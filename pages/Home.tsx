@@ -272,9 +272,9 @@ export default function Home() {
         <p className="text-slate-400 font-bold uppercase tracking-[0.4em] text-[10px] mb-8">Central de Inteligencia Logística</p>
         
         <div className="inline-flex items-center gap-3 px-6 py-2 bg-white rounded-full shadow-sm border border-slate-100 mb-8">
-          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-            {currentUser.nombre} • Modo Local Activo
+            {currentUser.nombre} • Firebase Activo
           </span>
         </div>
       </div>
