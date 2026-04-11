@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { StoreProvider } from './store/AppContext';
+import { StoreProvider } from './store/GlobalContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

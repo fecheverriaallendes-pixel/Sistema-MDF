@@ -33,7 +33,7 @@ import Configuracion from './pages/Configuracion';
 import Comisiones from './pages/Comisiones';
 import Proveedores from './pages/Proveedores';
 import Catalogo from './pages/Catalogo';
-import { useStore } from './store/AppContext';
+import { useStore } from './store/GlobalContext';
 import { StaffRole } from './types';
 
 const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) => {
