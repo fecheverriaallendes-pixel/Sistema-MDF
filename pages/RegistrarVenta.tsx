@@ -215,7 +215,7 @@ export default function RegistrarVenta() {
 
           <div className="bg-slate-900 p-10 rounded-[40px] text-white shadow-2xl">
             <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><DollarSign size={18} className="text-emerald-400" /> Valor Final Venta ($)</label>
-            <input required type="number" className="w-full px-8 py-6 bg-slate-800 border-2 border-slate-700 rounded-[28px] text-5xl font-black text-emerald-400 focus:border-emerald-500 outline-none" value={formData.valorUnitario || ''} onChange={(e) => setFormData({...formData, valorUnitario: Number(e.target.value)})} placeholder="0"/>
+            <input required type="number" onWheel={(e) => e.currentTarget.blur()} className="w-full px-8 py-6 bg-slate-800 border-2 border-slate-700 rounded-[28px] text-5xl font-black text-emerald-400 focus:border-emerald-500 outline-none" value={formData.valorUnitario || ''} onChange={(e) => setFormData({...formData, valorUnitario: Number(e.target.value)})} placeholder="0"/>
           </div>
 
           <button type="submit" className={`group w-full py-8 rounded-[32px] text-white font-black text-3xl flex items-center justify-center gap-4 shadow-2xl transition-all active:scale-[0.97] ${mode === 'QUICK' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'}`}>

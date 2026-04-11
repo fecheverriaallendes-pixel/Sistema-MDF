@@ -573,10 +573,13 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       datosCompletos: saleData.tipoVenta === SaleType.NORMAL,
       estadoDespacho: DispatchStatus.PREPARACION,
       itemsDespachados: 0,
-      tipoDespacho: saleData.tipoDespacho // Can be undefined for Quick Sales
+      tipoDespacho: saleData.tipoDespacho || '' // Avoid undefined for Firestore
     } as Sale;
     
-    setDoc(doc(db, 'sales', newSale.id), newSale);
+    // Remove undefined values to prevent Firestore errors
+    const cleanSale = Object.fromEntries(Object.entries(newSale).filter(([_, v]) => v !== undefined));
+    
+    setDoc(doc(db, 'sales', newSale.id), cleanSale);
 
     const stockItem = stock.find(item => item.codigo === saleData.codigoFardo);
     if (stockItem) {

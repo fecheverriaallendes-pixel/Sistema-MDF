@@ -270,7 +270,7 @@ export default function Stock() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cant. Inicial ({newBale.unidad === 'FARDO' ? 'Fardos' : 'Unidades'})</label>
-                  <input required type="number" className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-black text-xl" value={newBale.stockActual} onChange={(e) => setNewBale({...newBale, stockActual: Number(e.target.value)})}/>
+                  <input required type="number" onWheel={(e) => e.currentTarget.blur()} className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-black text-xl" value={newBale.stockActual} onChange={(e) => setNewBale({...newBale, stockActual: Number(e.target.value)})}/>
                 </div>
               </div>
               <div className="space-y-2">

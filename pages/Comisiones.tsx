@@ -243,7 +243,7 @@ export default function Comisiones() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-2">Monto (Negativo para descuento)</label>
                 <input 
                   required
-                  type="number"
+                  type="number" onWheel={(e) => e.currentTarget.blur()}
                   placeholder="-5000"
                   className="w-full px-5 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-700 outline-none"
                   value={newAdjustment.monto}

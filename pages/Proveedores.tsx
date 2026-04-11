@@ -241,7 +241,7 @@ export default function Proveedores() {
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-4">Monto Total Pactado ($)</label>
-                <input required type="number" className="w-full px-8 py-5 bg-slate-900 text-emerald-400 text-3xl font-black rounded-3xl outline-none" placeholder="0" value={newPurchase.montoTotal || ''} onChange={(e) => setNewPurchase({...newPurchase, montoTotal: Number(e.target.value)})}/>
+                <input required type="number" onWheel={(e) => e.currentTarget.blur()} className="w-full px-8 py-5 bg-slate-900 text-emerald-400 text-3xl font-black rounded-3xl outline-none" placeholder="0" value={newPurchase.montoTotal || ''} onChange={(e) => setNewPurchase({...newPurchase, montoTotal: Number(e.target.value)})}/>
               </div>
               <button type="submit" className="w-full py-6 bg-blue-600 text-white rounded-3xl font-black text-xl shadow-2xl hover:bg-blue-700 transition-all active:scale-95">REGISTRAR EN CUENTAS POR PAGAR</button>
             </form>
