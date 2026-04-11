@@ -179,6 +179,18 @@ export default function Configuracion() {
                   <input required type="text" className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold uppercase outline-none" value={newStaff.nombre} onChange={e => setNewStaff({...newStaff, nombre: e.target.value.toUpperCase()})} />
                 </div>
                 <div>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-2">Rol del Usuario</label>
+                  <select 
+                    className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold uppercase outline-none appearance-none" 
+                    value={newStaff.rol} 
+                    onChange={e => setNewStaff({...newStaff, rol: e.target.value as StaffRole})}
+                  >
+                    {Object.values(StaffRole).map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-2">PIN (4 dígitos)</label>
                   <input required type="password" maxLength={4} className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-2xl font-black outline-none" value={newStaff.pin} onChange={e => setNewStaff({...newStaff, pin: e.target.value})} />
                 </div>
