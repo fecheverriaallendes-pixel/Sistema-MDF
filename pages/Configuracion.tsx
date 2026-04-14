@@ -48,10 +48,10 @@ export default function Configuracion() {
   };
 
   const handleMasterStockReset = () => {
-    if (confirm("⚠️ ADVERTENCIA CRÍTICA: Se ELIMINARÁ el inventario actual y se cargarán los 315 productos de la Base de Datos Maestra. ¿Deseas continuar?")) {
+    if (confirm("⚠️ ADVERTENCIA CRÍTICA: Se ELIMINARÁ el inventario actual y se cargarán los 404 productos de la Base de Datos Maestra. ¿Deseas continuar?")) {
       resetToMasterStock();
       playSound('success');
-      alert("✅ ÉXITO: Los 315 productos han sido inyectados en el sistema.");
+      alert("✅ ÉXITO: Los 404 productos han sido inyectados en el sistema.");
     }
   };
 
