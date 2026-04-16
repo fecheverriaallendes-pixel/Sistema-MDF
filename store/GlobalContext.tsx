@@ -863,7 +863,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       topSellers,
       stockCritico: stock.filter(i => i.stockActual < 3 && i.stockActual > 0).length,
       valorInventarioVenta: stock.reduce((acc, i) => acc + (i.precioSugerido * i.stockActual), 0),
-      deudaTotalProveedores: purchases.reduce((acc, p) => acc + p.saldoPendiente, 0)
+      deudaTotalProveedores: purchases.reduce((acc, p) => acc + p.saldoPendiente, 0),
+      faltaCompletar: sales.filter(s => !s.datosCompletos).length,
+      faltaPagar: sales.filter(s => s.estadoPago === 'Pendiente').length,
+      faltaDespachar: sales.filter(s => s.datosCompletos && s.status === 'Pendiente').length
     };
   };
 

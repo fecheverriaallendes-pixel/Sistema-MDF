@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+       return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Check for user role in database OR default admin email
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return isAuthenticated() && (
+        (userDoc.data.role == 'admin') ||
+        (request.auth.token.email == "f.echeverria.allendes@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    // ===============================================================
+    // Validation Functions
+    // ===============================================================
+    function isValidSale(data) {
+      return data.numeroVenta is number &&
+             data.cliente is string && data.cliente.size() > 0 && data.cliente.size() < 100 &&
+             data.total is number &&
+             data.status in ['Pendiente', 'Enviado'];
+    }
+
+    match /sales/{saleId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSale(request.resource.data);
+      allow update: if isAuthenticated() && isValidSale(request.resource.data) && request.resource.data.numeroVenta == resource.data.numeroVenta;
+      allow delete: if isAdmin();
+    }                
+
+    match /stock/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+  }
+}

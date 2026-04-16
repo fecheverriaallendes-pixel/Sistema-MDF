@@ -15,7 +15,8 @@ import {
   Users,
   ArrowUpRight,
   LayoutDashboard,
-  FileText
+  FileText,
+  Truck
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -176,6 +177,9 @@ export default function Dashboard() {
           color="purple" 
           subtitle="Datos de envío faltantes"
         />
+        <StatCard title="Falta Completar" value={stats.faltaCompletar} icon={AlertCircle} color="red" subtitle="Pedidos con datos incompletos" />
+        <StatCard title="Falta Pagar" value={stats.faltaPagar} icon={DollarSign} color="amber" subtitle="Pedidos pendientes de pago" />
+        <StatCard title="Falta Despachar" value={stats.faltaDespachar} icon={Truck} color="blue" subtitle="Pedidos listos para salir" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -339,6 +339,7 @@ export default function Despachos() {
                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Destino</th>
                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Items</th>
+                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Despacho</th>
                 <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Estado</th>
               </tr>
             </thead>
@@ -349,6 +350,10 @@ export default function Despachos() {
                   <td className="px-8 py-6 font-bold text-slate-900">{sale.cliente}</td>
                   <td className="px-8 py-6 text-xs text-slate-500 uppercase max-w-xs truncate">{sale.direccion}</td>
                   <td className="px-8 py-6 font-bold text-slate-700">{sale.cantidad} x {sale.codigoFardo}</td>
+                  <td className="px-8 py-6 text-xs text-slate-500">
+                    <div>{sale.fechaDespacho || 'N/A'}</div>
+                    <div className="font-bold text-slate-700">{sale.transportista || sale.agencia || 'N/A'}</div>
+                  </td>
                   <td className="px-8 py-6 text-right">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {sale.status}
