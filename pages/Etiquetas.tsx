@@ -9,20 +9,20 @@ const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 const Label = ({ sale }: { sale: Sale }) => (
   <div className="w-[100mm] h-[70mm] bg-white border-2 border-black p-4 flex flex-row items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[70mm]">
-    <div className="w-[35mm] flex flex-col border-r-2 border-black pr-4 justify-between">
+    <div className="w-[28mm] flex flex-col border-r-2 border-dashed border-black pr-2 justify-between">
       <div className="flex flex-col items-center">
-        <img src={LOGO_URL} alt="Logo" className="w-[28mm] object-contain mb-4 grayscale contrast-[2] brightness-75" />
-        <div className="text-center w-full bg-black text-white py-2 rounded-lg">
-          <p className="text-[10px] font-black uppercase tracking-widest mb-1">Venta</p>
-          <p className="text-3xl font-black font-mono leading-none">#{sale.numeroVenta}</p>
+        <img src={LOGO_URL} alt="Logo" className="w-[22mm] object-contain mb-2 grayscale contrast-[2] brightness-75" />
+        <div className="text-center w-full bg-black text-white py-1 rounded-sm">
+          <p className="text-[8px] font-black uppercase tracking-widest mb-0.5">Venta</p>
+          <p className="text-2xl font-black font-mono leading-none">#{sale.numeroVenta}</p>
         </div>
       </div>
-      <div className="text-center border-t border-black pt-2">
-        <p className="text-[8px] font-black uppercase tracking-tighter text-slate-600">Origen</p>
-        <p className="text-[10px] font-bold uppercase">{sale.tipoVenta}</p>
+      <div className="text-center border-t border-dashed border-black pt-1">
+        <p className="text-[7px] font-black uppercase tracking-tighter text-slate-600">Origen</p>
+        <p className="text-[8px] font-bold uppercase">{sale.tipoVenta}</p>
       </div>
     </div>
-    <div className="flex-1 pl-6 flex flex-col justify-between py-1">
+    <div className="flex-1 pl-4 flex flex-col justify-between py-1">
       <div>
         <div className="mb-4">
           <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Destinatario / Cliente</p>
