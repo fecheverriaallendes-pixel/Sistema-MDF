@@ -867,12 +867,30 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     };
   };
 
+  const getReportData = (type: 'weekly' | 'monthly' | 'custom', startDate?: Date, endDate?: Date) => {
+    const now = new Date();
+    
+    return sales.filter(s => {
+      const [day, month, year] = s.fecha.split('/').map(Number);
+      const saleDate = new Date(year, month - 1, day);
+      
+      if (type === 'custom' && startDate && endDate) {
+        return saleDate >= startDate && saleDate <= endDate;
+      } else if (type === 'weekly') {
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return saleDate >= oneWeekAgo;
+      } else {
+        return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+      }
+    });
+  };
+
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
       addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, 
-      addPurchase, removePurchase, addAbono, removeAbono, getStats, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
+      addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>
       {children}
     </StoreContext.Provider>

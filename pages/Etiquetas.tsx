@@ -7,7 +7,7 @@ import { Sale, SaleType, SaleStatus, CommissionType } from '../types';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
-const Label = ({ sale }: { sale: Sale }) => (
+const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
   <div className="w-[100mm] h-[70mm] bg-white border-2 border-black p-4 flex flex-row items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[70mm]">
     <div className="w-[28mm] flex flex-col border-r-2 border-dashed border-black pr-2 justify-between">
       <div className="flex flex-col items-center">
@@ -36,10 +36,15 @@ const Label = ({ sale }: { sale: Sale }) => (
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4 border-t border-black pt-4">
+      <div className="grid grid-cols-[1fr,auto] gap-4 border-t border-black pt-4">
         <div>
           <p className="text-[9px] font-black uppercase text-slate-500">Producto</p>
-          <p className="text-lg font-black leading-none">{sale.codigoFardo}</p>
+          <p className="text-[11px] font-black leading-tight break-words">
+            { (() => {
+              const stockItem = stock.find(item => item.codigo === sale.codigoFardo);
+              return stockItem ? `${stockItem.tipo} (${stockItem.proveedor})` : sale.tipo;
+            })()}
+          </p>
           <p className="text-[10px] font-bold uppercase mt-1 truncate">{sale.variante || 'Normal'}</p>
         </div>
         <div className="text-right flex flex-col justify-end">
@@ -53,7 +58,7 @@ const Label = ({ sale }: { sale: Sale }) => (
 );
 
 export default function Etiquetas() {
-  const { sales } = useStore();
+  const { sales, stock } = useStore();
   const [individualSale, setIndividualSale] = useState<Sale | null>(null);
   const [showDemo, setShowDemo] = useState(false);
   const readyToPrint = sales.filter(s => s.datosCompletos && !s.enviado).sort((a, b) => b.numeroVenta - a.numeroVenta);
@@ -98,13 +103,13 @@ export default function Etiquetas() {
         {showDemo && (
           <div className="relative group w-full flex flex-col items-center">
             <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-500 text-white text-[10px] font-black px-4 py-1 rounded-full shadow-lg">ETIQUETA DE MUESTRA</div>
-            <div className="relative bg-white p-4 border-4 border-amber-200 rounded-[32px] shadow-lg scale-75 sm:scale-100 origin-top overflow-hidden"><Label sale={demoSale} /></div>
+            <div className="relative bg-white p-4 border-4 border-amber-200 rounded-[32px] shadow-lg scale-75 sm:scale-100 origin-top overflow-hidden"><Label sale={demoSale} stock={stock} /></div>
           </div>
         )}
         {readyToPrint.map((sale) => (
           <div key={sale.id} className="relative group animate-in fade-in slide-in-from-bottom duration-500 w-full flex flex-col items-center">
             <div className="relative bg-white p-4 border-4 border-dashed border-slate-200 rounded-[32px] hover:border-emerald-400 transition-all shadow-lg scale-75 sm:scale-100 origin-top overflow-hidden">
-              <Label sale={sale} />
+              <Label sale={sale} stock={stock} />
               <div className="absolute inset-0 bg-slate-900/80 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center backdrop-blur-sm">
                 <button onClick={() => handlePrintSingle(sale)} className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-2xl transition-all">
                   <Printer size={20} /> IMPRIMIR ÉSTA
@@ -123,7 +128,7 @@ export default function Etiquetas() {
         )}
       </div>
       <div className="hidden print-only">
-        {individualSale ? <div className="label-container"><Label sale={individualSale} /></div> : readyToPrint.map((sale) => <div key={sale.id} className="label-container"><Label sale={sale} /></div>)}
+        {individualSale ? <div className="label-container"><Label sale={individualSale} stock={stock} /></div> : readyToPrint.map((sale) => <div key={sale.id} className="label-container"><Label sale={sale} stock={stock} /></div>)}
       </div>
       <style>{`
         @media print {

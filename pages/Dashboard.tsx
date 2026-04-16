@@ -1,5 +1,6 @@
 
 import React, { useMemo } from 'react';
+import { ReportModal } from '../components/ReportModal';
 import { 
   TrendingUp, 
   Package, 
@@ -13,8 +14,8 @@ import {
   BarChart3,
   Users,
   ArrowUpRight,
-  // Add missing LayoutDashboard import
-  LayoutDashboard
+  LayoutDashboard,
+  FileText
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -53,8 +54,22 @@ const StatCard = ({ title, value, icon: Icon, color, subtitle, trend }: any) => 
 );
 
 export default function Dashboard() {
-  const { getStats, syncWithCloud, isSyncing, settings, sales } = useStore();
+  const { getStats, getReportData, syncWithCloud, isSyncing, settings, sales } = useStore();
+  const [reportState, setReportState] = React.useState<{isOpen: boolean, type: 'weekly' | 'monthly' | 'custom', sales: Sale[]}>({isOpen: false, type: 'weekly', sales: []});
+  const [dateRange, setDateRange] = React.useState({ start: '', end: '' });
   const stats = getStats();
+
+  const openReport = (type: 'weekly' | 'monthly' | 'custom') => {
+    if (type === 'custom') {
+      if (!dateRange.start || !dateRange.end) {
+        alert("Por favor selecciona ambas fechas");
+        return;
+      }
+      setReportState({ isOpen: true, type, sales: getReportData(type, new Date(dateRange.start), new Date(dateRange.end)) });
+    } else {
+      setReportState({ isOpen: true, type, sales: getReportData(type) });
+    }
+  };
 
   // Procesar datos para el gráfico de área (Ventas últimos 7 días)
   const chartData = useMemo(() => {
@@ -82,21 +97,47 @@ export default function Dashboard() {
           <p className="text-slate-500 font-medium italic mt-2">Inteligencia de negocios y control operativo centralizado</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-4">
-          <button 
-            // Fix: Wrapping syncWithCloud in an anonymous function to prevent React event from being passed as 'silent' parameter
-            onClick={() => syncWithCloud()}
-            disabled={isSyncing}
-            className="flex items-center gap-3 px-8 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase tracking-widest hover:border-slate-300 transition-all shadow-sm active:scale-95"
-          >
-            <RefreshCw className={isSyncing ? 'animate-spin text-blue-500' : 'text-slate-400'} size={18} /> 
-            {isSyncing ? 'Actualizando Datos...' : 'Refrescar Nube'}
-          </button>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-[24px]">
+             <input type="date" onChange={e => setDateRange({...dateRange, start: e.target.value})} className="px-4 py-2 rounded-xl border-none outline-none text-xs font-bold" />
+             <span className="text-slate-400 font-black">A</span>
+             <input type="date" onChange={e => setDateRange({...dateRange, end: e.target.value})} className="px-4 py-2 rounded-xl border-none outline-none text-xs font-bold" />
+             <button 
+              onClick={() => openReport('custom')}
+              className="px-6 py-2 bg-amber-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-amber-600 transition-all active:scale-95"
+            >
+              Histórico
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <button 
+              onClick={() => openReport('weekly')}
+              className="flex items-center gap-3 px-6 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase tracking-widest hover:border-amber-200 transition-all shadow-sm active:scale-95"
+            >
+              <FileText size={18} /> Reporte Semanal
+            </button>
+            
+            <button 
+              onClick={() => openReport('monthly')}
+              className="flex items-center gap-3 px-6 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase tracking-widest hover:border-amber-200 transition-all shadow-sm active:scale-95"
+            >
+              <FileText size={18} /> Reporte Mensual
+            </button>
 
+            <button 
+              onClick={() => syncWithCloud()}
+              disabled={isSyncing}
+              className="flex items-center gap-3 px-8 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase tracking-widest hover:border-slate-300 transition-all shadow-sm active:scale-95"
+            >
+              <RefreshCw className={isSyncing ? 'animate-spin text-blue-500' : 'text-slate-400'} size={18} /> 
+              {isSyncing ? 'Actualizando...' : 'Refrescar'}
+            </button>
+          </div>
+          
           {stats.stockCritico > 0 && (
             <Link 
               to="/stock"
-              className="flex items-center gap-3 bg-red-500 text-white px-8 py-4 rounded-[24px] font-black animate-pulse shadow-xl shadow-red-500/20 text-xs uppercase tracking-widest"
+              className="flex items-center justify-center gap-3 bg-red-500 text-white px-8 py-4 rounded-[24px] font-black animate-pulse shadow-xl shadow-red-500/20 text-xs uppercase tracking-widest"
             >
               <AlertCircle size={18} />
               {stats.stockCritico} Alertas Stock
@@ -226,6 +267,14 @@ export default function Dashboard() {
         <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
         Sincronizado vía Cloud Protocol <Cloud size={12} className="text-blue-400" />
       </div>
+      
+      <ReportModal 
+        isOpen={reportState.isOpen} 
+        onClose={() => setReportState({...reportState, isOpen: false})} 
+        title={`Reporte ${reportState.type === 'weekly' ? 'Semanal' : reportState.type === 'monthly' ? 'Mensual' : 'Histórico (Personalizado)'}`}
+        sales={reportState.sales}
+        stats={stats}
+      />
     </div>
   );
 }

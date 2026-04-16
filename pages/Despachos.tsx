@@ -25,7 +25,7 @@ import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
 
 export default function Despachos() {
-  const { sales, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, playSound } = useStore();
+  const { sales, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, playSound, carriers } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'HISTORIAL'>('AGENCIA');
@@ -285,7 +285,7 @@ export default function Despachos() {
                           onChange={(e) => assignCarrier(sale.id, e.target.value)}
                         >
                           <option value="">Seleccionar Transportista...</option>
-                          {useStore().carriers.map(c => (
+                          {carriers.map(c => (
                             <option key={c} value={c}>{c}</option>
                           ))}
                         </select>
