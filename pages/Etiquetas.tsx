@@ -26,7 +26,7 @@ const Label = ({ sale }: { sale: Sale }) => (
       <div>
         <div className="mb-4">
           <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Destinatario / Cliente</p>
-          <p className="text-xl font-black uppercase leading-tight line-clamp-1">{sale.cliente}</p>
+          <p className="text-xl font-black uppercase leading-tight line-clamp-2">{sale.cliente}</p>
           <p className="text-sm font-bold text-slate-700 mt-1">{sale.rut || 'RUT PENDIENTE'}</p>
         </div>
         <div className="mb-4">
