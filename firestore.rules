@@ -3,46 +3,85 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // See src/types.ts for detailed definitions
+    // ===============================================================
+
+    // ===============================================================
     // Helper Functions
     // ===============================================================
     function isAuthenticated() {
-       return request.auth != null;
+      return request.auth != null;
     }
 
-    function isAdmin() {
-      // Check for user role in database OR default admin email
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return isAuthenticated() && (
-        (userDoc.data.role == 'admin') ||
-        (request.auth.token.email == "f.echeverria.allendes@gmail.com" && request.auth.token.email_verified == true)
-      );
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function validString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+    
+    function validOptionalString(field, minLen, maxLen) {
+      return !('field' in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function validNumber(field, min, max) {
+      return request.resource.data[field] is number &&
+             request.resource.data[field] >= min &&
+             request.resource.data[field] <= max;
     }
 
     // ===============================================================
-    // Validation Functions
+    // Collection Rules
     // ===============================================================
-    function isValidSale(data) {
-      return data.numeroVenta is number &&
-             data.cliente is string && data.cliente.size() > 0 && data.cliente.size() < 100 &&
-             data.total is number &&
-             data.status in ['Pendiente', 'Enviado'];
-    }
 
     match /sales/{saleId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidSale(request.resource.data);
-      allow update: if isAuthenticated() && isValidSale(request.resource.data) && request.resource.data.numeroVenta == resource.data.numeroVenta;
-      allow delete: if isAdmin();
-    }                
-
-    match /stock/{itemId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create: if isAuthenticated() && hasRequiredFields(['numeroVenta', 'total', 'cantidad', 'status']) && validNumber('total', 0, 1000000000);
+      allow update: if isAuthenticated() && validNumber('total', 0, 1000000000);
+      allow delete: if false;
     }
-    
-    match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAdmin();
+
+    match /stock/{stockId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && hasRequiredFields(['codigo', 'stockActual']) && validString('codigo', 1, 20);
+      allow update: if isAuthenticated() && validString('codigo', 1, 20);
+      allow delete: if false;
+    }
+
+    match /staff/{staffId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasOnlyAllowedFields(['id', 'nombre', 'rol', 'pin', 'activo']);
+      allow delete: if false;
+    }
+
+    match /purchases/{purchaseId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if false;
+    }
+
+    match /adjustments/{adjustmentId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if false;
+    }
+
+    match /config/{configId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if false;
     }
   }
 }

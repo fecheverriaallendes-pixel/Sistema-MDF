@@ -2,38 +2,110 @@
   "entities": {
     "Sale": {
       "title": "Sale",
-      "description": "Definition of a sale document in Firestore",
+      "description": "A sale transaction",
       "type": "object",
       "properties": {
-        "numeroVenta": { "type": "number" },
-        "fecha": { "type": "string" },
+        "id": { "type": "string" },
         "cliente": { "type": "string" },
+        "vendedor": { "type": "string" },
+        "telefono": { "type": "string" },
+        "rut": { "type": "string" },
+        "codigoFardo": { "type": "string" },
+        "variante": { "type": "string" },
+        "valorUnitario": { "type": "number" },
+        "cantidad": { "type": "number" },
         "total": { "type": "number" },
-        "status": { "type": "string", "enum": ["Pendiente", "Enviado"] },
-        "enviado": { "type": "boolean" },
-        "datosCompletos": { "type": "boolean" }
-      },
-      "required": ["numeroVenta", "fecha", "cliente", "total", "status"]
+        "direccion": { "type": "string" },
+        "estadoPago": { "type": "string" },
+        "tipoComision": { "type": "string" },
+        "juntaCompra": { "type": "string" },
+        "observaciones": { "type": "string" },
+        "tipoDespacho": { "type": "string" },
+        "tipoVenta": { "type": "string" },
+        "status": { "type": "string" },
+        "datosCompletos": { "type": "boolean" },
+        "fecha": { "type": "string" },
+        "numeroVenta": { "type": "number" },
+        "itemsDespachados": { "type": "number" },
+        "transportista": { "type": "string" }
+      }
     },
     "StockItem": {
       "title": "StockItem",
-      "description": "Definition of a stock item",
+      "description": "An item in the inventory",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "codigo": { "type": "string" },
-        "stockActual": { "type": "number" }
-      },
-      "required": ["codigo", "stockActual"]
+        "tipo": { "type": "string" },
+        "proveedor": { "type": "string" },
+        "precioCosto": { "type": "number" },
+        "precioSugerido": { "type": "number" },
+        "stockActual": { "type": "number" },
+        "unidad": { "type": "string" },
+        "disponible": { "type": "boolean" }
+      }
+    },
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "A staff member",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nombre": { "type": "string" },
+        "rol": { "type": "string" },
+        "pin": { "type": "string" }
+      }
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "A purchase from a supplier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "proveedor": { "type": "string" },
+        "tipo": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "montoTotal": { "type": "number" },
+        "saldoPendiente": { "type": "number" },
+        "estado": { "type": "string" },
+        "fecha": { "type": "string" },
+        "abonos": { "type": "array" }
+      }
+    },
+    "Adjustment": {
+      "title": "Adjustment",
+      "description": "A commission adjustment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fecha": { "type": "string" },
+        "vendedor": { "type": "string" },
+        "monto": { "type": "number" },
+        "motivo": { "type": "string" }
+      }
     }
   },
   "firestore": {
     "/sales/{saleId}": {
-      "schema": { "$ref": "Sale" },
+      "schema": { "$ref": "#/entities/Sale" },
       "description": "Sales collection"
     },
-    "/stock/{itemId}": {
-      "schema": { "$ref": "StockItem" },
+    "/stock/{stockId}": {
+      "schema": { "$ref": "#/entities/StockItem" },
       "description": "Stock collection"
+    },
+    "/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Staff collection"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/Purchase" },
+      "description": "Purchases collection"
+    },
+    "/adjustments/{adjustmentId}": {
+      "schema": { "$ref": "#/entities/Adjustment" },
+      "description": "Commission adjustments collection"
     }
   }
 }
