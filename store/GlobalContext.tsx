@@ -707,6 +707,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     if (sale) setDoc(doc(db, 'sales', saleId), { ...sale, transportista: carrier });
   };
 
+  const assignAgency = (saleId: string, agency: string) => {
+    const sale = sales.find(s => s.id === saleId);
+    if (sale) setDoc(doc(db, 'sales', saleId), { ...sale, agencia: agency });
+  };
+
   const addCarrier = (name: string) => {
     if (!carriers.includes(name)) {
       const newCarriers = [...carriers, name];
@@ -891,7 +896,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
+      sales, stock, staff, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
       addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, 
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>

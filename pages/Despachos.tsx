@@ -25,55 +25,67 @@ import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
 
 export default function Despachos() {
-  const { sales, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, playSound, carriers } = useStore();
+  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'HISTORIAL'>('AGENCIA');
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
 
-  const filteredSales = sales
-    .filter(s => s.datosCompletos)
-    .filter(s => 
+  const allSales = sales;
+
+  console.log("Total sales:", sales.length, "Search term:", searchTerm);
+
+  // Siempre filtramos por término de búsqueda primero
+  const searchResults = searchTerm ? allSales.filter(s => 
       s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
       s.numeroVenta.toString().includes(searchTerm) ||
-      s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+      s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.transportista?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      (s.agencia?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+  ) : allSales;
 
-  const pendingSales = filteredSales.filter(s => s.status === SaleStatus.PENDIENTE);
+  // Si hay búsqueda activa, queremos ver resultados de todas las categorías
+  // Si no hay búsqueda, aplicamos los filtros de pestañas
+  let agencySales = [];
+  let homeSales = [];
+  let historySales = [];
+
+  if (searchTerm) {
+    // Si buscamos, mostramos resultados agrupados según su estado/tipo
+    agencySales = searchResults.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.AGENCIA || !s.tipoDespacho));
+    homeSales = searchResults.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
+    historySales = searchResults.filter(s => s.status === SaleStatus.ENVIADO);
+  } else {
+    // Si no hay búsqueda, aplicamos filtros de pestañas estrictos
+    agencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.AGENCIA || !s.tipoDespacho));
+    homeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
+    historySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
+  }
   
-  const agencySales = pendingSales.filter(s => s.tipoDespacho === DispatchType.AGENCIA || !s.tipoDespacho); // Backwards compatibility
-  const homeSales = pendingSales.filter(s => s.tipoDespacho === DispatchType.DOMICILIO);
-  const historySales = filteredSales.filter(s => s.status === SaleStatus.ENVIADO);
-
   const currentList = activeTab === 'AGENCIA' ? agencySales 
                     : activeTab === 'DOMICILIO' ? homeSales 
                     : historySales;
 
   const handleExportExcel = () => {
-    const headers = ["N_Venta", "Cliente", "RUT", "Direccion", "Telefono", "Producto", "Cant", "Tipo", "Status"];
-    const rows = currentList.map(s => [
-      s.numeroVenta,
-      s.cliente,
-      s.rut || 'N/A',
-      s.direccion,
-      s.telefono,
-      s.codigoFardo,
-      s.cantidad,
-      s.tipoDespacho || 'N/A',
-      s.status
-    ]);
+    import('xlsx').then(XLSX => {
+      const data = currentList.map(s => ({
+        "N_Venta": s.numeroVenta,
+        "Cliente": s.cliente,
+        "RUT": s.rut || 'N/A',
+        "Direccion": s.direccion,
+        "Telefono": s.telefono,
+        "Producto": s.codigoFardo,
+        "Cant": s.cantidad,
+        "Tipo": s.tipoDespacho || 'N/A',
+        "Status": s.status
+      }));
 
-    let csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n"
-      + rows.map(e => e.join(",")).join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Planilla_Despacho_${activeTab}_${new Date().toLocaleDateString()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    playSound('success');
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Despachos");
+      XLSX.writeFile(wb, `Planilla_Despacho_${activeTab}_${new Date().toLocaleDateString()}.xlsx`);
+      playSound('success');
+    });
   };
 
   const handleIncrementItem = (sale: Sale) => {
@@ -176,7 +188,7 @@ export default function Despachos() {
         </div>
         <input 
           type="text" 
-          placeholder="Buscar por cliente, dirección o código..."
+          placeholder="Buscar cliente, código, transporte o agencia..."
           className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-200 outline-none font-bold text-base shadow-sm transition-all"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -229,7 +241,7 @@ export default function Despachos() {
                         <Package size={20} />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-slate-900">{sale.codigoFardo}</p>
+                        <p className="text-sm font-black text-slate-900">{stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</p>
                         <p className="text-[10px] text-slate-500 font-bold">CANT: {sale.cantidad}</p>
                       </div>
                     </div>
@@ -291,6 +303,18 @@ export default function Despachos() {
                         </select>
                       </div>
                     )}
+                    {sale.tipoDespacho === DispatchType.AGENCIA && (
+                      <div className="mb-4">
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-2">Nombre de Agencia</p>
+                        <input 
+                          type="text"
+                          className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
+                          placeholder="Nombre de la agencia..."
+                          value={sale.agencia || ''}
+                          onChange={(e) => assignAgency(sale.id, e.target.value)}
+                        />
+                      </div>
+                    )}
 
                     <button 
                       onClick={() => handleConfirmDispatch(sale)}
@@ -349,7 +373,7 @@ export default function Despachos() {
                   <td className="px-8 py-6 font-mono font-bold text-slate-600">#{sale.numeroVenta}</td>
                   <td className="px-8 py-6 font-bold text-slate-900">{sale.cliente}</td>
                   <td className="px-8 py-6 text-xs text-slate-500 uppercase max-w-xs truncate">{sale.direccion}</td>
-                  <td className="px-8 py-6 font-bold text-slate-700">{sale.cantidad} x {sale.codigoFardo}</td>
+                  <td className="px-8 py-6 font-bold text-slate-700">{sale.cantidad} x {stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</td>
                   <td className="px-8 py-6 text-xs text-slate-500">
                     <div>{sale.fechaDespacho || 'N/A'}</div>
                     <div className="font-bold text-slate-700">{sale.transportista || sale.agencia || 'N/A'}</div>
