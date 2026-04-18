@@ -22,6 +22,7 @@ interface StoreContextType {
   staff: StaffMember[];
   purchases: Purchase[];
   carriers: string[];
+  categories: string[];
   adjustments: CommissionAdjustment[];
   addSale: (saleData: Partial<Sale>) => Sale;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
@@ -31,6 +32,9 @@ interface StoreContextType {
   assignCarrier: (saleId: string, carrier: string) => void;
   addCarrier: (name: string) => void;
   removeCarrier: (name: string) => void;
+  addCategory: (name: string) => void;
+  editCategory: (oldName: string, newName: string) => void;
+  removeCategory: (name: string) => void;
   addAdjustment: (adj: Omit<CommissionAdjustment, 'id'>) => void;
   removeAdjustment: (id: string) => void;
   clearAllSales: () => void;
@@ -89,9 +93,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     ];
   });
   
+  const [categories, setCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('fa_categories');
+    return saved ? JSON.parse(saved) : ['DEPORTIVO', 'BÁSICOS', 'INTERIOR', 'VERANO', 'ESCOLAR', 'LABORAL', 'INVIERNO', 'PROMOS'];
+  });
+  
   const [adjustments, setAdjustments] = useState<CommissionAdjustment[]>(() => JSON.parse(localStorage.getItem('fa_adjustments') || '[]'));
-
-  const isSyncingRef = useRef(false);
 
   const calculatePurchaseState = (purchase: Purchase) => {
     const totalAbonado = purchase.abonos.reduce((acc, a) => acc + a.monto, 0);
@@ -131,7 +138,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     } catch (e) {}
   }, [settings.soundEnabled]);
 
-  const pushToCloud = async (curSales: Sale[], curStock: StockItem[], curStaff: StaffMember[], curPurchases: Purchase[], curCarriers?: string[], curAdjustments?: CommissionAdjustment[]) => {
+  const pushToCloud = async (curSales: Sale[], curStock: StockItem[], curStaff: StaffMember[], curPurchases: Purchase[], curCarriers?: string[], curCategories?: string[], curAdjustments?: CommissionAdjustment[]) => {
     setIsSyncing(true);
     try {
       const batch = writeBatch(db);
@@ -143,6 +150,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       (curAdjustments || adjustments).forEach(a => batch.set(doc(db, 'adjustments', a.id), a));
       
       batch.set(doc(db, 'config', 'carriers'), { list: curCarriers || carriers });
+      batch.set(doc(db, 'config', 'categories'), { list: curCategories || categories });
       
       await batch.commit();
       
@@ -168,73 +176,42 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubPurchases: any;
     let unsubAdjustments: any;
     let unsubConfig: any;
+    let unsubCategories: any;
 
     const initFirebase = async () => {
       try {
-        // Wait for auth to be ready
         await new Promise<void>((resolve) => {
           const unsubscribe = auth.onAuthStateChanged((user) => {
             unsubscribe();
             if (!user) {
-              signInAnonymously(auth).then(() => resolve()).catch((err) => {
-                console.error("Error en signInAnonymously:", err);
-                resolve();
-              });
+              signInAnonymously(auth).then(() => resolve()).catch(() => resolve());
             } else {
               resolve();
             }
           });
         });
 
-        // Proceed with data operations only after successful auth check
         if (auth.currentUser) {
-            const salesSnap = await getDocs(collection(db, 'sales'));
-            const stockSnap = await getDocs(collection(db, 'stock'));
-            
-            const cloudHasData = !salesSnap.empty || !stockSnap.empty;
-            const localHasData = sales.length > 0 || stock.length > 0;
-
-            if (!cloudHasData && localHasData) {
-              console.log("Migrando datos locales a Firebase...");
-              await pushToCloud(sales, stock, staff, purchases, carriers, adjustments);
-            }
-
-            unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
-              setSales(snap.docs.map(d => d.data() as Sale));
-            });
-            unsubStock = onSnapshot(collection(db, 'stock'), (snap) => {
-              setStock(snap.docs.map(d => d.data() as StockItem));
-            });
-            unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => {
-              setStaff(snap.docs.map(d => d.data() as StaffMember));
-            });
-            unsubPurchases = onSnapshot(collection(db, 'purchases'), (snap) => {
-              setPurchases(snap.docs.map(d => d.data() as Purchase));
-            });
-            unsubAdjustments = onSnapshot(collection(db, 'adjustments'), (snap) => {
-              setAdjustments(snap.docs.map(d => d.data() as CommissionAdjustment));
-            });
-            unsubConfig = onSnapshot(doc(db, 'config', 'carriers'), (docSnap) => {
-              if (docSnap.exists()) {
-                const data = docSnap.data();
-                if (data.list) setCarriers(data.list);
-              }
-            });
+            unsubSales = onSnapshot(collection(db, 'sales'), (snap) => setSales(snap.docs.map(d => d.data() as Sale)));
+            unsubStock = onSnapshot(collection(db, 'stock'), (snap) => setStock(snap.docs.map(d => d.data() as StockItem)));
+            unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => setStaff(snap.docs.map(d => d.data() as StaffMember)));
+            unsubPurchases = onSnapshot(collection(db, 'purchases'), (snap) => setPurchases(snap.docs.map(d => d.data() as Purchase)));
+            unsubAdjustments = onSnapshot(collection(db, 'adjustments'), (snap) => setAdjustments(snap.docs.map(d => d.data() as CommissionAdjustment)));
+            unsubConfig = onSnapshot(doc(db, 'config', 'carriers'), (docSnap) => { if (docSnap.exists() && docSnap.data().list) setCarriers(docSnap.data().list); });
+            unsubCategories = onSnapshot(doc(db, 'config', 'categories'), (docSnap) => { if (docSnap.exists() && docSnap.data().list) setCategories(docSnap.data().list); });
         }
-      } catch (error) {
-        console.error("Error inicializando Firebase:", error);
-      }
+      } catch (error) { console.error(error); }
     };
-
     initFirebase();
-
+    
     return () => {
-      if (unsubSales) unsubSales();
-      if (unsubStock) unsubStock();
-      if (unsubStaff) unsubStaff();
-      if (unsubPurchases) unsubPurchases();
-      if (unsubAdjustments) unsubAdjustments();
-      if (unsubConfig) unsubConfig();
+        if (unsubSales) unsubSales();
+        if (unsubStock) unsubStock();
+        if (unsubStaff) unsubStaff();
+        if (unsubPurchases) unsubPurchases();
+        if (unsubAdjustments) unsubAdjustments();
+        if (unsubConfig) unsubConfig();
+        if (unsubCategories) unsubCategories();
     };
   }, []);
 
@@ -244,9 +221,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     localStorage.setItem('fa_staff', JSON.stringify(staff));
     localStorage.setItem('fa_purchases', JSON.stringify(purchases));
     localStorage.setItem('fa_carriers', JSON.stringify(carriers));
+    localStorage.setItem('fa_categories', JSON.stringify(categories));
     localStorage.setItem('fa_adjustments', JSON.stringify(adjustments));
     localStorage.setItem('fa_settings', JSON.stringify(settings));
-  }, [sales, stock, staff, purchases, carriers, adjustments, settings]);
+  }, [sales, stock, staff, purchases, carriers, categories, adjustments, settings]);
 
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: StaffRole } | null>(() => {
     const saved = sessionStorage.getItem('fa_session');
@@ -334,6 +312,23 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const removeCarrier = (name: string) => {
     const newCarriers = carriers.filter(c => c !== name);
     setDoc(doc(db, 'config', 'carriers'), { list: newCarriers });
+  };
+
+  const addCategory = (name: string) => {
+    if (!categories.includes(name)) {
+      const newCats = [...categories, name];
+      setDoc(doc(db, 'config', 'categories'), { list: newCats });
+    }
+  };
+
+  const editCategory = (oldName: string, newName: string) => {
+     const newCats = categories.map(c => c === oldName ? newName : c);
+     setDoc(doc(db, 'config', 'categories'), { list: newCats });
+  };
+
+  const removeCategory = (name: string) => {
+    const newCats = categories.filter(c => c !== name);
+    setDoc(doc(db, 'config', 'categories'), { list: newCats });
   };
 
   const addAdjustment = (adj: Omit<CommissionAdjustment, 'id'>) => {
@@ -457,7 +452,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
+      sales, stock, staff, purchases, carriers, categories, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, addCarrier, removeCarrier, addCategory, editCategory, removeCategory, addAdjustment, removeAdjustment, clearAllSales,
       addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, 
       addPurchase, removePurchase, addAbono, removeAbono, getStats, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>

@@ -1,16 +1,17 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter } from 'lucide-react';
+import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, Settings } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { formatCurrencyWithUSD, formatUSD } from '../utils/currency';
 import { StaffRole, StockItem } from '../types';
 
 export default function Stock() {
-  const { stock, addStockItem, updateStockItem, removeStockItem, bulkAddStock, currentUser, playSound, settings } = useStore();
+  const { stock, addStockItem, updateStockItem, removeStockItem, bulkAddStock, currentUser, playSound, settings, categories, addCategory, editCategory, removeCategory } = useStore();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('TODOS');
   const [isAdding, setIsAdding] = useState(false);
+  const [isManagingCategories, setIsManagingCategories] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -38,9 +39,8 @@ export default function Stock() {
   const canModify = currentUser?.rol === StaffRole.ADMIN || currentUser?.rol === StaffRole.BODEGA;
 
   const uniqueCategories = useMemo(() => {
-    const categories = stock.map(item => (item.categoria || 'SIN CATEGORÍA').toUpperCase());
-    return ['TODOS', ...Array.from(new Set(categories))].sort();
-  }, [stock]);
+    return ['TODOS', ...categories].sort();
+  }, [categories]);
 
   const filteredStock = useMemo(() => {
     return stock.filter(item => {
@@ -130,6 +130,12 @@ export default function Stock() {
         </div>
         {canModify && (
           <div className="flex flex-wrap gap-4">
+            <button 
+              onClick={() => setIsManagingCategories(true)}
+              className="flex items-center gap-2 px-6 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-sm"
+            >
+              <Settings size={18} /> Categorías
+            </button>
             <button 
               onClick={downloadFormat}
               className="flex items-center gap-2 px-8 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-sm"
@@ -278,7 +284,7 @@ export default function Stock() {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Categoría</label>
                   <select required className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-amber-500 outline-none font-black text-xl uppercase" value={newBale.categoria} onChange={(e) => setNewBale({...newBale, categoria: e.target.value})}>
-                    {['DEPORTIVO', 'BÁSICOS', 'INTERIOR', 'VERANO', 'ESCOLAR', 'LABORAL', 'INVIERNO', 'PROMOS'].map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
               </div>
@@ -393,6 +399,31 @@ export default function Stock() {
               <button onClick={() => setDeletingId(null)} className="flex-1 py-5 bg-slate-100 text-slate-900 rounded-[24px] font-black uppercase text-xs tracking-widest">Abortar</button>
               <button onClick={handleDelete} className="flex-1 py-5 bg-red-600 text-white rounded-[24px] font-black shadow-2xl shadow-red-600/30 uppercase text-xs tracking-widest">Confirmar Purga</button>
             </div>
+          </div>
+        </div>
+      )}
+      {isManagingCategories && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[56px] shadow-2xl w-full max-w-lg p-12 space-y-6">
+             <div className="flex justify-between items-center">
+               <h3 className="text-3xl font-black uppercase">Categorías</h3>
+               <button onClick={() => setIsManagingCategories(false)} className="p-2"><X size={24} /></button>
+             </div>
+             <div className="space-y-2 max-h-[300px] overflow-y-auto">
+               {categories.map((cat, i) => (
+                 <div key={i} className="flex gap-2 p-2 border-b">
+                   <span className="flex-1 font-bold">{cat}</span>
+                   <button onClick={() => removeCategory(cat)} className="text-red-500 text-xs">Eliminar</button>
+                 </div>
+               ))}
+             </div>
+             <div className="flex gap-2">
+                <input id="newCat" className="flex-1 p-3 border rounded-xl" placeholder="Nueva Categoría" />
+                <button onClick={() => {
+                   const input = document.getElementById('newCat') as HTMLInputElement;
+                   if (input.value) { addCategory(input.value.toUpperCase()); input.value = ''; }
+                }} className="p-3 bg-amber-600 text-white rounded-xl">Agregar</button>
+             </div>
           </div>
         </div>
       )}

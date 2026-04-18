@@ -287,35 +287,18 @@ export default function Home() {
 
       {canSeeCatalogue && (
         <div className="w-full max-w-6xl mb-12 animate-in slide-in-from-top duration-700">
-           <div className="flex items-center gap-4 mb-6">
-              <BookOpen size={24} className="text-gray-600" />
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Módulo de Catálogo Maestro</h2>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <button 
-                onClick={() => { playSound('transition'); navigate('/catalogo?mode=digital'); }}
-                className="group flex items-center justify-between p-8 bg-gray-800 rounded-[40px] text-white shadow-xl hover:bg-gray-900 transition-all hover:scale-[1.02] active:scale-95 text-left"
-              >
-                <div>
-                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4"><LayoutGrid size={24} /></div>
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">Catálogo Digital</h3>
-                  <p className="text-gray-100 text-[10px] font-bold uppercase italic mt-1 tracking-widest">Especial para WhatsApp (Cuadrícula)</p>
-                </div>
-                <ChevronRight size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
-              </button>
-
-              <button 
-                onClick={() => { playSound('transition'); navigate('/catalogo?mode=print'); }}
-                className="group flex items-center justify-between p-8 bg-slate-900 rounded-[40px] text-white shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 text-left"
-              >
-                <div>
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center mb-4"><List size={24} /></div>
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">Lista de Precios</h3>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase italic mt-1 tracking-widest">Formato Impreso (Líneas)</p>
-                </div>
-                <ChevronRight size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
-              </button>
-           </div>
+           <Link 
+             to="/catalogo"
+             onClick={() => playSound('transition')}
+             className="group flex items-center justify-between p-8 bg-indigo-600 rounded-[40px] text-white shadow-xl hover:bg-indigo-700 transition-all hover:scale-[1.02] active:scale-95 text-left"
+           >
+              <div>
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4"><LayoutGrid size={24} /></div>
+                <h3 className="text-2xl font-black uppercase tracking-tighter">Catálogo Maestro</h3>
+                <p className="text-indigo-100 text-[10px] font-bold uppercase italic mt-1 tracking-widest">Visualización y Precios</p>
+              </div>
+              <ChevronRight size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+           </Link>
         </div>
       )}
 

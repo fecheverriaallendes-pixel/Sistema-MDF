@@ -15,7 +15,7 @@ export default function Configuracion() {
   const { 
     settings, updateSettings, playSound, syncWithCloud, pushToCloud,
     isSyncing, lastSync, staff, addStaff, removeStaff, sales, stock, purchases,
-    clearAllSales, resetToMasterStock
+    clearAllSales, resetToMasterStock, carriers, removeCarrier, addCarrier
   } = useStore();
   
   const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS'>('RED');
@@ -242,7 +242,7 @@ export default function Configuracion() {
                 const form = e.target as HTMLFormElement;
                 const input = form.elements.namedItem('carrierName') as HTMLInputElement;
                 if (input.value.trim()) {
-                  useStore().addCarrier(input.value.trim());
+                  addCarrier(input.value.trim());
                   input.value = '';
                   playSound('success');
                 }
@@ -258,7 +258,7 @@ export default function Configuracion() {
             <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl">
               <h3 className="text-xl font-black uppercase tracking-tighter mb-8">Transportistas Habilitados</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {useStore().carriers.map(carrier => (
+                {carriers.map(carrier => (
                   <div key={carrier} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between group">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400"><Truck size={20} /></div>
@@ -267,7 +267,7 @@ export default function Configuracion() {
                         <p className="text-[9px] font-bold text-amber-500 uppercase">ACTIVO</p>
                       </div>
                     </div>
-                    <button onClick={() => useStore().removeCarrier(carrier)} className="p-3 text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                    <button onClick={() => removeCarrier(carrier)} className="p-3 text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
                   </div>
                 ))}
               </div>
