@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer } from '../types';
 import { db } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
 
@@ -490,6 +490,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   });
   
   const [adjustments, setAdjustments] = useState<CommissionAdjustment[]>(() => JSON.parse(localStorage.getItem('mdf_adjustments') || '[]'));
+  const [customers, setCustomers] = useState<Customer[]>([]);
 
   const isSyncingRef = useRef(false);
 
@@ -568,6 +569,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubPurchases: any;
     let unsubAdjustments: any;
     let unsubConfig: any;
+    let unsubCustomers: any;
 
     const initFirebase = async () => {
       try {
@@ -603,6 +605,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
             if (data.list) setCarriers(data.list);
           }
         });
+        unsubCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
+          setCustomers(snapshot.docs.map(doc => doc.data() as Customer));
+        });
       } catch (error) {
         console.error("Error inicializando Firebase:", error);
       }
@@ -617,6 +622,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubPurchases) unsubPurchases();
       if (unsubAdjustments) unsubAdjustments();
       if (unsubConfig) unsubConfig();
+      if (unsubCustomers) unsubCustomers();
     };
   }, []);
 
@@ -808,6 +814,24 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     deleteDoc(doc(db, 'staff', id));
   };
 
+  const addCustomer = (customer: Omit<Customer, 'id' | 'lastContacted' | 'notas'>) => {
+    const newId = Math.random().toString(36).substr(2, 9);
+    setDoc(doc(db, 'customers', newId), { 
+      ...customer, 
+      id: newId, 
+      lastContacted: new Date().toISOString(),
+      notas: []
+    });
+  };
+
+  const updateCustomer = (customer: Customer) => {
+    setDoc(doc(db, 'customers', customer.id), customer);
+  };
+
+  const removeCustomer = (id: string) => {
+    deleteDoc(doc(db, 'customers', id));
+  };
+
   const addPurchase = (p: Omit<Purchase, 'id' | 'saldoPendiente' | 'abonos' | 'estado'>) => {
     const newId = Math.random().toString(36).substr(2, 9);
     setDoc(doc(db, 'purchases', newId), {
@@ -896,8 +920,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
-      addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, 
+      sales, stock, staff, customers, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
+      addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>
       {children}

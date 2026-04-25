@@ -33,6 +33,7 @@ import Configuracion from './pages/Configuracion';
 import Comisiones from './pages/Comisiones';
 import Proveedores from './pages/Proveedores';
 import Catalogo from './pages/Catalogo';
+import CRM from './pages/CRM';
 import { useStore } from './store/GlobalContext';
 import { StaffRole } from './types';
 
@@ -46,6 +47,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'Inicio', icon: HomeIcon, path: '/', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
     { name: 'Catálogo', icon: BookOpen, path: '/catalogo', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
+    { name: 'CRM Clientes', icon: UserIcon, path: '/crm', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Registrar Venta', icon: PlusCircle, path: '/registrar', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Ventas y Clientes', icon: FileText, path: '/ventas', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Nómina Comisiones', icon: Coins, path: '/comisiones', roles: [StaffRole.ADMIN] },
@@ -179,6 +181,7 @@ export default function App() {
               <Route path="/ventas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Ventas /></ProtectedRoute>} />
               <Route path="/stock" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.BODEGA]}><Stock /></ProtectedRoute>} />
               <Route path="/despachos" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Despachos /></ProtectedRoute>} />
+              <Route path="/crm" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><CRM /></ProtectedRoute>} />
               <Route path="/etiquetas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Etiquetas /></ProtectedRoute>} />
               <Route path="/configuracion" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Configuracion /></ProtectedRoute>} />
               <Route path="/comisiones" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Comisiones /></ProtectedRoute>} />

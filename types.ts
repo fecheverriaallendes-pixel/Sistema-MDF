@@ -1,4 +1,15 @@
 
+export interface Customer {
+  id: string;
+  nombre: string;
+  telefono: string;
+  rut?: string;
+  email?: string;
+  direccion?: string;
+  notas: string[]; // History/interaction notes
+  lastContacted: string; // ISO date
+}
+
 export enum SaleStatus {
   PENDIENTE = 'Pendiente',
   ENVIADO = 'Enviado'

@@ -249,12 +249,6 @@ export default function Home() {
                   </button>
                 </form>
           </div>
-          
-          <div className="mt-8 flex flex-col items-center gap-2">
-              <div className="flex items-center gap-3 text-white/40 text-[9px] font-black uppercase tracking-widest">
-                <Database size={12} /> Cloud SQL: MODO LOCAL
-              </div>
-          </div>
         </div>
       </div>
     );

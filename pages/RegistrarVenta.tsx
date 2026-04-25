@@ -6,10 +6,11 @@ import { useStore } from '../store/GlobalContext';
 import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '../types';
 
 export default function RegistrarVenta() {
-  const { stock, staff, addSale, playSound } = useStore();
+  const { stock, staff, customers, addSale, playSound } = useStore();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'QUICK' | 'NORMAL'>('QUICK');
   const [success, setSuccess] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
   
   const vendedores = staff.filter(m => m.rol === StaffRole.VENDEDOR);
   const quickNameRef = useRef<HTMLInputElement>(null);
@@ -45,6 +46,19 @@ export default function RegistrarVenta() {
     observaciones: '',
     tipoDespacho: undefined
   });
+
+  const handleClientChange = (name: string) => {
+      setFormData(prev => ({...prev, cliente: name.toUpperCase()}));
+      const found = customers.find(c => c.nombre.toLowerCase() === name.toLowerCase());
+      if (found) {
+          setFormData(prev => ({
+              ...prev,
+              telefono: found.telefono,
+              rut: found.rut || '',
+              direccion: found.direccion || ''
+          }));
+      }
+  };
 
   useEffect(() => {
     if (mode === 'QUICK') quickNameRef.current?.focus();
@@ -130,7 +144,10 @@ export default function RegistrarVenta() {
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">
                 <User size={14} className="text-blue-500" /> Cliente
               </label>
-              <input ref={quickNameRef} required type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="NOMBRE" value={formData.cliente} onChange={(e) => setFormData({...formData, cliente: e.target.value.toUpperCase()})}/>
+              <input ref={quickNameRef} required list="customers-suggestions" type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="NOMBRE" value={formData.cliente} onChange={(e) => handleClientChange(e.target.value)}/>
+              <datalist id="customers-suggestions">
+                  {customers.map(c => <option key={c.id} value={c.nombre} />)}
+              </datalist>
             </div>
             
             <div className="md:col-span-1">
