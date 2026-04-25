@@ -832,6 +832,26 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     deleteDoc(doc(db, 'customers', id));
   };
 
+  const deleteSale = (saleId: string) => {
+    if (currentUser?.rol !== 'Admin') {
+      alert("Solo el administrador puede borrar ventas.");
+      return;
+    }
+    deleteDoc(doc(db, 'sales', saleId));
+    playSound('click');
+  };
+
+  const deleteAllSales = () => {
+    if (currentUser?.rol !== 'Admin') {
+      alert("Solo el administrador puede borrar todo el historial.");
+      return;
+    }
+    const batch = writeBatch(db);
+    sales.forEach(s => batch.delete(doc(db, 'sales', s.id)));
+    batch.commit();
+    playSound('success');
+  };
+
   const addPurchase = (p: Omit<Purchase, 'id' | 'saldoPendiente' | 'abonos' | 'estado'>) => {
     const newId = Math.random().toString(36).substr(2, 9);
     setDoc(doc(db, 'purchases', newId), {
@@ -921,7 +941,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
-      addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer,
+      addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>
       {children}

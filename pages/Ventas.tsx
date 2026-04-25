@@ -1,14 +1,16 @@
 
 import React, { useState } from 'react';
-import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package } from 'lucide-react';
+import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType } from '../types';
 
 export default function Ventas() {
-  const { sales, updateSale, playSound } = useStore();
+  const { sales, updateSale, playSound, deleteSale, deleteAllSales, currentUser } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('PENDING');
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
+
+  const isAdmin = currentUser?.rol === 'Admin';
 
   const pendingLiveSales = sales.filter(s => !s.datosCompletos && s.tipoVenta === SaleType.LIVE);
   const readySales = sales.filter(s => s.datosCompletos || s.tipoVenta === SaleType.NORMAL);
@@ -51,6 +53,14 @@ export default function Ventas() {
           <p className="text-slate-500 italic font-medium">Gestión de clientes y recolección de datos pendientes</p>
         </div>
         <div className="flex bg-slate-200 p-1.5 rounded-[24px] shadow-inner">
+          {isAdmin && (
+            <button 
+              onClick={() => { if(confirm('¿BORRAR TODO EL HISTORIAL?')) deleteAllSales(); playSound('click'); }}
+              className="flex items-center gap-2 px-4 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all"
+            >
+              <Trash2 size={16} /> Borrar Todo
+            </button>
+          )}
           <button 
             onClick={() => { setActiveTab('PENDING'); playSound('click'); }}
             className={`flex items-center gap-3 px-8 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${activeTab === 'PENDING' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-600'}`}
@@ -138,6 +148,14 @@ export default function Ventas() {
                       <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-400 rounded-full text-[10px] font-black uppercase">
                         <CheckCircle2 size={12} /> Datos OK
                       </div>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
+                        className="mt-2 text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     )}
                   </td>
                 </tr>
