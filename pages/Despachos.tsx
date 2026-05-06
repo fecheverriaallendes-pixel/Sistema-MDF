@@ -19,7 +19,8 @@ import {
   Plus,
   Home,
   Building2,
-  ArrowRight
+  ArrowRight,
+  Camera
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
@@ -204,7 +205,14 @@ export default function Despachos() {
               {/* Card Header */}
               <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-start">
                 <div>
-                  <span className="inline-block px-3 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-black mb-2">#{sale.numeroVenta}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block px-3 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-black mb-2">#{sale.numeroVenta}</span>
+                    {sale.comprobante && (
+                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 mb-2">
+                        <Camera size={16} />
+                      </a>
+                    )}
+                  </div>
                   <p className="text-xs font-bold text-slate-500">{sale.fecha}</p>
                 </div>
                 <div className="text-right">
@@ -385,7 +393,14 @@ export default function Despachos() {
             <tbody className="divide-y divide-slate-100">
               {currentList.map((sale) => (
                 <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-8 py-6 font-mono font-bold text-slate-600">#{sale.numeroVenta}</td>
+                  <td className="px-8 py-6 font-mono font-bold text-slate-600 flex items-center gap-2">
+                    #{sale.numeroVenta}
+                    {sale.comprobante && (
+                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500">
+                        <Camera size={16} />
+                      </a>
+                    )}
+                  </td>
                   <td className="px-8 py-6 font-bold text-slate-900">{sale.cliente}</td>
                   <td className="px-8 py-6 text-xs text-slate-500 uppercase max-w-xs truncate">{sale.direccion}</td>
                   <td className="px-8 py-6 font-bold text-slate-700">{sale.cantidad} x {stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</td>

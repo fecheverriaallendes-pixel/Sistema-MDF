@@ -12,7 +12,9 @@ export default function TransportistaView() {
 
   if (!currentUser) return null;
 
-  const filteredSales = sales.filter(s => s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase() && s.enviado);
+  const isAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
+  const filteredSales = sales.filter(s => (isAdmin || s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase()) && s.enviado);
+  
   const assignedSales = activeTab === 'PENDING' 
     ? filteredSales.filter(s => s.estadoDespacho !== DispatchStatus.ENTREGADO)
     : filteredSales.filter(s => s.estadoDespacho === DispatchStatus.ENTREGADO);

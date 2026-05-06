@@ -729,18 +729,16 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const uploadProofPhoto = async (file: File, saleId: string): Promise<string> => {
-    if (!file) throw new Error("El archivo no es válido");
-    console.log("Uploading file:", file.name, "size:", file.size, "type:", file.type);
+    if (!file) throw new Error("Archivo nulo");
     
-    // Ensure we are uploading as a Blob/File which should work
-    const storageRef = ref(storage, `comprobantes/${saleId}/${Date.now()}_${file.name}`);
-    
-    // Some browsers/environments might have issues with File objects directly in uploadBytes
-    // Creating a blob from it can sometimes help
-    const blob = file.slice(0, file.size, file.type);
-    
-    await uploadBytes(storageRef, blob);
-    return await getDownloadURL(storageRef);
+    try {
+        const storageRef = ref(storage, `comprobantes/${saleId}/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        return await getDownloadURL(snapshot.ref);
+    } catch (e) {
+        console.error("Error subiendo:", e);
+        throw e;
+    }
   };
 
   const updateDispatchItems = (saleId: string, quantity: number) => {
