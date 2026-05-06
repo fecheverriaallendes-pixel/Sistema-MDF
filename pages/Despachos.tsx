@@ -30,14 +30,17 @@ export default function Despachos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'HISTORIAL'>('AGENCIA');
+  const [transportistaFilter, setTransportistaFilter] = useState('');
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
 
   const allSales = sales;
+  
+  // Filter logic
+  let agencySales = [];
+  let homeSales = [];
+  let historySales = [];
 
-  console.log("Total sales:", sales.length, "Search term:", searchTerm);
-
-  // Siempre filtramos por término de búsqueda primero
-  const searchResults = searchTerm ? allSales.filter(s => 
+  const baseSales = searchTerm ? allSales.filter(s => 
       s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
       s.numeroVenta.toString().includes(searchTerm) ||
       s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -45,27 +48,23 @@ export default function Despachos() {
       (s.agencia?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
   ) : allSales;
 
-  // Si hay búsqueda activa, queremos ver resultados de todas las categorías
-  // Si no hay búsqueda, aplicamos los filtros de pestañas
-  let agencySales = [];
-  let homeSales = [];
-  let historySales = [];
-
   if (searchTerm) {
-    // Si buscamos, mostramos resultados agrupados según su estado/tipo
-    agencySales = searchResults.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA);
-    homeSales = searchResults.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
-    historySales = searchResults.filter(s => s.status === SaleStatus.ENVIADO);
+    agencySales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA);
+    homeSales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
+    historySales = baseSales.filter(s => s.status === SaleStatus.ENVIADO);
   } else {
-    // Si no hay búsqueda, aplicamos filtros de pestañas estrictos
     agencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA);
     homeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
     historySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
   }
   
-  const currentList = activeTab === 'AGENCIA' ? agencySales 
+  let currentList = activeTab === 'AGENCIA' ? agencySales 
                     : activeTab === 'DOMICILIO' ? homeSales 
                     : historySales;
+
+  if (transportistaFilter) {
+      currentList = currentList.filter(s => s.transportista === transportistaFilter);
+  }
 
   const handleExportExcel = () => {
     import('xlsx').then(XLSX => {
@@ -183,17 +182,27 @@ export default function Despachos() {
       </div>
 
       {/* Search */}
-      <div className="relative group max-w-2xl mx-auto">
-        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors">
-          <Search size={24} />
+      <div className="flex gap-4 max-w-4xl mx-auto">
+        <div className="relative group flex-1">
+          <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors">
+            <Search size={24} />
+          </div>
+          <input 
+            type="text" 
+            placeholder="Buscar cliente, código, transporte o agencia..."
+            className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-200 outline-none font-bold text-base shadow-sm transition-all"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
-        <input 
-          type="text" 
-          placeholder="Buscar cliente, código, transporte o agencia..."
-          className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-200 outline-none font-bold text-base shadow-sm transition-all"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <select 
+            className="px-6 bg-white rounded-[24px] border-2 border-slate-100 font-bold text-sm outline-none"
+            value={transportistaFilter}
+            onChange={(e) => setTransportistaFilter(e.target.value)}
+        >
+            <option value="">Todos los transportistas</option>
+            {carriers.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
       {/* Content */}
@@ -381,34 +390,26 @@ export default function Despachos() {
         <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Venta</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Destino</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Items</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Despacho</th>
-                <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {currentList.map((sale) => (
-                <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-8 py-6 font-mono font-bold text-slate-600 flex items-center gap-2">
-                    #{sale.numeroVenta}
-                    {sale.comprobante && (
-                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500">
-                        <Camera size={16} />
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-8 py-6 font-bold text-slate-900">{sale.cliente}</td>
-                  <td className="px-8 py-6 text-xs text-slate-500 uppercase max-w-xs truncate">{sale.direccion}</td>
-                  <td className="px-8 py-6 font-bold text-slate-700">{sale.cantidad} x {stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</td>
-                  <td className="px-8 py-6 text-xs text-slate-500">
-                    <div>{sale.fechaDespacho || 'N/A'}</div>
-                    <div className="font-bold text-slate-700">{sale.transportista || sale.agencia || 'N/A'}</div>
-                  </td>
-                  <td className="px-8 py-6 text-right">
+                <tr>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Venta</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Destino</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Items</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha Entrega</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Transportista/Agencia</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {currentList.map((sale) => (
+                  <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-8 py-6 font-mono font-bold text-slate-600 flex items-center gap-2">#{sale.numeroVenta}</td>
+                    <td className="px-8 py-6 font-bold text-slate-900">{sale.cliente}</td>
+                    <td className="px-8 py-6 text-xs text-slate-500 uppercase max-w-xs truncate">{sale.direccion}</td>
+                    <td className="px-8 py-6 font-bold text-slate-700">{sale.cantidad} x {stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</td>
+                    <td className="px-8 py-6 text-xs text-slate-600 font-bold">{sale.fechaDespacho ? new Date(sale.fechaDespacho).toLocaleDateString() : 'N/A'}</td>
+                    <td className="px-8 py-6 text-xs text-slate-700 font-bold">{sale.transportista || sale.agencia || 'N/A'}</td>
+                    <td className="px-8 py-6 text-right">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {sale.status}
                     </span>

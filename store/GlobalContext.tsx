@@ -427,8 +427,7 @@ interface StoreContextType {
   addSale: (saleData: Partial<Sale>) => Sale;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
   markAsSent: (saleId: string) => void;
-  updateDispatchStatus: (saleId: string, status: DispatchStatus, comprobanteUrl?: string) => void;
-  uploadProofPhoto: (file: File, saleId: string) => Promise<string>;
+  updateDispatchStatus: (saleId: string, status: DispatchStatus) => void;
   updateDispatchItems: (saleId: string, quantity: number) => void;
   assignCarrier: (saleId: string, carrier: string) => void;
   addCarrier: (name: string) => void;
@@ -718,26 +717,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
 
-  const updateDispatchStatus = (saleId: string, status: DispatchStatus, comprobanteUrl?: string) => {
+  const updateDispatchStatus = (saleId: string, status: DispatchStatus) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
       const updatedData: Partial<Sale> = { estadoDespacho: status };
-      if (comprobanteUrl) updatedData.comprobante = comprobanteUrl;
       
       setDoc(doc(db, 'sales', saleId), { ...sale, ...updatedData });
-    }
-  };
-
-  const uploadProofPhoto = async (file: File, saleId: string): Promise<string> => {
-    if (!file) throw new Error("Archivo nulo");
-    
-    try {
-        const storageRef = ref(storage, `comprobantes/${saleId}/${Date.now()}_${file.name}`);
-        const snapshot = await uploadBytes(storageRef, file);
-        return await getDownloadURL(snapshot.ref);
-    } catch (e) {
-        console.error("Error subiendo:", e);
-        throw e;
     }
   };
 

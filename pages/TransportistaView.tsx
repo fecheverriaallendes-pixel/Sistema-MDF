@@ -4,10 +4,8 @@ import { useStore } from '../store/GlobalContext';
 import { DispatchStatus, Sale, StaffRole } from '../types';
 
 export default function TransportistaView() {
-  const { sales, updateDispatchStatus, uploadProofPhoto, currentUser } = useStore();
+  const { sales, updateDispatchStatus, currentUser } = useStore();
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<'PENDING' | 'FINISHED'>('PENDING');
 
   if (!currentUser) return null;
@@ -21,24 +19,8 @@ export default function TransportistaView() {
 
   const handleUpdateStatus = async (saleId: string, status: DispatchStatus) => {
     if (confirm(`¿Cambiar estado a ${status}?`)) {
-        let photoUrl = undefined;
-        
-        // Only attempt upload if Entregado and a file is selected
-        if (status === DispatchStatus.ENTREGADO && file) {
-            setUploading(true);
-            try {
-                photoUrl = await uploadProofPhoto(file, saleId);
-            } catch (e: any) {
-                alert("Error al subir foto: " + e.message);
-                setUploading(false);
-                return;
-            }
-            setUploading(false);
-        }
-        
-        updateDispatchStatus(saleId, status, photoUrl);
+        updateDispatchStatus(saleId, status);
         setSelectedSale(null);
-        setFile(null); // Clear file after successful status update
         alert("Estado actualizado correctamente.");
     }
   };
@@ -87,18 +69,6 @@ export default function TransportistaView() {
           <div className="bg-white p-6 rounded-3xl w-full max-w-sm space-y-4">
             <h2 className="font-black text-xl">Venta #{selectedSale.numeroVenta}</h2>
             
-            {selectedSale.estadoDespacho !== DispatchStatus.ENTREGADO && (
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500">Subir Foto Comprobante</label>
-                    <input 
-                        type="file" 
-                        accept="image/*"
-                        capture="environment"
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                        className="w-full p-2 border rounded-xl"
-                    />
-                </div>
-            )}
 
             <div className="grid grid-cols-2 gap-2">
               <button 
