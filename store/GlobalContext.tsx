@@ -657,8 +657,16 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   const addSale = (saleData: Partial<Sale>) => {
     const now = new Date();
+    const items = saleData.items || [];
+    
+    // Calculate total
+    const total = saleData.tipoVenta === SaleType.NOTA_VENTA 
+       ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0)
+       : (saleData.valorUnitario || 0) * (saleData.cantidad || 0);
+
     const newSale: Sale = {
       ...saleData,
+      total,
       id: Math.random().toString(36).substr(2, 9),
       numeroVenta: sales.length > 0 ? Math.max(...sales.map(s => s.numeroVenta || 0)) + 1 : 2000,
       fecha: now.toLocaleDateString(),
@@ -676,10 +684,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     
     setDoc(doc(db, 'sales', newSale.id), cleanSale);
 
-    const stockItem = stock.find(item => item.codigo === saleData.codigoFardo);
-    if (stockItem) {
-      const nuevoStockVal = Math.max(0, stockItem.stockActual - (saleData.cantidad || 1));
-      setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
+    if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
+        items.forEach(item => {
+            const stockItem = stock.find(s => s.codigo === item.codigoFardo);
+            if (stockItem) {
+                const nuevoStockVal = Math.max(0, stockItem.stockActual - item.cantidad);
+                setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
+            }
+        });
+    } else {
+        const stockItem = stock.find(item => item.codigo === saleData.codigoFardo);
+        if (stockItem) {
+            const nuevoStockVal = Math.max(0, stockItem.stockActual - (saleData.cantidad || 0));
+            setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
+        }
     }
 
     return newSale;

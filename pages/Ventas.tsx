@@ -5,7 +5,7 @@ import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType } from '../types';
 
 export default function Ventas() {
-  const { sales, updateSale, playSound, deleteSale, deleteAllSales, currentUser } = useStore();
+  const { sales, updateSale, playSound, deleteSale, deleteAllSales, currentUser, stock } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('PENDING');
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -120,9 +120,17 @@ export default function Ventas() {
                     <div className="flex flex-col">
                       <div className="flex items-center gap-3">
                         <Tag size={18} className="text-slate-400" />
-                        <span className="font-black text-slate-700 uppercase">{sale.codigoFardo}</span>
+                        <span className="font-black text-slate-700 uppercase">
+                          {sale.tipoVenta === SaleType.NOTA_VENTA 
+                            ? 'Nota de Venta (Varios)' 
+                            : stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}
+                        </span>
                       </div>
-                      <span className="text-[9px] font-black text-slate-400 uppercase ml-7">{sale.variante || 'Pendiente Clasificar'}</span>
+                      <span className="text-[9px] font-black text-slate-400 uppercase ml-7">
+                        {sale.tipoVenta === SaleType.NOTA_VENTA 
+                          ? sale.items?.map(i => i.codigoFardo).join(', ') 
+                          : (sale.variante || 'Pendiente Clasificar')}
+                      </span>
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right font-black text-slate-900 text-2xl tracking-tighter">

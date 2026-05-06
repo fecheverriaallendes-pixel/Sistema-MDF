@@ -34,6 +34,7 @@ import Comisiones from './pages/Comisiones';
 import Proveedores from './pages/Proveedores';
 import Catalogo from './pages/Catalogo';
 import CRM from './pages/CRM';
+import TransportistaView from './pages/TransportistaView';
 import { useStore } from './store/GlobalContext';
 import { StaffRole } from './types';
 
@@ -54,6 +55,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'Pagos Proveedores', icon: Wallet, path: '/proveedores', roles: [StaffRole.ADMIN] },
     { name: 'Inventario Stock', icon: Package, path: '/stock', roles: [StaffRole.ADMIN, StaffRole.BODEGA] },
     { name: 'Logística Despacho', icon: Truck, path: '/despachos', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
+    { name: 'Mis Despachos', icon: Truck, path: '/transportista', roles: [StaffRole.TRANSPORTISTA, StaffRole.ADMIN] },
     { name: 'Etiquetas Térmicas', icon: Tags, path: '/etiquetas', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
     { name: 'Configuración', icon: Settings, path: '/configuracion', roles: [StaffRole.ADMIN] },
   ];
@@ -180,6 +182,7 @@ export default function App() {
               <Route path="/registrar" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><RegistrarVenta /></ProtectedRoute>} />
               <Route path="/ventas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Ventas /></ProtectedRoute>} />
               <Route path="/stock" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.BODEGA]}><Stock /></ProtectedRoute>} />
+              <Route path="/transportista" element={<ProtectedRoute roles={[StaffRole.TRANSPORTISTA, StaffRole.ADMIN]}><TransportistaView /></ProtectedRoute>} />
               <Route path="/despachos" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Despachos /></ProtectedRoute>} />
               <Route path="/crm" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><CRM /></ProtectedRoute>} />
               <Route path="/etiquetas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Etiquetas /></ProtectedRoute>} />

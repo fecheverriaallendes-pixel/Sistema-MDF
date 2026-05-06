@@ -8,9 +8,11 @@ import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '.
 export default function RegistrarVenta() {
   const { stock, staff, customers, addSale, playSound } = useStore();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'QUICK' | 'NORMAL'>('QUICK');
+  const [mode, setMode] = useState<'QUICK' | 'NORMAL' | 'NOTA_VENTA'>('QUICK');
   const [success, setSuccess] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
+  const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number}[]>([]);
+  const [newItem, setNewItem] = useState({codigoFardo: '', cantidad: 1, valorUnitario: 0});
   
   const vendedores = staff.filter(m => m.rol === StaffRole.VENDEDOR);
   const quickNameRef = useRef<HTMLInputElement>(null);
@@ -60,6 +62,21 @@ export default function RegistrarVenta() {
       }
   };
 
+  const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
+    const foundItem = stock.find(s => s.codigo === code.toUpperCase());
+    const price = foundItem ? foundItem.precioSugerido : 0;
+    
+    if (isNotaVenta) {
+      setNewItem(prev => ({...prev, codigoFardo: code.toUpperCase(), valorUnitario: price}));
+    } else {
+      setFormData(prev => ({...prev, codigoFardo: code.toUpperCase(), valorUnitario: price}));
+    }
+  };
+
+  const calculatedTotal = mode === 'NOTA_VENTA' 
+    ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0)
+    : (formData.valorUnitario * (formData.cantidad || 1));
+
   useEffect(() => {
     if (mode === 'QUICK') quickNameRef.current?.focus();
   }, [mode, success]);
@@ -67,15 +84,17 @@ export default function RegistrarVenta() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const isQuick = mode === 'QUICK';
+    const isNotaVenta = mode === 'NOTA_VENTA';
     
     const finalData = {
       ...formData,
-      tipoVenta: isQuick ? SaleType.LIVE : SaleType.NORMAL,
-      total: formData.valorUnitario * formData.cantidad,
+      tipoVenta: isQuick ? SaleType.LIVE : isNotaVenta ? SaleType.NOTA_VENTA : SaleType.NORMAL,
+      items: isNotaVenta ? items : undefined,
+      total: isNotaVenta ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0) : formData.valorUnitario * formData.cantidad,
       status: SaleStatus.PENDIENTE,
       datosCompletos: !isQuick,
-      variante: isQuick ? '' : formData.variante, // En live va vacío para obligar a completar después
-      tipoDespacho: isQuick ? undefined : (formData.tipoDespacho || DispatchType.AGENCIA) // En live queda undefined
+      variante: isQuick ? '' : formData.variante, 
+      tipoDespacho: isQuick ? undefined : (formData.tipoDespacho || DispatchType.AGENCIA)
     };
 
     addSale(finalData);
@@ -88,6 +107,7 @@ export default function RegistrarVenta() {
       direccion: '', estadoPago: 'Pendiente', tipoComision: CommissionType.FARDO_NORMAL,
       juntaCompra: 'DESPACHO INMEDIATO', observaciones: '', tipoDespacho: undefined
     });
+    setItems([]);
     
     setTimeout(() => setSuccess(false), 2000);
   };
@@ -111,6 +131,12 @@ export default function RegistrarVenta() {
             className={`flex-1 sm:flex-none flex items-center justify-center gap-3 px-8 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${mode === 'NORMAL' ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900'}`}
           >
             <ClipboardList size={20} /> Venta Normal
+          </button>
+          <button 
+            onClick={() => { setMode('NOTA_VENTA'); playSound('click'); }}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-3 px-8 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${mode === 'NOTA_VENTA' ? 'bg-amber-600 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            <FileText size={20} /> Nota de Venta
           </button>
         </div>
       </div>
@@ -168,14 +194,45 @@ export default function RegistrarVenta() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              <div className="relative">
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Package size={18} className="text-blue-500" /> Código de Fardo</label>
-              <input required list="stock-suggestions" type="text" className="w-full px-8 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-2xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="F-XXX" value={formData.codigoFardo} onChange={(e) => setFormData({...formData, codigoFardo: e.target.value.toUpperCase()})}/>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Package size={18} className="text-blue-500" /> {mode === 'NOTA_VENTA' ? 'Agregar Producto' : 'Código de Fardo'}</label>
+              
+              {mode === 'NOTA_VENTA' ? (
+                <div className="flex gap-2">
+                    <input list="stock-suggestions" type="text" className="w-[150px] px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CODIGO" value={newItem.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, true)}/>
+                    <input type="number" className="w-20 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CANT" value={newItem.cantidad} onChange={(e) => setNewItem({...newItem, cantidad: Number(e.target.value)})}/>
+                    <input type="number" className="w-24 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="VALOR" value={newItem.valorUnitario} onChange={(e) => setNewItem({...newItem, valorUnitario: Number(e.target.value)})}/>
+                    <button type="button" onClick={() => { 
+                        if(newItem.codigoFardo && newItem.cantidad > 0 && newItem.valorUnitario > 0) {
+                            setItems([...items, newItem]);
+                            setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0});
+                        }
+                    }} className="bg-amber-600 text-white rounded-2xl px-4">+</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                    <input required list="stock-suggestions" type="text" className="w-full px-8 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-2xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="F-XXX" value={formData.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, false)}/>
+                    <input required type="number" className="w-32 px-4 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-xl font-black outline-none transition-all" placeholder="VALOR" value={formData.valorUnitario || ''} onChange={(e) => setFormData({...formData, valorUnitario: Number(e.target.value)})}/>
+                </div>
+              )}
               <datalist id="stock-suggestions">
                 {stock.filter(s => s.disponible).map(s => ( <option key={s.id} value={s.codigo}>{s.tipo}</option> ))}
               </datalist>
             </div>
-
-            <div>
+            
+            {mode === 'NOTA_VENTA' ? (
+              <div className="max-h-40 overflow-y-auto bg-slate-50 border-2 border-slate-100 rounded-[28px] p-4">
+                {items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-xs font-bold p-1">
+                        <span>{item.cantidad} x {stock.find(s => s.codigo === item.codigoFardo)?.tipo || item.codigoFardo}</span>
+                        <span>${(item.valorUnitario * item.cantidad).toLocaleString()}</span>
+                    </div>
+                ))}
+                <div className="border-t mt-2 pt-2 text-right font-black text-sm">
+                    Total: ${calculatedTotal.toLocaleString()}
+                </div>
+              </div>
+            ) : (
+             <div>
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Coins size={18} className="text-amber-500" /> Tipo de Pago / Comisión</label>
               <select 
                 required 
@@ -188,6 +245,7 @@ export default function RegistrarVenta() {
                 ))}
               </select>
             </div>
+            )}
           </div>
 
           {mode === 'NORMAL' && (
@@ -232,7 +290,9 @@ export default function RegistrarVenta() {
 
           <div className="bg-slate-900 p-10 rounded-[40px] text-white shadow-2xl">
             <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><DollarSign size={18} className="text-emerald-400" /> Valor Final Venta ($)</label>
-            <input required type="number" onWheel={(e) => e.currentTarget.blur()} className="w-full px-8 py-6 bg-slate-800 border-2 border-slate-700 rounded-[28px] text-5xl font-black text-emerald-400 focus:border-emerald-500 outline-none" value={formData.valorUnitario || ''} onChange={(e) => setFormData({...formData, valorUnitario: Number(e.target.value)})} placeholder="0"/>
+            <div className="w-full px-8 py-6 bg-slate-800 border-2 border-slate-700 rounded-[28px] text-5xl font-black text-emerald-400">
+               ${calculatedTotal.toLocaleString()}
+            </div>
           </div>
 
           <button type="submit" className={`group w-full py-8 rounded-[32px] text-white font-black text-3xl flex items-center justify-center gap-4 shadow-2xl transition-all active:scale-[0.97] ${mode === 'QUICK' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'}`}>

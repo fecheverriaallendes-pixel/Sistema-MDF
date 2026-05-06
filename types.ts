@@ -25,12 +25,22 @@ export enum DispatchStatus {
   PREPARACION = 'En Preparación',
   LISTO_PARA_RETIRO = 'Listo para Retiro',
   EN_RUTA = 'En Ruta',
-  ENTREGADO = 'Entregado'
+  ENTREGADO = 'Entregado',
+  CLIENTE_AUSENTE = 'Cliente ausente',
+  DIRECCION_NO_ENCONTRADA = 'Dirección no encontrada',
+  CLIENTE_NO_RECIBIO = 'Cliente no recibió'
 }
 
 export enum SaleType {
   NORMAL = 'Normal',
-  LIVE = 'Live TikTok'
+  LIVE = 'Live TikTok',
+  NOTA_VENTA = 'Nota de Venta'
+}
+
+export interface SaleItem {
+  codigoFardo: string;
+  cantidad: number;
+  valorUnitario: number;
 }
 
 export enum CommissionType {
@@ -43,7 +53,8 @@ export enum StaffRole {
   VENDEDOR = 'Vendedor',
   BODEGA = 'Jefe de Bodega',
   DESPACHO = 'Encargado de Despacho',
-  ADMIN = 'Administrador'
+  ADMIN = 'Administrador',
+  TRANSPORTISTA = 'Transportista'
 }
 
 export enum PurchaseType {
@@ -101,10 +112,11 @@ export interface Sale {
   cliente: string;
   telefono: string;
   rut?: string;
-  codigoFardo: string; 
+  codigoFardo?: string; 
   variante?: string;
-  valorUnitario: number;
-  cantidad: number;
+  valorUnitario?: number;
+  cantidad?: number;
+  items?: SaleItem[];
   total: number;
   direccion?: string;
   estadoPago: string;

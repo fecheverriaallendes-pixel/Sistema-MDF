@@ -95,7 +95,19 @@ export default function Stock() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canModify) return;
-    addStockItem({ ...newBale, proveedor: newBale.proveedor.toUpperCase() });
+    
+    let finalCodigo = newBale.codigo;
+    if (!finalCodigo) {
+        const existingCodes = stock.map(s => s.codigo).filter(c => c.startsWith('MDF-'));
+        let nextNum = 1;
+        if(existingCodes.length > 0) {
+            const numbers = existingCodes.map(c => parseInt(c.split('-')[1]) || 0);
+            nextNum = Math.max(...numbers) + 1;
+        }
+        finalCodigo = `MDF-${String(nextNum).padStart(4, '0')}`;
+    }
+
+    addStockItem({ ...newBale, codigo: finalCodigo, proveedor: newBale.proveedor.toUpperCase() });
     setNewBale({ codigo: '', tipo: '', proveedor: '', precioCosto: 0, precioSugerido: 0, stockActual: 1, unidad: 'FARDO' });
     setIsAdding(false);
     playSound('success');
@@ -265,8 +277,8 @@ export default function Stock() {
 
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Código Identificador</label>
-                  <input required className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-black text-xl uppercase" placeholder="F-XXX" value={newBale.codigo} onChange={(e) => setNewBale({...newBale, codigo: e.target.value.toUpperCase()})}/>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Código Identificador (Opcional)</label>
+                  <input className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-black text-xl uppercase" placeholder="MDF-XXXX (Autogenera si vacío)" value={newBale.codigo} onChange={(e) => setNewBale({...newBale, codigo: e.target.value.toUpperCase()})}/>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cant. Inicial ({newBale.unidad === 'FARDO' ? 'Fardos' : 'Unidades'})</label>

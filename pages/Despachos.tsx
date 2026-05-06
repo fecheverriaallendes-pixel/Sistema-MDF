@@ -112,8 +112,8 @@ export default function Despachos() {
       alert(`Error: La cantidad verificada (${sale.itemsDespachados || 0}) no coincide con la venta (${sale.cantidad}).`);
       return;
     }
-    if (sale.tipoDespacho === DispatchType.DOMICILIO && !sale.transportista) {
-      alert("Error: Debes asignar un transportista para despachos a domicilio.");
+    if ((sale.tipoDespacho === DispatchType.DOMICILIO || sale.tipoDespacho === DispatchType.AGENCIA) && !sale.transportista) {
+      alert("Error: Debes asignar un transportista para este tipo de despacho.");
       return;
     }
     markAsSent(sale.id);
@@ -304,21 +304,36 @@ export default function Despachos() {
                       </div>
                     )}
                     {sale.tipoDespacho === DispatchType.AGENCIA && (
-                      <div className="mb-4">
-                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-2">Nombre de Agencia</p>
-                        <input 
-                          type="text"
-                          className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
-                          placeholder="Nombre de la agencia..."
-                          value={sale.agencia || ''}
-                          onChange={(e) => assignAgency(sale.id, e.target.value)}
-                        />
+                      <div className="mb-4 space-y-4">
+                        <div>
+                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-2">Nombre de Agencia</p>
+                          <input 
+                            type="text"
+                            className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
+                            placeholder="Nombre de la agencia..."
+                            value={sale.agencia || ''}
+                            onChange={(e) => assignAgency(sale.id, e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-2">Transporte a Agencia</p>
+                          <select 
+                            className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
+                            value={sale.transportista || ''}
+                            onChange={(e) => assignCarrier(sale.id, e.target.value)}
+                          >
+                            <option value="">Seleccionar Transportista...</option>
+                            {carriers.map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     )}
 
                     <button 
                       onClick={() => handleConfirmDispatch(sale)}
-                      disabled={(sale.itemsDespachados || 0) !== sale.cantidad || (sale.tipoDespacho === DispatchType.DOMICILIO && !sale.transportista)}
+                      disabled={(sale.itemsDespachados || 0) !== sale.cantidad || ((sale.tipoDespacho === DispatchType.DOMICILIO || sale.tipoDespacho === DispatchType.AGENCIA) && !sale.transportista)}
                       className="w-full py-3 bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
                     >
                       Confirmar Salida
