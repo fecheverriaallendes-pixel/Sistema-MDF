@@ -8,7 +8,7 @@ export default function TransportistaView() {
   
   if (!currentUser) return null;
 
-  const assignedSales = sales.filter(s => s.transportista === currentUser.nombre && s.enviado);
+  const assignedSales = sales.filter(s => s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase() && s.enviado);
 
   return (
     <div className="p-4 space-y-6">
