@@ -20,7 +20,9 @@ export default function TransportistaView() {
   const handleUpdateStatus = async (saleId: string, status: DispatchStatus) => {
     if (confirm(`¿Cambiar estado a ${status}?`)) {
         let photoUrl = undefined;
-        if (file) {
+        
+        // Only attempt upload if Entregado and a file is selected
+        if (status === DispatchStatus.ENTREGADO && file) {
             setUploading(true);
             try {
                 photoUrl = await uploadProofPhoto(file, saleId);
@@ -34,7 +36,7 @@ export default function TransportistaView() {
         
         updateDispatchStatus(saleId, status, photoUrl);
         setSelectedSale(null);
-        setFile(null);
+        setFile(null); // Clear file after successful status update
         alert("Estado actualizado correctamente.");
     }
   };
