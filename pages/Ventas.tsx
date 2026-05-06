@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2 } from 'lucide-react';
+import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType } from '../types';
 
@@ -103,7 +103,14 @@ export default function Ventas() {
             <tbody className="divide-y divide-slate-100">
               {filteredSales.map((sale) => (
                 <tr key={sale.id} className="group hover:bg-slate-50/80 transition-colors">
-                  <td className="px-8 py-6 font-mono font-black text-slate-900 text-lg">#{sale.numeroVenta}</td>
+                  <td className="px-8 py-6 font-mono font-black text-slate-900 text-lg flex items-center gap-2">
+                    #{sale.numeroVenta}
+                    {sale.comprobante && (
+                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-700">
+                        <Camera size={16} />
+                      </a>
+                    )}
+                  </td>
                   <td className="px-8 py-6">
                     <div className="flex flex-col">
                       <span className="font-black text-slate-900 uppercase tracking-tight">{sale.cliente}</span>

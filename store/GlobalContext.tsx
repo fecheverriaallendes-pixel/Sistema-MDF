@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer } from '../types';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const INITIAL_MASTER_STOCK: Omit<StockItem, 'id' | 'disponible'>[] = [
   { codigo: 'MDF-001', tipo: 'Abrigo Corto Mujer CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 120000, stockActual: 0, unidad: 'FARDO' },
@@ -426,7 +427,8 @@ interface StoreContextType {
   addSale: (saleData: Partial<Sale>) => Sale;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
   markAsSent: (saleId: string) => void;
-  updateDispatchStatus: (saleId: string, status: DispatchStatus) => void;
+  updateDispatchStatus: (saleId: string, status: DispatchStatus, comprobanteUrl?: string) => void;
+  uploadProofPhoto: (file: File, saleId: string) => Promise<string>;
   updateDispatchItems: (saleId: string, quantity: number) => void;
   assignCarrier: (saleId: string, carrier: string) => void;
   addCarrier: (name: string) => void;
@@ -716,9 +718,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
 
-  const updateDispatchStatus = (saleId: string, status: DispatchStatus) => {
+  const updateDispatchStatus = (saleId: string, status: DispatchStatus, comprobanteUrl?: string) => {
     const sale = sales.find(s => s.id === saleId);
-    if (sale) setDoc(doc(db, 'sales', saleId), { ...sale, estadoDespacho: status });
+    if (sale) {
+      const updatedData: Partial<Sale> = { estadoDespacho: status };
+      if (comprobanteUrl) updatedData.comprobante = comprobanteUrl;
+      
+      setDoc(doc(db, 'sales', saleId), { ...sale, ...updatedData });
+    }
+  };
+
+  const uploadProofPhoto = async (file: File, saleId: string): Promise<string> => {
+    const storageRef = ref(storage, `comprobantes/${saleId}/${Date.now()}_${file.name}`);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
   };
 
   const updateDispatchItems = (saleId: string, quantity: number) => {

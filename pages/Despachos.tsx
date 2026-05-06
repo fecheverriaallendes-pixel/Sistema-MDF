@@ -52,12 +52,12 @@ export default function Despachos() {
 
   if (searchTerm) {
     // Si buscamos, mostramos resultados agrupados según su estado/tipo
-    agencySales = searchResults.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.AGENCIA || !s.tipoDespacho));
+    agencySales = searchResults.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA);
     homeSales = searchResults.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
     historySales = searchResults.filter(s => s.status === SaleStatus.ENVIADO);
   } else {
     // Si no hay búsqueda, aplicamos filtros de pestañas estrictos
-    agencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.AGENCIA || !s.tipoDespacho));
+    agencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA);
     homeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
     historySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
   }
