@@ -8,10 +8,14 @@ export default function TransportistaView() {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'FINISHED'>('PENDING');
+
   if (!currentUser) return null;
 
-  const assignedSales = sales.filter(s => s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase() && s.enviado && s.estadoDespacho !== DispatchStatus.ENTREGADO);
+  const filteredSales = sales.filter(s => s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase() && s.enviado);
+  const assignedSales = activeTab === 'PENDING' 
+    ? filteredSales.filter(s => s.estadoDespacho !== DispatchStatus.ENTREGADO)
+    : filteredSales.filter(s => s.estadoDespacho === DispatchStatus.ENTREGADO);
 
   const handleUpdateStatus = async (saleId: string, status: DispatchStatus) => {
     if (confirm(`¿Cambiar estado a ${status}?`)) {
@@ -20,8 +24,8 @@ export default function TransportistaView() {
             setUploading(true);
             try {
                 photoUrl = await uploadProofPhoto(file, saleId);
-            } catch (e) {
-                alert("Error al subir foto");
+            } catch (e: any) {
+                alert("Error al subir foto: " + e.message);
                 setUploading(false);
                 return;
             }
@@ -31,15 +35,19 @@ export default function TransportistaView() {
         updateDispatchStatus(saleId, status, photoUrl);
         setSelectedSale(null);
         setFile(null);
-        if (status === DispatchStatus.ENTREGADO) {
-            alert("Estado actualizado. El comprobante ha sido procesado.");
-        }
+        alert("Estado actualizado correctamente.");
     }
   };
+
 
   return (
     <div className="p-4 space-y-6">
       <h1 className="text-2xl font-black text-slate-900 uppercase">Mis Despachos</h1>
+      
+      <div className="flex bg-slate-100 p-1 rounded-full">
+         <button onClick={() => setActiveTab('PENDING')} className={`flex-1 py-3 text-xs font-black rounded-full uppercase ${activeTab === 'PENDING' ? 'bg-white shadow' : ''}`}>Pendientes</button>
+         <button onClick={() => setActiveTab('FINISHED')} className={`flex-1 py-3 text-xs font-black rounded-full uppercase ${activeTab === 'FINISHED' ? 'bg-white shadow' : ''}`}>Entregados</button>
+      </div>
       
       <div className="space-y-4">
         {assignedSales.map(sale => (
