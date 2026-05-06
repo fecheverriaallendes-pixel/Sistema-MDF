@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Truck, CheckCircle2, AlertCircle, Camera } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
-import { DispatchStatus, Sale } from '../types';
+import { DispatchStatus, Sale, StaffRole } from '../types';
 
 export default function TransportistaView() {
   const { sales, updateDispatchStatus, uploadProofPhoto, currentUser } = useStore();
