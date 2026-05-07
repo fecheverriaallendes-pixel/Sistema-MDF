@@ -9,11 +9,17 @@ export default function Ventas() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('PENDING');
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   const isAdmin = currentUser?.rol === 'Admin';
 
   const pendingLiveSales = sales.filter(s => !s.datosCompletos && s.tipoVenta === SaleType.LIVE);
-  const readySales = sales.filter(s => s.datosCompletos || s.tipoVenta === SaleType.NORMAL);
+  const readySales = sales.filter(s => {
+    if (!(s.datosCompletos || s.tipoVenta === SaleType.NORMAL)) return false;
+    const d = new Date(s.fecha);
+    return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
+  });
   const currentSales = activeTab === 'PENDING' ? pendingLiveSales : readySales;
 
   const filteredSales = currentSales.filter(s => 
@@ -22,7 +28,7 @@ export default function Ventas() {
     s.numeroVenta.toString().includes(searchTerm)
   );
 
-  const handleCompleteSale = (e: React.FormEvent) => {
+  const handleSaveSale = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSale) return;
     
@@ -30,7 +36,7 @@ export default function Ventas() {
     const finalSale = {
       ...editingSale,
       datosCompletos: true,
-      status: SaleStatus.PENDIENTE,
+      status: editingSale.status === SaleStatus.PENDIENTE ? SaleStatus.PENDIENTE : editingSale.status,
       tipoDespacho: editingSale.tipoDespacho || DispatchType.AGENCIA
     };
 
@@ -86,6 +92,17 @@ export default function Ventas() {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
+      
+      {activeTab === 'READY' && (
+        <div className="flex gap-4 p-4 bg-slate-50 rounded-[24px]">
+          <select className="px-6 py-3 rounded-xl border font-bold" value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))}>
+            {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select className="px-6 py-3 rounded-xl border font-bold" value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))}>
+            {Array.from({length: 12}).map((_, i) => <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('es-ES', { month: 'long' })}</option>)}
+          </select>
+        </div>
+      )}
 
       <div className="bg-white rounded-[48px] border border-slate-100 shadow-2xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -152,18 +169,12 @@ export default function Ventas() {
                     </button>
                   </td>
                   <td className="px-8 py-6 text-center">
-                    {activeTab === 'PENDING' ? (
                       <button 
                         onClick={() => setEditingSale(sale)}
-                        className="px-6 py-3 bg-amber-500 text-white rounded-[18px] font-black text-xs uppercase tracking-widest hover:bg-amber-600 transition-all flex items-center gap-2 mx-auto shadow-xl"
+                        className={`px-6 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 mx-auto shadow-xl ${activeTab === 'PENDING' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
                       >
-                        <FileEdit size={16} /> Completar Datos
+                        <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
                       </button>
-                    ) : (
-                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-400 rounded-full text-[10px] font-black uppercase">
-                        <CheckCircle2 size={12} /> Datos OK
-                      </div>
-                    )}
                     {isAdmin && (
                       <button
                         onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
@@ -193,7 +204,7 @@ export default function Ventas() {
               </button>
             </div>
             
-            <form onSubmit={handleCompleteSale} className="p-10 space-y-8">
+            <form onSubmit={handleSaveSale} className="p-10 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block flex items-center gap-2">

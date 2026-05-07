@@ -43,6 +43,7 @@ export default function TransportistaView() {
               <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-3 py-1 rounded-full">{sale.estadoDespacho}</span>
             </div>
             <p className="text-sm text-slate-600 mb-2">Cliente: {sale.cliente} - {sale.telefono}</p>
+            <p className="text-sm font-bold text-slate-700 mb-2">Transportista: {sale.transportista || 'No asignado'}</p>
             <a 
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${sale.direccion}, Chile`)}`}
               target="_blank"
