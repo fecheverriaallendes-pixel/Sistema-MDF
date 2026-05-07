@@ -74,35 +74,30 @@ export default function TransportistaView() {
             <div className="grid grid-cols-2 gap-2">
               <button 
                 onClick={() => handleUpdateStatus(selectedSale.id, DispatchStatus.ENTREGADO)}
-                disabled={uploading}
-                className="flex items-center justify-center gap-2 p-3 bg-emerald-500 text-white rounded-xl font-bold text-xs disabled:bg-slate-300"
+                className="flex items-center justify-center gap-2 p-3 bg-emerald-500 text-white rounded-xl font-bold text-xs"
               >
-                {uploading ? 'Subiendo...' : <><CheckCircle2 size={16} /> ENTREGADO</>}
+                <CheckCircle2 size={16} /> ENTREGADO
               </button>
               <button 
                 onClick={() => handleUpdateStatus(selectedSale.id, DispatchStatus.EN_RUTA)}
-                disabled={uploading}
-                className="flex items-center justify-center gap-2 p-3 bg-blue-500 text-white rounded-xl font-bold text-xs disabled:bg-slate-300"
+                className="flex items-center justify-center gap-2 p-3 bg-blue-500 text-white rounded-xl font-bold text-xs"
               >
                 <Truck size={16} /> EN RUTA
               </button>
               <button 
                 onClick={() => handleUpdateStatus(selectedSale.id, DispatchStatus.CLIENTE_NO_RECIBIO)}
-                disabled={uploading}
-                className="flex items-center justify-center gap-2 p-3 bg-amber-500 text-white rounded-xl font-bold text-xs disabled:bg-slate-300"
+                className="flex items-center justify-center gap-2 p-3 bg-amber-500 text-white rounded-xl font-bold text-xs"
               >
                 <AlertCircle size={16} /> NO RECIBIÓ
               </button>
               <button 
                 onClick={() => handleUpdateStatus(selectedSale.id, DispatchStatus.DIRECCION_NO_ENCONTRADA)}
-                disabled={uploading}
-                className="flex items-center justify-center gap-2 p-3 bg-red-500 text-white rounded-xl font-bold text-xs disabled:bg-slate-300"
+                className="flex items-center justify-center gap-2 p-3 bg-red-500 text-white rounded-xl font-bold text-xs"
               >
                 <AlertCircle size={16} /> NO ENCONTRADA
               </button>
               <button 
                 onClick={() => setSelectedSale(null)}
-                disabled={uploading}
                 className="col-span-2 p-3 bg-slate-200 text-slate-600 rounded-xl font-bold text-xs"
               >
                 CANCELAR

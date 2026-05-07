@@ -17,7 +17,11 @@ export default function Ventas() {
   const pendingLiveSales = sales.filter(s => !s.datosCompletos && s.tipoVenta === SaleType.LIVE);
   const readySales = sales.filter(s => {
     if (!(s.datosCompletos || s.tipoVenta === SaleType.NORMAL)) return false;
-    const d = new Date(s.fecha);
+    
+    // Attempt parsing; if it fails, default to today or skip
+    const d = s.fecha ? new Date(s.fecha) : new Date();
+    if (isNaN(d.getTime())) return false; // Invalid date
+    
     return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
   });
   const currentSales = activeTab === 'PENDING' ? pendingLiveSales : readySales;

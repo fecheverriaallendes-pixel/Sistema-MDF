@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon } from '../types';
 import { db, storage } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -432,8 +432,9 @@ interface StoreContextType {
   assignCarrier: (saleId: string, carrier: string) => void;
   addCarrier: (name: string) => void;
   removeCarrier: (name: string) => void;
-  addAdjustment: (adj: Omit<CommissionAdjustment, 'id'>) => void;
-  removeAdjustment: (id: string) => void;
+  coupons: Coupon[];
+  addCoupon: (coupon: Omit<Coupon, 'id' | 'createdAt'>) => void;
+  redeemCoupon: (code: string) => void;
   clearAllSales: () => void;
   addStockItem: (item: Omit<StockItem, 'id' | 'disponible'>) => void;
   updateStockItem: (id: string, updatedData: Partial<StockItem>) => void;
@@ -491,6 +492,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   });
   
   const [adjustments, setAdjustments] = useState<CommissionAdjustment[]>(() => JSON.parse(localStorage.getItem('mdf_adjustments') || '[]'));
+  const [coupons, setCoupons] = useState<Coupon[]>(() => JSON.parse(localStorage.getItem('mdf_coupons') || '[]'));
   const [customers, setCustomers] = useState<Customer[]>([]);
 
   const isSyncingRef = useRef(false);
@@ -569,6 +571,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubStaff: any;
     let unsubPurchases: any;
     let unsubAdjustments: any;
+    let unsubCoupons: any;
     let unsubConfig: any;
     let unsubCustomers: any;
 
@@ -600,6 +603,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubAdjustments = onSnapshot(collection(db, 'adjustments'), (snap) => {
           setAdjustments(snap.docs.map(d => d.data() as CommissionAdjustment));
         });
+        unsubCoupons = onSnapshot(collection(db, 'coupons'), (snap) => {
+          setCoupons(snap.docs.map(d => d.data() as Coupon));
+        });
         unsubConfig = onSnapshot(doc(db, 'config', 'carriers'), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -622,6 +628,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubStaff) unsubStaff();
       if (unsubPurchases) unsubPurchases();
       if (unsubAdjustments) unsubAdjustments();
+      if (unsubCoupons) unsubCoupons();
       if (unsubConfig) unsubConfig();
       if (unsubCustomers) unsubCustomers();
     };
@@ -760,6 +767,24 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   const removeAdjustment = (id: string) => {
     deleteDoc(doc(db, 'adjustments', id));
+  };
+
+  const addCoupon = (coupon: Omit<Coupon, 'id' | 'createdAt'>) => {
+    const newCoupon: Coupon = {
+        ...coupon,
+        id: Math.random().toString(36).substr(2, 9),
+        createdAt: new Date().toISOString()
+    };
+    setDoc(doc(db, 'coupons', newCoupon.id), newCoupon);
+  };
+  
+  const redeemCoupon = (code: string) => {
+      const coupon = coupons.find(c => c.code === code && !c.used);
+      if (coupon) {
+          setDoc(doc(db, 'coupons', coupon.id), { ...coupon, used: true });
+      } else {
+          throw new Error("Cupón no encontrado o ya utilizado");
+      }
   };
 
   const clearAllSales = () => {

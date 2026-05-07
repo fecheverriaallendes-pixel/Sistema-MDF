@@ -54,7 +54,8 @@ export enum StaffRole {
   BODEGA = 'Jefe de Bodega',
   DESPACHO = 'Encargado de Despacho',
   ADMIN = 'Administrador',
-  TRANSPORTISTA = 'Transportista'
+  TRANSPORTISTA = 'Transportista',
+  POST_VENTA = 'Post-Venta'
 }
 
 export enum PurchaseType {
@@ -144,4 +145,15 @@ export interface CommissionAdjustment {
   vendedor: string;
   monto: number; // Negative for deductions, positive for bonuses
   motivo: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  value: number;
+  validUntil: string;
+  used: boolean;
+  createdAt: string;
+  customerName?: string;
+  saleId?: string;
 }
