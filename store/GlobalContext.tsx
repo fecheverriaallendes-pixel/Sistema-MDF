@@ -679,14 +679,15 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       total,
       id: Math.random().toString(36).substr(2, 9),
       numeroVenta: sales.length > 0 ? Math.max(...sales.map(s => s.numeroVenta || 0)) + 1 : 2000,
-      fecha: now.toLocaleDateString(),
+      fecha: now.toISOString().split('T')[0],
       hora: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: SaleStatus.PENDIENTE,
       enviado: false,
       datosCompletos: saleData.tipoVenta === SaleType.NORMAL,
       estadoDespacho: DispatchStatus.PREPARACION,
       itemsDespachados: 0,
-      tipoDespacho: saleData.tipoDespacho || '' // Avoid undefined for Firestore
+      tipoDespacho: saleData.tipoDespacho || '',
+      timestamp: now.toISOString()
     } as Sale;
     
     // Remove undefined values to prevent Firestore errors
@@ -952,8 +953,17 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const getStats = () => {
-    const today = new Date().toLocaleDateString();
-    const todaySales = sales.filter(s => s.fecha === today);
+    const today = new Date().toISOString().split('T')[0];
+    const todaySales = sales.filter(s => {
+        let saleDateISO: string;
+        if (s.timestamp) {
+            saleDateISO = new Date(s.timestamp).toISOString().split('T')[0];
+        } else {
+            const [d, m, y] = s.fecha.split('/');
+            saleDateISO = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+        return saleDateISO === today;
+    });
     let totalCosto = 0;
     sales.forEach(sale => {
       const product = stock.find(p => p.codigo === sale.codigoFardo);
@@ -985,8 +995,17 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const now = new Date();
     
     return sales.filter(s => {
-      const [day, month, year] = s.fecha.split('/').map(Number);
-      const saleDate = new Date(year, month - 1, day);
+      let saleDate: Date;
+      if (s.timestamp) {
+        saleDate = new Date(s.timestamp);
+      } else {
+        const parts = s.fecha.split('/');
+        // Assuming DD/MM/YYYY based on Chilean context
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        saleDate = new Date(year, month - 1, day);
+      }
       
       if (type === 'custom' && startDate && endDate) {
         return saleDate >= startDate && saleDate <= endDate;

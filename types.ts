@@ -137,6 +137,7 @@ export interface Sale {
   itemsDespachados?: number; // Cantidad verificada/escaneada
   agencia?: string; // Starken, Chilexpress, BlueExpress, etc.
   transportista?: string; // Nombre del transportista para despacho a domicilio
+  timestamp?: string; // ISO date
 }
 
 export interface CommissionAdjustment {
