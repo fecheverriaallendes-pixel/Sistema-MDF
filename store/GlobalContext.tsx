@@ -434,7 +434,9 @@ interface StoreContextType {
   removeCarrier: (name: string) => void;
   coupons: Coupon[];
   addCoupon: (coupon: Omit<Coupon, 'id' | 'createdAt'>) => void;
-  redeemCoupon: (code: string) => void;
+  redeemCoupon: (id: string) => void;
+  redeemCouponByCode: (code: string) => void;
+  deleteCoupon: (id: string) => void;
   clearAllSales: () => void;
   addStockItem: (item: Omit<StockItem, 'id' | 'disponible'>) => void;
   updateStockItem: (id: string, updatedData: Partial<StockItem>) => void;
@@ -778,13 +780,25 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     setDoc(doc(db, 'coupons', newCoupon.id), newCoupon);
   };
   
-  const redeemCoupon = (code: string) => {
-      const coupon = coupons.find(c => c.code === code && !c.used);
-      if (coupon) {
-          setDoc(doc(db, 'coupons', coupon.id), { ...coupon, used: true });
-      } else {
-          throw new Error("Cupón no encontrado o ya utilizado");
-      }
+  const redeemCoupon = (id: string) => {
+    const coupon = coupons.find(c => c.id === id);
+    if (coupon) {
+      setDoc(doc(db, 'coupons', id), { ...coupon, used: true });
+    } else {
+      throw new Error("Cupón no encontrado");
+    }
+  };
+
+  const redeemCouponByCode = (code: string) => {
+      const coupon = coupons.find(c => c.code === code);
+      if (!coupon) throw new Error("Cupón no encontrado");
+      if (coupon.used) throw new Error("Cupón ya utilizado");
+      if (new Date(coupon.validUntil) < new Date()) throw new Error("Cupón expiró");
+      setDoc(doc(db, 'coupons', coupon.id), { ...coupon, used: true });
+  }
+
+  const deleteCoupon = (id: string) => {
+    deleteDoc(doc(db, 'coupons', id));
   };
 
   const clearAllSales = () => {
@@ -988,7 +1002,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, clearAllSales,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, clearAllSales,
       addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>

@@ -8,6 +8,7 @@ import {
   AlertCircle,
   ArrowRight,
   Zap,
+  Ticket,
   RefreshCw,
   Cloud,
   PieChart,
@@ -55,10 +56,13 @@ const StatCard = ({ title, value, icon: Icon, color, subtitle, trend }: any) => 
 );
 
 export default function Dashboard() {
-  const { getStats, getReportData, syncWithCloud, isSyncing, settings, sales } = useStore();
+  const { getStats, getReportData, syncWithCloud, isSyncing, settings, sales, coupons } = useStore();
   const [reportState, setReportState] = React.useState<{isOpen: boolean, type: 'weekly' | 'monthly' | 'custom', sales: Sale[]}>({isOpen: false, type: 'weekly', sales: []});
   const [dateRange, setDateRange] = React.useState({ start: '', end: '' });
   const stats = getStats();
+
+  const pendingCoupons = coupons.filter(c => !c.used).length;
+  const totalPendingValue = coupons.filter(c => !c.used).reduce((acc, c) => acc + c.value, 0);
 
   const openReport = (type: 'weekly' | 'monthly' | 'custom') => {
     if (type === 'custom') {
@@ -180,6 +184,8 @@ export default function Dashboard() {
         <StatCard title="Falta Completar" value={stats.faltaCompletar} icon={AlertCircle} color="red" subtitle="Pedidos con datos incompletos" />
         <StatCard title="Falta Pagar" value={stats.faltaPagar} icon={DollarSign} color="amber" subtitle="Pedidos pendientes de pago" />
         <StatCard title="Falta Despachar" value={stats.faltaDespachar} icon={Truck} color="blue" subtitle="Pedidos listos para salir" />
+        <StatCard title="Cupones Pendientes" value={pendingCoupons} icon={Ticket} color="emerald" subtitle="Cupones por canjear" />
+        <StatCard title="Dinero en Cupones" value={`$${totalPendingValue.toLocaleString()}`} icon={DollarSign} color="red" subtitle="Valor total pendiente" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
