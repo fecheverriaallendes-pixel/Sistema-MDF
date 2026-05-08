@@ -168,7 +168,7 @@ export default function Etiquetas() {
         )}
         {readyToPrint.map((sale) => (
           <div key={sale.id} className="relative group animate-in fade-in slide-in-from-bottom duration-500 w-full flex flex-col items-center">
-            <div className={`relative bg-white p-2 border-2 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-2xl hover:border-emerald-400 transition-all shadow-lg scale-[0.4] origin-top overflow-hidden`}>
+            <div className={`relative bg-white p-2 border-2 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-2xl hover:border-emerald-400 transition-all shadow-lg scale-[0.4] origin-top -mb-[90mm] overflow-hidden`}>
               {sale.impresa && (
                 <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-full shadow-lg z-10">IMPRESO</div>
               )}
