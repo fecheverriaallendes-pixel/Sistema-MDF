@@ -8,7 +8,7 @@ import { Sale, SaleType, SaleStatus, CommissionType } from '../types';
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
-  <div className="w-[100mm] h-[150mm] bg-white border-2 border-black p-4 flex flex-col items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[150mm]">
+  <div className="w-[100mm] h-[150mm] box-border bg-white border-2 border-black p-4 flex flex-col items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[150mm]">
     <div className="flex flex-row border-b-2 border-dashed border-black pb-2 mb-2 justify-between">
       <div className="flex flex-col items-center">
         <img src={LOGO_URL} alt="Logo" className="w-[20mm] object-contain mb-1 grayscale contrast-[2] brightness-75" />
@@ -59,6 +59,11 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
           <p className="text-lg font-black uppercase leading-none">{sale.cantidad || 1}</p>
           <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Variante</p>
           <p className="text-md font-bold uppercase leading-none">{sale.variante || 'Normal'}</p>
+
+          <div className="mt-4 p-2 bg-slate-100 border-l-4 border-slate-900">
+            <p className="text-[10px] font-bold leading-tight">🔄 Para cambios, debe grabar un video de inicio a fin SIN EXCEPCIÓN</p>
+            <p className="text-[9px] text-slate-600 mt-1">Grabe su video al recibir y abrir su compra, de inicio a fin ante problemas de etiquetado o error de entregas.</p>
+          </div>
         </div>
       </div>
       <div className="border-t border-black pt-2">
@@ -155,7 +160,7 @@ export default function Etiquetas() {
           body { margin: 0; padding: 0; background: white !important; }
           .no-print { display: none !important; }
           .print-only { display: block !important; }
-          .label-container { width: 100mm; height: 150mm; page-break-after: always; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+          .label-container { width: 100mm; height: 150mm; box-sizing: border-box; page-break-after: always; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         }
       `}</style>
     </div>
