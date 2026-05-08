@@ -12,11 +12,12 @@ export default function Ventas() {
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
-  const isAdmin = currentUser?.rol === 'Admin';
+  const isAdmin = currentUser?.rol === StaffRole.ADMIN;
 
-  const pendingLiveSales = sales.filter(s => !s.datosCompletos && s.tipoVenta === SaleType.LIVE);
+  const pendingLiveSales = sales.filter(s => !s.datosCompletos && s.tipoVenta === SaleType.LIVE && (isAdmin || s.vendedor === currentUser?.nombre));
   const readySales = sales.filter(s => {
     if (!(s.datosCompletos || s.tipoVenta === SaleType.NORMAL)) return false;
+    if (!(isAdmin || s.vendedor === currentUser?.nombre)) return false;
     
     // Attempt parsing; if it fails, default to today or skip
     const d = s.fecha ? new Date(s.fecha) : new Date();
@@ -28,7 +29,7 @@ export default function Ventas() {
 
   const filteredSales = currentSales.filter(s => 
     s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.codigoFardo && s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase())) ||
     s.numeroVenta.toString().includes(searchTerm)
   );
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Printer, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
-import { Sale, SaleType, SaleStatus, CommissionType } from '../types';
+import { Sale, SaleType, SaleStatus, CommissionType, StaffRole } from '../types';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
@@ -82,10 +82,18 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
 );
 
 export default function Etiquetas() {
-  const { sales, stock } = useStore();
+  const { sales, stock, currentUser, updateSale } = useStore();
   const [individualSale, setIndividualSale] = useState<Sale | null>(null);
   const [showDemo, setShowDemo] = useState(false);
-  const readyToPrint = sales.filter(s => s.datosCompletos && !s.enviado).sort((a, b) => b.numeroVenta - a.numeroVenta);
+  const [showPrinted, setShowPrinted] = useState(false);
+  const isAdmin = currentUser?.rol === StaffRole.ADMIN;
+  const readyToPrint = sales.filter(s => {
+    const isSellerReady = s.datosCompletos && !s.enviado;
+    if (!isSellerReady) return false;
+    if (!showPrinted && s.impresa) return false;
+    if (isAdmin) return true;
+    return s.vendedor === currentUser?.nombre;
+  }).sort((a, b) => b.numeroVenta - a.numeroVenta);
 
   // Fix: Added missing tipoComision property to satisfy the Sale interface
   const demoSale: Sale = {
@@ -104,8 +112,17 @@ export default function Etiquetas() {
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
 
-  const handlePrintAll = () => { setIndividualSale(null); setTimeout(() => window.print(), 50); };
-  const handlePrintSingle = (sale: Sale) => { setIndividualSale(sale); setTimeout(() => window.print(), 50); };
+  const handlePrintAll = () => {
+    readyToPrint.forEach(s => updateSale(s.id, { impresa: true }));
+    setIndividualSale(null);
+    setTimeout(() => window.print(), 50);
+  };
+
+  const handlePrintSingle = (sale: Sale) => {
+    updateSale(sale.id, { impresa: true });
+    setIndividualSale(sale);
+    setTimeout(() => window.print(), 50);
+  };
 
   return (
     <div className="space-y-8">
@@ -115,6 +132,10 @@ export default function Etiquetas() {
           <p className="text-slate-500 font-medium italic">Cola de impresión térmica (100x150mm)</p>
         </div>
         <div className="flex gap-4 w-full sm:w-auto">
+          <label className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl cursor-pointer">
+            <input type="checkbox" checked={showPrinted} onChange={e => setShowPrinted(e.target.checked)} />
+            <span className="text-xs font-bold text-slate-700">Incluir impresos</span>
+          </label>
           <button onClick={() => setShowDemo(!showDemo)} className={`px-4 py-2 rounded-xl font-bold text-xs transition-all ${showDemo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
             {showDemo ? 'Ocultar Demo' : 'Ver Guía Visual'}
           </button>
@@ -123,20 +144,23 @@ export default function Etiquetas() {
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-10 justify-items-center no-print pb-20">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 justify-items-center no-print pb-20">
         {showDemo && (
           <div className="relative group w-full flex flex-col items-center">
             <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-500 text-white text-[10px] font-black px-4 py-1 rounded-full shadow-lg">ETIQUETA DE MUESTRA</div>
-            <div className="relative bg-white p-4 border-4 border-amber-200 rounded-[32px] shadow-lg scale-75 sm:scale-100 origin-top overflow-hidden"><Label sale={demoSale} stock={stock} /></div>
+            <div className="relative bg-white p-4 border-4 border-amber-200 rounded-[32px] shadow-lg scale-[0.5] origin-top overflow-hidden"><Label sale={demoSale} stock={stock} /></div>
           </div>
         )}
         {readyToPrint.map((sale) => (
           <div key={sale.id} className="relative group animate-in fade-in slide-in-from-bottom duration-500 w-full flex flex-col items-center">
-            <div className="relative bg-white p-4 border-4 border-dashed border-slate-200 rounded-[32px] hover:border-emerald-400 transition-all shadow-lg scale-75 sm:scale-100 origin-top overflow-hidden">
+            <div className={`relative bg-white p-4 border-4 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-[32px] hover:border-emerald-400 transition-all shadow-lg scale-[0.5] origin-top overflow-hidden`}>
+              {sale.impresa && (
+                <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-full shadow-lg z-10">IMPRESO</div>
+              )}
               <Label sale={sale} stock={stock} />
               <div className="absolute inset-0 bg-slate-900/80 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center backdrop-blur-sm">
                 <button onClick={() => handlePrintSingle(sale)} className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-2xl transition-all">
-                  <Printer size={20} /> IMPRIMIR ÉSTA
+                  <Printer size={20} /> IMPRIMIR {sale.impresa ? 'OTRA VEZ' : 'AHORA'}
                 </button>
               </div>
             </div>

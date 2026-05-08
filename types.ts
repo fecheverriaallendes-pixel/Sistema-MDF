@@ -138,6 +138,7 @@ export interface Sale {
   agencia?: string; // Starken, Chilexpress, BlueExpress, etc.
   transportista?: string; // Nombre del transportista para despacho a domicilio
   timestamp?: string; // ISO date
+  impresa?: boolean;
 }
 
 export interface CommissionAdjustment {
