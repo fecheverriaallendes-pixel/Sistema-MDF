@@ -86,9 +86,16 @@ export default function Etiquetas() {
   const [individualSale, setIndividualSale] = useState<Sale | null>(null);
   const [showDemo, setShowDemo] = useState(false);
   const [showPrinted, setShowPrinted] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const readyToPrint = sales.filter(s => {
     if (!s) return false;
+    const matchesSearch = searchTerm === '' || 
+                          s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          s.numeroVenta.toString().includes(searchTerm) ||
+                          (s.codigoFardo && s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (!matchesSearch) return false;
+
     const isSellerReady = s.datosCompletos && !s.enviado;
     if (!isSellerReady) return false;
     if (!showPrinted && s.impresa) return false;
@@ -133,6 +140,13 @@ export default function Etiquetas() {
           <p className="text-slate-500 font-medium italic">Cola de impresión térmica (100x150mm)</p>
         </div>
         <div className="flex gap-4 w-full sm:w-auto">
+          <input 
+            type="text" 
+            placeholder="Buscar..." 
+            value={searchTerm} 
+            onChange={e => setSearchTerm(e.target.value)}
+            className="px-4 py-2 rounded-xl bg-slate-100 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-40"
+          />
           <label className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-xl cursor-pointer">
             <input type="checkbox" checked={showPrinted} onChange={e => setShowPrinted(e.target.checked)} />
             <span className="text-xs font-bold text-slate-700">Incluir impresos</span>
@@ -154,7 +168,7 @@ export default function Etiquetas() {
         )}
         {readyToPrint.map((sale) => (
           <div key={sale.id} className="relative group animate-in fade-in slide-in-from-bottom duration-500 w-full flex flex-col items-center">
-            <div className={`relative bg-white p-4 border-4 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-[32px] hover:border-emerald-400 transition-all shadow-lg scale-[0.5] origin-top overflow-hidden`}>
+            <div className={`relative bg-white p-2 border-2 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-2xl hover:border-emerald-400 transition-all shadow-lg scale-[0.4] origin-top overflow-hidden`}>
               {sale.impresa && (
                 <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-full shadow-lg z-10">IMPRESO</div>
               )}
@@ -165,7 +179,7 @@ export default function Etiquetas() {
                 </button>
               </div>
             </div>
-            <p className="mt-4 text-xs font-black uppercase text-slate-400">Previsualización #{sale.numeroVenta}</p>
+            <p className="mt-1 text-[10px] font-black uppercase text-slate-400">Previsualización #{sale.numeroVenta}</p>
           </div>
         ))}
         {readyToPrint.length === 0 && !showDemo && (
