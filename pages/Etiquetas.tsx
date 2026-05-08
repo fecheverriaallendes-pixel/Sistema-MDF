@@ -88,6 +88,7 @@ export default function Etiquetas() {
   const [showPrinted, setShowPrinted] = useState(false);
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const readyToPrint = sales.filter(s => {
+    if (!s) return false;
     const isSellerReady = s.datosCompletos && !s.enviado;
     if (!isSellerReady) return false;
     if (!showPrinted && s.impresa) return false;

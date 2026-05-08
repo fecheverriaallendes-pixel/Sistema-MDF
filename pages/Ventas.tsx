@@ -14,8 +14,9 @@ export default function Ventas() {
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
 
-  const pendingLiveSales = sales.filter(s => !s.datosCompletos && s.tipoVenta === SaleType.LIVE && (isAdmin || s.vendedor === currentUser?.nombre));
+  const pendingLiveSales = sales.filter(s => s && !s.datosCompletos && s.tipoVenta === SaleType.LIVE && (isAdmin || s.vendedor === currentUser?.nombre));
   const readySales = sales.filter(s => {
+    if (!s) return false;
     if (!(s.datosCompletos || s.tipoVenta === SaleType.NORMAL)) return false;
     if (!(isAdmin || s.vendedor === currentUser?.nombre)) return false;
     
