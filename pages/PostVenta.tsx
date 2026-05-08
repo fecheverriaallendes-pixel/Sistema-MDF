@@ -67,61 +67,63 @@ export default function PostVenta() {
   };
   
   const downloadPDFEnhanced = (coupon: any) => {
-    // PDF portrait ticket style (80mm width typical for tickets)
-    const doc = new jsPDF({ unit: 'mm', format: [80, 150] });
+    // Explicitly set orientation to portrait 'p'
+    const doc = new jsPDF('p', 'mm', [100, 150]);
 
-    // Background and Border
+    // Background and Border with a slight margin to avoid cut-offs on thermal printers
     doc.setDrawColor(250, 204, 21); // Yellow
-    doc.setLineWidth(1.5);
-    doc.rect(2, 2, 76, 146);
+    doc.setLineWidth(1);
+    doc.rect(5, 5, 90, 140);
 
     // Brand "Watermark"
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(18); // Slightly smaller to fit better
+    doc.setFontSize(24);
     doc.setTextColor(240, 240, 240); // Even lighter
-    doc.text(`EL MUNDO`, 40, 70, { align: 'center', angle: 45 });
-    doc.text(`DEL FARDO`, 40, 80, { align: 'center', angle: 45 });
+    doc.text(`EL MUNDO`, 50, 80, { align: 'center', angle: 45 });
+    doc.text(`DEL FARDO`, 50, 95, { align: 'center', angle: 45 });
 
     // Title
     doc.setFontSize(14);
     doc.setTextColor(180, 83, 9);
-    doc.text(`CUPÓN DE COMPENSACIÓN`, 40, 15, { align: 'center' });
+    doc.text(`CUPÓN DE COMPENSACIÓN`, 50, 15, { align: 'center' });
 
     // Details Section
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setTextColor(31, 41, 55);
-    doc.text(`Cliente:`, 7, 30);
+    doc.text(`Cliente:`, 10, 25);
     doc.setFont("Helvetica", "normal");
-    doc.text(coupon.customerName || 'N/A', 25, 30);
+    // Wrap the customer name
+    const customerLines = doc.splitTextToSize(coupon.customerName || 'N/A', 60);
+    doc.text(customerLines, 30, 25);
     
     doc.setFont("Helvetica", "bold");
-    doc.text(`Cupón:`, 7, 35);
+    doc.text(`Cupón:`, 10, 35);
     doc.setFont("Helvetica", "normal");
-    doc.text(coupon.code, 25, 35);
+    doc.text(coupon.code, 30, 35);
 
     // Value Section
     doc.setFillColor(22, 163, 74);
-    doc.rect(10, 50, 60, 20, 'F');
+    doc.rect(10, 50, 80, 20, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(16);
-    doc.text(`CLP $${coupon.value.toLocaleString('es-CL')}`, 40, 62, { align: 'center' });
+    doc.text(`CLP $${coupon.value.toLocaleString('es-CL')}`, 50, 63, { align: 'center' });
 
     // Footer/Info
     doc.setTextColor(31, 41, 55);
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont("Helvetica", "bold");
-    doc.text(`Estado: ${coupon.used ? 'USADO' : 'PENDIENTE'}`, 7, 85);
-    doc.text(`Emitido: ${new Date(coupon.createdAt).toLocaleDateString()}`, 7, 90);
+    doc.text(`Estado: ${coupon.used ? 'USADO' : 'PENDIENTE'}`, 10, 85);
+    doc.text(`Emitido: ${new Date(coupon.createdAt).toLocaleDateString()}`, 10, 95);
 
     doc.setFont("Helvetica", "bolditalic");
-    doc.text(`Válido por 1 mes`, 40, 110, { align: 'center' });
+    doc.text(`Válido por 1 mes`, 50, 110, { align: 'center' });
 
     // Bottom Branding
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(180, 83, 9);
-    doc.text(`EL MUNDO DEL FARDO`, 40, 130, { align: 'center' });
+    doc.text(`EL MUNDO DEL FARDO`, 50, 135, { align: 'center' });
     
     doc.save(`cupon_${coupon.code}.pdf`);
   };
@@ -182,7 +184,7 @@ export default function PostVenta() {
                         <td className="p-4 flex gap-2">
                             {!c.used && (
                                 <>
-                                    <button onClick={() => downloadPDFEnhanced(c)} className="text-emerald-500"><Download size={16}/></button>
+                                    <button onClick={() => downloadPDF(c)} className="text-emerald-500"><Download size={16}/></button>
                                     <button onClick={() => handleRedeem(c)} className="px-3 py-1 bg-amber-500 text-white rounded-lg text-xs font-bold">Canjear</button>
                                 </>
                             )}

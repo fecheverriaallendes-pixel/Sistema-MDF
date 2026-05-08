@@ -8,49 +8,65 @@ import { Sale, SaleType, SaleStatus, CommissionType } from '../types';
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
-  <div className="w-[100mm] h-[70mm] bg-white border-2 border-black p-4 flex flex-row items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[70mm]">
-    <div className="w-[28mm] flex flex-col border-r-2 border-dashed border-black pr-2 justify-between">
+  <div className="w-[100mm] h-[150mm] bg-white border-2 border-black p-4 flex flex-col items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[150mm]">
+    <div className="flex flex-row border-b-2 border-dashed border-black pb-2 mb-2 justify-between">
       <div className="flex flex-col items-center">
-        <img src={LOGO_URL} alt="Logo" className="w-[22mm] object-contain mb-2 grayscale contrast-[2] brightness-75" />
-        <div className="text-center w-full bg-black text-white py-1 rounded-sm">
-          <p className="text-[8px] font-black uppercase tracking-widest mb-0.5">Venta</p>
-          <p className="text-2xl font-black font-mono leading-none">#{sale.numeroVenta}</p>
+        <img src={LOGO_URL} alt="Logo" className="w-[20mm] object-contain mb-1 grayscale contrast-[2] brightness-75" />
+        <div className="text-center w-full border border-black py-0.5 rounded-sm">
+          <p className="text-[7px] font-black uppercase tracking-widest mb-0.5">Venta</p>
+          <p className="text-lg font-black font-mono leading-none">#{sale.numeroVenta}</p>
         </div>
       </div>
-      <div className="text-center border-t border-dashed border-black pt-1">
-        <p className="text-[7px] font-black uppercase tracking-tighter text-slate-600">Origen</p>
-        <p className="text-[8px] font-bold uppercase">{sale.tipoVenta}</p>
+      <div className="text-center border-l border-dashed border-black pl-2 flex flex-col justify-between">
+        <div>
+          <p className="text-[7px] font-black uppercase tracking-tighter text-slate-600">Origen</p>
+          <p className="text-[8px] font-bold uppercase">{sale.tipoVenta}</p>
+        </div>
+        <div className="border-t border-dashed border-black pt-1">
+          <p className="text-[7px] font-black uppercase tracking-tighter text-slate-600">Tipo</p>
+          <p className="text-[8px] font-bold uppercase">{ (() => {
+              const stockItem = stock.find(item => item.codigo === sale.codigoFardo);
+              return stockItem ? stockItem.tipo : sale.tipo;
+            })()}</p>
+        </div>
       </div>
     </div>
-    <div className="flex-1 pl-4 flex flex-col justify-between py-1">
+    <div className="flex-1 flex flex-col justify-between py-1">
       <div>
-        <div className="mb-4">
-          <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Destinatario / Cliente</p>
-          <p className="text-xl font-black uppercase leading-tight line-clamp-2">{sale.cliente}</p>
-          <p className="text-sm font-bold text-slate-700 mt-1">{sale.rut || 'RUT PENDIENTE'}</p>
+        <div className="mb-2">
+          <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Destinatario / Cliente</p>
+          <p className="text-lg font-black uppercase leading-tight line-clamp-2">{sale.cliente}</p>
+          <p className="text-xs font-bold text-slate-700 mt-0.5">{sale.rut || 'RUT PENDIENTE'}</p>
         </div>
-        <div className="mb-4">
-          <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Dirección de Entrega</p>
-          <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-            <p className="text-sm font-black uppercase leading-snug line-clamp-2 italic">{sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}</p>
+        <div className="mb-2">
+          <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Dirección de Entrega</p>
+          <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+            <p className="text-xs font-black uppercase leading-snug line-clamp-3 italic">{sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}</p>
           </div>
         </div>
-      </div>
-      <div className="grid grid-cols-[1fr,auto] gap-4 border-t border-black pt-4">
-        <div>
-          <p className="text-[9px] font-black uppercase text-slate-500">Producto</p>
-          <p className="text-[11px] font-black leading-tight break-words">
+        <div className="mb-2">
+          <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Agencia</p>
+          <p className="text-xs font-black uppercase">{sale.agencia || 'NO ESPECIFICADO'}</p>
+          <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Producto</p>
+          <p className="text-lg font-black uppercase leading-none">
             { (() => {
               const stockItem = stock.find(item => item.codigo === sale.codigoFardo);
-              return stockItem ? `${stockItem.tipo} (${stockItem.proveedor})` : sale.tipo;
+              return stockItem ? `${stockItem.tipo}` : (sale.tipo || 'Producto');
             })()}
           </p>
-          <p className="text-[10px] font-bold uppercase mt-1 truncate">{sale.variante || 'Normal'}</p>
+          <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Variante</p>
+          <p className="text-md font-bold uppercase leading-none">{sale.variante || 'Normal'}</p>
         </div>
-        <div className="text-right flex flex-col justify-end">
-          <p className="text-[9px] font-black uppercase text-slate-500">Contacto</p>
-          <p className="text-lg font-black leading-none">{sale.telefono}</p>
-          <p className="text-[8px] font-bold uppercase text-slate-400 mt-1">Cuaderno MDF S.A.</p>
+      </div>
+      <div className="border-t border-black pt-2">
+        <div className="flex justify-between items-end">
+          <div>
+            <p className="text-[8px] font-black uppercase text-slate-500">Contacto</p>
+            <p className="text-sm font-black leading-none">{sale.telefono}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[7px] font-bold uppercase text-slate-400">Cuaderno MDF S.A.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -88,7 +104,7 @@ export default function Etiquetas() {
       <div className="flex flex-col sm:flex-row items-center justify-between no-print gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">Centro de Etiquetado</h2>
-          <p className="text-slate-500 font-medium italic">Cola de impresión térmica (100x70mm Horizontal)</p>
+          <p className="text-slate-500 font-medium italic">Cola de impresión térmica (100x150mm)</p>
         </div>
         <div className="flex gap-4 w-full sm:w-auto">
           <button onClick={() => setShowDemo(!showDemo)} className={`px-4 py-2 rounded-xl font-bold text-xs transition-all ${showDemo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
@@ -132,11 +148,11 @@ export default function Etiquetas() {
       </div>
       <style>{`
         @media print {
-          @page { size: 100mm 70mm landscape; margin: 0; }
+          @page { size: 100mm 150mm portrait; margin: 0; }
           body { margin: 0; padding: 0; background: white !important; }
           .no-print { display: none !important; }
           .print-only { display: block !important; }
-          .label-container { width: 100mm; height: 70mm; page-break-after: always; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+          .label-container { width: 100mm; height: 150mm; page-break-after: always; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         }
       `}</style>
     </div>
