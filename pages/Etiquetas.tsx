@@ -36,7 +36,7 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
         <div className="mb-2">
           <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Destinatario / Cliente</p>
           <p className="text-lg font-black uppercase leading-tight line-clamp-2">{sale.cliente}</p>
-          <p className="text-xs font-bold text-slate-700 mt-0.5">{sale.rut || 'RUT PENDIENTE'}</p>
+          <p className="text-xs font-bold text-slate-700 mt-0.5">RUT: {sale.rut || 'PENDIENTE'}</p>
         </div>
         <div className="mb-2">
           <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Dirección de Entrega</p>
@@ -47,13 +47,16 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
         <div className="mb-2">
           <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Agencia</p>
           <p className="text-xs font-black uppercase">{sale.agencia || 'NO ESPECIFICADO'}</p>
-          <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Producto</p>
+          <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Producto / SKU</p>
           <p className="text-lg font-black uppercase leading-none">
             { (() => {
               const stockItem = stock.find(item => item.codigo === sale.codigoFardo);
               return stockItem ? `${stockItem.tipo}` : (sale.tipo || 'Producto');
             })()}
           </p>
+          <p className="text-[9px] font-bold text-slate-500 mt-0.5">SKU: {sale.codigoFardo || 'N/A'}</p>
+          <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Cantidad</p>
+          <p className="text-lg font-black uppercase leading-none">{sale.cantidad || 1}</p>
           <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Variante</p>
           <p className="text-md font-bold uppercase leading-none">{sale.variante || 'Normal'}</p>
         </div>

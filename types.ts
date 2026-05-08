@@ -158,3 +158,13 @@ export interface Coupon {
   customerName?: string;
   saleId?: string;
 }
+
+export interface Cheque {
+  id: string;
+  fecha: string;
+  numeroCheque: string;
+  monto: number;
+  nombre: string;
+  tipo: 'Abierto' | 'Cruzado';
+  pagado: boolean;
+}

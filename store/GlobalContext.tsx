@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque } from '../types';
 import { db, storage } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -437,6 +437,9 @@ interface StoreContextType {
   redeemCoupon: (id: string) => void;
   redeemCouponByCode: (code: string) => void;
   deleteCoupon: (id: string) => void;
+  cheques: Cheque[];
+  addCheque: (cheque: Omit<Cheque, 'id' | 'pagado'>) => void;
+  markChequeAsPaid: (id: string) => void;
   clearAllSales: () => void;
   addStockItem: (item: Omit<StockItem, 'id' | 'disponible'>) => void;
   updateStockItem: (id: string, updatedData: Partial<StockItem>) => void;
@@ -495,6 +498,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   
   const [adjustments, setAdjustments] = useState<CommissionAdjustment[]>(() => JSON.parse(localStorage.getItem('mdf_adjustments') || '[]'));
   const [coupons, setCoupons] = useState<Coupon[]>(() => JSON.parse(localStorage.getItem('mdf_coupons') || '[]'));
+  const [cheques, setCheques] = useState<Cheque[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
 
   const isSyncingRef = useRef(false);
@@ -574,6 +578,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubPurchases: any;
     let unsubAdjustments: any;
     let unsubCoupons: any;
+    let unsubCheques: any;
     let unsubConfig: any;
     let unsubCustomers: any;
 
@@ -608,6 +613,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubCoupons = onSnapshot(collection(db, 'coupons'), (snap) => {
           setCoupons(snap.docs.map(d => d.data() as Coupon));
         });
+        unsubCheques = onSnapshot(collection(db, 'cheques'), (snap) => {
+          setCheques(snap.docs.map(d => ({ ...d.data(), id: d.id } as Cheque)));
+        });
         unsubConfig = onSnapshot(doc(db, 'config', 'carriers'), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -631,6 +639,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubPurchases) unsubPurchases();
       if (unsubAdjustments) unsubAdjustments();
       if (unsubCoupons) unsubCoupons();
+      if (unsubCheques) unsubCheques();
       if (unsubConfig) unsubConfig();
       if (unsubCustomers) unsubCustomers();
     };
@@ -779,6 +788,18 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         createdAt: new Date().toISOString()
     };
     setDoc(doc(db, 'coupons', newCoupon.id), newCoupon);
+  };
+
+  const addCheque = async (cheque: Omit<Cheque, 'id' | 'pagado'>) => {
+    const newChequeRef = doc(collection(db, 'cheques'));
+    await setDoc(newChequeRef, { ...cheque, id: newChequeRef.id, pagado: false });
+  };
+
+  const markChequeAsPaid = async (id: string) => {
+    const cheque = cheques.find(c => c.id === id);
+    if (cheque) {
+       await setDoc(doc(db, 'cheques', id), { ...cheque, pagado: true });
+    }
   };
   
   const redeemCoupon = (id: string) => {
@@ -1021,7 +1042,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, clearAllSales,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, clearAllSales,
       addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>
