@@ -161,6 +161,7 @@ export default function Etiquetas() {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
           .label-container { width: 100mm; height: 150mm; box-sizing: border-box; page-break-after: always; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+          .label-container:last-child { page-break-after: auto; }
         }
       `}</style>
     </div>
