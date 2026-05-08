@@ -19,7 +19,8 @@ import {
   Wallet,
   Activity,
   Cloud,
-  BookOpen
+  BookOpen,
+  CreditCard
 } from 'lucide-react';
 
 import { Percent } from 'lucide-react';
@@ -36,6 +37,7 @@ import Proveedores from './pages/Proveedores';
 import Catalogo from './pages/Catalogo';
 import CRM from './pages/CRM';
 import PostVenta from './pages/PostVenta';
+import Cheques from './pages/Cheques';
 import TransportistaView from './pages/TransportistaView';
 import { useStore } from './store/GlobalContext';
 import { StaffRole } from './types';
@@ -54,6 +56,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'Registrar Venta', icon: PlusCircle, path: '/registrar', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Ventas y Clientes', icon: FileText, path: '/ventas', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Nómina Comisiones', icon: Coins, path: '/comisiones', roles: [StaffRole.ADMIN] },
+    { name: 'Cheques', icon: CreditCard, path: '/cheques', roles: [StaffRole.ADMIN] },
     { name: 'Pagos Proveedores', icon: Wallet, path: '/proveedores', roles: [StaffRole.ADMIN] },
     { name: 'Inventario Stock', icon: Package, path: '/stock', roles: [StaffRole.ADMIN, StaffRole.BODEGA] },
     { name: 'Logística Despacho', icon: Truck, path: '/despachos', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
@@ -192,6 +195,7 @@ export default function App() {
               <Route path="/etiquetas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Etiquetas /></ProtectedRoute>} />
               <Route path="/configuracion" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Configuracion /></ProtectedRoute>} />
               <Route path="/comisiones" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Comisiones /></ProtectedRoute>} />
+              <Route path="/cheques" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Cheques /></ProtectedRoute>} />
               <Route path="/proveedores" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Proveedores /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
