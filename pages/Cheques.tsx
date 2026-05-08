@@ -30,7 +30,14 @@ export default function Cheques() {
     setNombre('');
   };
 
-  const filteredCheques = cheques.filter(c => activeTab === 'pending' ? !c.pagado : c.pagado);
+  const filteredCheques = cheques
+    .filter(c => activeTab === 'pending' ? !c.pagado : c.pagado)
+    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+  const formatFecha = (fecha: string) => {
+    const [y, m, d] = fecha.split('-');
+    return `${d}/${m}/${y}`;
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -71,7 +78,7 @@ export default function Cheques() {
             <tbody>
                 {filteredCheques.map(c => (
                     <tr key={c.id} className="border-b">
-                        <td className="p-2">{c.fecha}</td>
+                        <td className="p-2">{formatFecha(c.fecha)}</td>
                         <td className="p-2">{c.numeroCheque}</td>
                         <td className="p-2">{c.nombre}</td>
                         <td className="p-2">{c.monto.toLocaleString('es-CL')}</td>
