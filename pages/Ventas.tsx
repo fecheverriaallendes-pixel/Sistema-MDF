@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
-import { SaleStatus, SaleType, Sale, DispatchType } from '../types';
+import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 
 export default function Ventas() {
   const { sales, updateSale, playSound, deleteSale, deleteAllSales, currentUser, stock } = useStore();
