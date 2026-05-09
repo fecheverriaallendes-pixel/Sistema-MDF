@@ -6,7 +6,7 @@ import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 
 export default function Stock() {
-  const { stock, addStockItem, updateStockItem, removeStockItem, bulkAddStock, currentUser, playSound } = useStore();
+  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound } = useStore();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
@@ -196,6 +196,7 @@ export default function Stock() {
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción Producto</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Precio Venta</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Cant.</th>
+                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Promoción</th>
                 {canModify && <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Gestión</th>}
               </tr>
             </thead>
@@ -227,6 +228,11 @@ export default function Stock() {
                       <span className="text-xl font-black leading-none">{item.stockActual}</span>
                       <span className="text-[8px] font-black uppercase mt-1">{item.unidad === 'FARDO' ? 'Uds' : 'Piezas'}</span>
                     </div>
+                  </td>
+                  <td className="px-8 py-6 text-center">
+                    <button onClick={() => togglePromocion(item.id)} className={`p-3 rounded-xl transition-all ${item.promocion ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                        <Tag size={20} />
+                    </button>
                   </td>
                   {canModify && (
                     <td className="px-8 py-6 text-center">

@@ -233,19 +233,7 @@ export default function RegistrarVenta() {
                 </div>
               </div>
             ) : (
-             <div>
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Coins size={18} className="text-amber-500" /> Tipo de Pago / Comisión</label>
-              <select 
-                required 
-                className="w-full px-8 py-6 bg-amber-50 border-2 border-amber-200 text-amber-900 rounded-[28px] text-xl font-black outline-none focus:border-amber-500 appearance-none"
-                value={formData.tipoComision}
-                onChange={(e) => setFormData({...formData, tipoComision: e.target.value as CommissionType})}
-              >
-                {Object.values(CommissionType).map(type => (
-                  <option key={type} value={type}>{type.toUpperCase()}</option>
-                ))}
-              </select>
-            </div>
+                <div />
             )}
           </div>
 

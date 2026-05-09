@@ -101,6 +101,7 @@ export interface StockItem {
   stockActual: number; 
   disponible: boolean;
   unidad: 'FARDO' | 'PIEZA';
+  promocion?: boolean;
 }
 
 export interface Sale {

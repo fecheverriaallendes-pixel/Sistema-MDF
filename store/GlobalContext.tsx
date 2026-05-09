@@ -444,6 +444,7 @@ interface StoreContextType {
   clearAllSales: () => void;
   addStockItem: (item: Omit<StockItem, 'id' | 'disponible'>) => void;
   updateStockItem: (id: string, updatedData: Partial<StockItem>) => void;
+  togglePromocion: (id: string) => void;
   removeStockItem: (id: string) => void;
   bulkAddStock: (items: Omit<StockItem, 'id' | 'disponible'>[]) => void;
   resetToMasterStock: () => void;
@@ -697,7 +698,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       estadoDespacho: DispatchStatus.PREPARACION,
       itemsDespachados: 0,
       tipoDespacho: saleData.tipoDespacho || '',
-      timestamp: now.toISOString()
+      timestamp: now.toISOString(),
+      tipoComision: saleData.tipoComision || (saleData.codigoFardo ? calculateCommission(saleData.codigoFardo) : CommissionType.FARDO_NORMAL)
     } as Sale;
     
     // Remove undefined values to prevent Firestore errors
@@ -840,6 +842,22 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const updateStockItem = (id: string, updatedData: Partial<StockItem>) => {
     const item = stock.find(i => i.id === id);
     if (item) setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
+  };
+
+  const togglePromocion = (id: string) => {
+    const item = stock.find(i => i.id === id);
+    if (item) setDoc(doc(db, 'stock', id), { ...item, promocion: !item.promocion });
+  };
+  
+  const calculateCommission = (codigoFardo: string): CommissionType => {
+      const item = stock.find(i => i.codigo === codigoFardo);
+      if (!item) return CommissionType.FARDO_NORMAL;
+      
+      const tipo = item.tipo.toLowerCase();
+      if (tipo.includes('saco') || tipo.includes('lote')) return CommissionType.LOTE_SACO;
+      if (item.promocion) return CommissionType.FARDO_PROMO;
+      
+      return CommissionType.FARDO_NORMAL;
   };
 
   const removeStockItem = (id: string) => {
@@ -1048,7 +1066,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales,
-      addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
+      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>
       {children}
