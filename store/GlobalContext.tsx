@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord } from '../types';
 import { db, storage } from '../firebase';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const INITIAL_MASTER_STOCK: Omit<StockItem, 'id' | 'disponible'>[] = [
@@ -455,6 +455,8 @@ interface StoreContextType {
   addAbono: (purchaseId: string, monto: number, metodo: string, observacion: string) => void;
   removeAbono: (purchaseId: string, abonoId: string) => void;
   getStats: () => any;
+  productionRecords: ProductionRecord[];
+  addProductionRecord: (cantidad: number) => void;
   syncWithCloud: (silent?: boolean) => Promise<boolean>;
   pushToCloud: (curSales: Sale[], curStock: StockItem[], curStaff: StaffMember[], curPurchases: Purchase[]) => Promise<void>;
   isSyncing: boolean;
@@ -502,6 +504,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [coupons, setCoupons] = useState<Coupon[]>(() => JSON.parse(localStorage.getItem('mdf_coupons') || '[]'));
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>([]);
 
   const isSyncingRef = useRef(false);
 
@@ -581,6 +584,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubAdjustments: any;
     let unsubCoupons: any;
     let unsubCheques: any;
+    let unsubProduction: any;
     let unsubConfig: any;
     let unsubCustomers: any;
 
@@ -618,6 +622,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubCheques = onSnapshot(collection(db, 'cheques'), (snap) => {
           setCheques(snap.docs.map(d => ({ ...d.data(), id: d.id } as Cheque)));
         });
+        unsubProduction = onSnapshot(collection(db, 'produccion'), (snap) => {
+          setProductionRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as ProductionRecord)));
+        });
         unsubConfig = onSnapshot(doc(db, 'config', 'carriers'), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -642,6 +649,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubAdjustments) unsubAdjustments();
       if (unsubCoupons) unsubCoupons();
       if (unsubCheques) unsubCheques();
+      if (unsubProduction) unsubProduction();
       if (unsubConfig) unsubConfig();
       if (unsubCustomers) unsubCustomers();
     };
@@ -724,6 +732,17 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
 
     return newSale;
+  };
+
+  const addProductionRecord = async (cantidad: number) => {
+    const record: ProductionRecord = {
+      id: Math.random().toString(36).substr(2, 9),
+      fecha: new Date().toISOString(),
+      cantidad,
+      totalPagar: cantidad * 4000
+    };
+    await setDoc(doc(db, 'produccion', record.id), record);
+    playSound('success');
   };
 
   const updateSale = (id: string, updatedData: Partial<Sale>) => {
@@ -1067,7 +1086,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
-      addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
+      addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
+      productionRecords, addProductionRecord
     }}>
       {children}
     </StoreContext.Provider>

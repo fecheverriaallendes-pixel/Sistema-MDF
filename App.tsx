@@ -20,10 +20,10 @@ import {
   Activity,
   Cloud,
   BookOpen,
-  CreditCard
+  CreditCard,
+  Factory,
+  Percent
 } from 'lucide-react';
-
-import { Percent } from 'lucide-react';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import RegistrarVenta from './pages/RegistrarVenta';
@@ -37,6 +37,7 @@ import Proveedores from './pages/Proveedores';
 import Catalogo from './pages/Catalogo';
 import CRM from './pages/CRM';
 import PostVenta from './pages/PostVenta';
+import Produccion from './pages/Produccion';
 import Cheques from './pages/Cheques';
 import TransportistaView from './pages/TransportistaView';
 import { useStore } from './store/GlobalContext';
@@ -63,10 +64,13 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'Mis Despachos', icon: Truck, path: '/transportista', roles: [StaffRole.TRANSPORTISTA, StaffRole.ADMIN] },
     { name: 'Post-Venta', icon: Percent, path: '/post-venta', roles: [StaffRole.POST_VENTA, StaffRole.ADMIN] },
     { name: 'Etiquetas Térmicas', icon: Tags, path: '/etiquetas', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
+    { name: 'Producción', icon: Factory, path: '/produccion', roles: [StaffRole.ADMIN] },
     { name: 'Configuración', icon: Settings, path: '/configuracion', roles: [StaffRole.ADMIN] },
   ];
 
-  const menuItems = allMenuItems.filter(item => item.roles.includes(currentUser.rol));
+  const menuItems = allMenuItems.filter(item => 
+    item.roles.includes(currentUser.rol) || (item.name === 'Producción' && currentUser.nombre.toUpperCase() === 'CAMILA VIVAR')
+  );
 
   return (
     <>
@@ -150,10 +154,10 @@ const Header = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
   );
 };
 
-const ProtectedRoute = ({ children, roles }: React.PropsWithChildren<{ roles: StaffRole[] }>) => {
+const ProtectedRoute = ({ children, roles, extraCheck }: React.PropsWithChildren<{ roles: StaffRole[], extraCheck?: (user: any) => boolean }>) => {
   const { currentUser } = useStore();
   if (!currentUser) return <Navigate to="/" />;
-  if (!roles.includes(currentUser.rol)) {
+  if (!roles.includes(currentUser.rol) && (!extraCheck || !extraCheck(currentUser))) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
         <ShieldAlert size={64} className="text-red-500" />
@@ -190,6 +194,7 @@ export default function App() {
               <Route path="/stock" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.BODEGA]}><Stock /></ProtectedRoute>} />
               <Route path="/transportista" element={<ProtectedRoute roles={[StaffRole.TRANSPORTISTA, StaffRole.ADMIN]}><TransportistaView /></ProtectedRoute>} />
               <Route path="/despachos" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Despachos /></ProtectedRoute>} />
+              <Route path="/produccion" element={<ProtectedRoute roles={[StaffRole.ADMIN]} extraCheck={(u) => u.nombre.toUpperCase() === 'CAMILA VIVAR'}><Produccion /></ProtectedRoute>} />
               <Route path="/crm" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><CRM /></ProtectedRoute>} />
               <Route path="/post-venta" element={<ProtectedRoute roles={[StaffRole.POST_VENTA, StaffRole.ADMIN]}><PostVenta /></ProtectedRoute>} />
               <Route path="/etiquetas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Etiquetas /></ProtectedRoute>} />

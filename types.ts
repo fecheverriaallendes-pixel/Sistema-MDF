@@ -170,3 +170,10 @@ export interface Cheque {
   tipo: 'Abierto' | 'Cruzado';
   pagado: boolean;
 }
+
+export interface ProductionRecord {
+  id: string;
+  fecha: string; // ISO date
+  cantidad: number;
+  totalPagar: number;
+}
