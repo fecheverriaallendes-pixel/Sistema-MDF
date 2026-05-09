@@ -65,14 +65,6 @@ export default function Ventas() {
           <p className="text-slate-500 italic font-medium">Gestión de clientes y recolección de datos pendientes</p>
         </div>
         <div className="flex bg-slate-200 p-1.5 rounded-[24px] shadow-inner">
-          {isAdmin && (
-            <button 
-              onClick={() => { if(confirm('¿BORRAR TODO EL HISTORIAL?')) deleteAllSales(); playSound('click'); }}
-              className="flex items-center gap-2 px-4 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest text-red-600 hover:bg-red-100 transition-all"
-            >
-              <Trash2 size={16} /> Borrar Todo
-            </button>
-          )}
           <button 
             onClick={() => { setActiveTab('PENDING'); playSound('click'); }}
             className={`flex items-center gap-3 px-8 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${activeTab === 'PENDING' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-600'}`}
@@ -182,6 +174,14 @@ export default function Ventas() {
                       >
                         <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
                       </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
+                          className="mt-2 text-red-500 hover:text-red-700 block mx-auto pt-2"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                   </td>
                 </tr>
               ))}
