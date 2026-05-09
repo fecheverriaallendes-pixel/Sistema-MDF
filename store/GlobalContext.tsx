@@ -440,6 +440,7 @@ interface StoreContextType {
   cheques: Cheque[];
   addCheque: (cheque: Omit<Cheque, 'id' | 'pagado'>) => void;
   markChequeAsPaid: (id: string) => void;
+  deleteCheque: (id: string) => void;
   clearAllSales: () => void;
   addStockItem: (item: Omit<StockItem, 'id' | 'disponible'>) => void;
   updateStockItem: (id: string, updatedData: Partial<StockItem>) => void;
@@ -802,6 +803,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
   
+  const deleteCheque = async (id: string) => {
+    await deleteDoc(doc(db, 'cheques', id));
+  };
+  
   const redeemCoupon = (id: string) => {
     const coupon = coupons.find(c => c.id === id);
     if (coupon) {
@@ -1042,7 +1047,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, clearAllSales,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales,
       addStockItem, updateStockItem, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync
     }}>

@@ -46,7 +46,8 @@ export default function RegistrarVenta() {
     tipoComision: CommissionType.FARDO_NORMAL,
     juntaCompra: 'DESPACHO INMEDIATO',
     observaciones: '',
-    tipoDespacho: undefined
+    tipoDespacho: undefined,
+    agencia: ''
   });
 
   const handleClientChange = (name: string) => {
@@ -284,6 +285,9 @@ export default function RegistrarVenta() {
                     <Package size={16} /> Retiro
                   </button>
                 </div>
+                {formData.tipoDespacho === DispatchType.AGENCIA && (
+                   <input required type="text" className="w-full mt-4 px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={formData.agencia} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>
+                )}
               </div>
             </div>
           )}

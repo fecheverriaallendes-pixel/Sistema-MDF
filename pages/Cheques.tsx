@@ -3,7 +3,7 @@ import { useStore } from '../store/GlobalContext';
 import { StaffRole } from '../types';
 
 export default function Cheques() {
-  const { cheques, addCheque, markChequeAsPaid, currentUser } = useStore();
+  const { cheques, addCheque, markChequeAsPaid, deleteCheque, currentUser } = useStore();
   const [activeTab, setActiveTab] = useState<'pending' | 'paid'>('pending');
   const [fecha, setFecha] = useState('');
   const [numeroCheque, setNumeroCheque] = useState('');
@@ -83,8 +83,9 @@ export default function Cheques() {
                         <td className="p-2">{c.nombre}</td>
                         <td className="p-2">{c.monto.toLocaleString('es-CL')}</td>
                         <td className="p-2">{c.tipo}</td>
-                         <td className="p-2">
-                            {!c.pagado && <button onClick={() => markChequeAsPaid(c.id)} className="text-emerald-500 font-bold hover:text-emerald-700">Marcar como pagado</button>}
+                        <td className="p-2">
+                            {!c.pagado && <button onClick={() => markChequeAsPaid(c.id)} className="text-emerald-500 font-bold hover:text-emerald-700 mr-2">Marcar como pagado</button>}
+                            <button onClick={() => deleteCheque(c.id)} className="text-red-500 font-bold hover:text-red-700">Eliminar</button>
                          </td>
                     </tr>
                 ))}
