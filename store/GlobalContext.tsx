@@ -940,7 +940,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const deleteSale = (saleId: string) => {
-    if (currentUser?.rol !== 'Admin') {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
       alert("Solo el administrador puede borrar ventas.");
       return;
     }
@@ -948,14 +948,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('click');
   };
 
-  const deleteAllSales = () => {
-    if (currentUser?.rol !== 'Admin') {
+  const deleteAllSales = async () => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
       alert("Solo el administrador puede borrar todo el historial.");
       return;
     }
     const batch = writeBatch(db);
     sales.forEach(s => batch.delete(doc(db, 'sales', s.id)));
-    batch.commit();
+    await batch.commit();
     playSound('success');
   };
 

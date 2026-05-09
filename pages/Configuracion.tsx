@@ -71,11 +71,11 @@ export default function Configuracion() {
     playSound('success');
   };
 
-  const handleClearSales = () => {
+  const handleClearSales = async () => {
     if (confirm("⚠️ ADVERTENCIA: ¿Estás seguro de eliminar TODAS las ventas del sistema?")) {
       const pin = prompt("Ingresa PIN Maestro:");
       if (pin === "2024") {
-        deleteAllSales();
+        await deleteAllSales();
         playSound('success');
         alert("Ventas eliminadas.");
       }
