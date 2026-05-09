@@ -745,6 +745,15 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('success');
   };
 
+  const deleteProductionRecord = (id: string) => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede borrar registros de producción.");
+      return;
+    }
+    deleteDoc(doc(db, 'produccion', id));
+    playSound('click');
+  };
+
   const updateSale = (id: string, updatedData: Partial<Sale>) => {
     const sale = sales.find(s => s.id === id);
     if (sale) setDoc(doc(db, 'sales', id), { ...sale, ...updatedData });
@@ -1087,7 +1096,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
-      productionRecords, addProductionRecord
+      productionRecords, addProductionRecord, deleteProductionRecord
     }}>
       {children}
     </StoreContext.Provider>

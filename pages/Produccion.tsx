@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/GlobalContext';
-import { Factory, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
+import { StaffRole } from '../types';
+import { Factory, TrendingUp, Calendar, AlertCircle, Trash2 } from 'lucide-react';
 
 export default function Produccion() {
-  const { productionRecords, addProductionRecord } = useStore();
+  const { productionRecords, addProductionRecord, deleteProductionRecord, currentUser } = useStore();
+  const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const [cantidad, setCantidad] = useState('');
 
   const handleSave = () => {
@@ -86,6 +88,7 @@ export default function Produccion() {
                     <th className="px-4 py-2 text-left text-slate-400 uppercase text-[10px] font-bold">Fecha</th>
                     <th className="px-4 py-2 text-right text-slate-400 uppercase text-[10px] font-bold">Cantidad</th>
                     <th className="px-4 py-2 text-right text-slate-400 uppercase text-[10px] font-bold">Monto</th>
+                    {isAdmin && <th className="px-4 py-2 text-center text-slate-400 uppercase text-[10px] font-bold">Acción</th>}
                 </tr>
             </thead>
             <tbody>
@@ -94,6 +97,13 @@ export default function Produccion() {
                         <td className="px-4 py-4">{new Date(r.fecha).toLocaleDateString()}</td>
                         <td className="px-4 py-4 text-right font-bold">{r.cantidad}</td>
                         <td className="px-4 py-4 text-right font-bold text-emerald-600">${r.totalPagar.toLocaleString('es-CL')}</td>
+                        {isAdmin && (
+                          <td className="px-4 py-4 text-center">
+                            <button onClick={() => { if(confirm('¿Borrar registro de producción?')) deleteProductionRecord(r.id); }} className="text-red-500 hover:text-red-700">
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        )}
                     </tr>
                 ))}
             </tbody>
