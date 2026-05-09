@@ -50,7 +50,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
 
   const allMenuItems = [
     { name: 'Inicio', icon: HomeIcon, path: '/', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', roles: [StaffRole.ADMIN] },
     { name: 'Catálogo', icon: BookOpen, path: '/catalogo', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'CRM Clientes', icon: UserIcon, path: '/crm', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Registrar Venta', icon: PlusCircle, path: '/registrar', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
@@ -183,7 +183,7 @@ export default function App() {
           <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/dashboard" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Dashboard /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Dashboard /></ProtectedRoute>} />
               <Route path="/catalogo" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Catalogo /></ProtectedRoute>} />
               <Route path="/registrar" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><RegistrarVenta /></ProtectedRoute>} />
               <Route path="/ventas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Ventas /></ProtectedRoute>} />

@@ -144,6 +144,7 @@ export default function Ventas() {
                       >
                         <Phone size={14} /> {sale.telefono}
                       </a>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase mt-1">Vendedor: {sale.vendedor || 'Desconocido'}</span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
@@ -181,14 +182,6 @@ export default function Ventas() {
                       >
                         <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
                       </button>
-                    {isAdmin && (
-                      <button
-                        onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
-                        className="mt-2 text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}
