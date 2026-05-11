@@ -1,6 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { 
   Printer, 
   LayoutGrid, 
@@ -100,6 +102,48 @@ export default function Catalogo() {
     window.print();
   };
 
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  const handleDownloadPDF = async () => {
+    playSound('success');
+    const input = contentRef.current;
+    if (!input) return;
+
+    // We need to temporarily remove some print specific classes that might hide things
+    // or affect layout when capturing via html2canvas.
+    // The current Catalogo-content div has print:p-0 etc.
+    
+    const canvas = await html2canvas(input, { 
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    // Calculate aspect ratio height
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    
+    // Multi-page handling
+    let heightLeft = pdfHeight;
+    let position = 0;
+    
+    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+    heightLeft -= 297; 
+    
+    while (heightLeft > 0) {
+      position = heightLeft - pdfHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= 297;
+    }
+    
+    pdf.save(`catalogo_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   const today = new Date().toLocaleDateString('es-CL');
 
   return (
@@ -133,11 +177,11 @@ export default function Catalogo() {
               </button>
             </div>
             <button 
-              onClick={handlePrint}
+              onClick={handleDownloadPDF}
               className={`flex items-center gap-3 px-8 py-4 text-white rounded-[24px] font-black text-xs uppercase tracking-widest transition-all shadow-2xl active:scale-95 ${viewMode === 'digital' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
-              {viewMode === 'digital' ? <FileDown size={18} /> : <Printer size={18} />}
-              {viewMode === 'digital' ? 'Guardar PDF Catálogo' : 'Imprimir Listado'}
+              <FileDown size={18} />
+              Guardar PDF
             </button>
           </div>
         </div>
@@ -173,7 +217,7 @@ export default function Catalogo() {
       </div>
 
       {/* ÁREA DE CONTENIDO */}
-      <div className="catalogo-content bg-white p-4 print:p-0">
+      <div ref={contentRef} className="catalogo-content bg-white p-4 print:p-0">
         
         {/* Header Impresión Común */}
         <div className="hidden print:flex items-center justify-between border-b-4 border-slate-900 pb-4 mb-6">
