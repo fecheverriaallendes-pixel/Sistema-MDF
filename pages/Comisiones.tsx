@@ -90,10 +90,12 @@ export default function Comisiones() {
             const parts = s.fecha.split('/');
             if (parts.length !== 3) return false;
             const [d, m, y] = parts;
-            saleDate = new Date(Number(y), Number(m) - 1, Number(d));
+            saleDate = new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0);
         } else {
-            // Asumimos YYYY-MM-DD
-            saleDate = new Date(s.fecha);
+            const parts = s.fecha.split('-');
+            if (parts.length !== 3) return false;
+            const [y, m, d] = parts;
+            saleDate = new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0);
         }
         
         // Verificar si la fecha es válida

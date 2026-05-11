@@ -222,8 +222,8 @@ export default function Catalogo() {
             ))}
           </div>
         ) : (
-          /* MODO IMPRESIÓN / LISTADO (Dos columnas CSS) */
-          <div className="print-columns-container columns-2 gap-8">
+          /* MODO IMPRESIÓN / LISTADO (Tabla simple para mejor paginación) */
+          <div className="print-columns-container">
               <table className="w-full border-collapse">
                 <TableHeader />
                 <tbody>
