@@ -9,39 +9,36 @@ const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
   <div className="w-[100mm] h-[150mm] box-border bg-white border-2 border-black p-4 flex flex-col items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[150mm]">
-    <div className="flex flex-row border-b-2 border-dashed border-black pb-2 mb-2 justify-between">
+    <div className="flex flex-row border-b-2 border-dashed border-black pb-2 mb-2 justify-between items-center">
       <div className="flex flex-col items-center">
-        <img src={LOGO_URL} alt="Logo" className="w-[20mm] object-contain mb-1 grayscale contrast-[2] brightness-75" />
+        <img src={LOGO_URL} alt="Logo" className="w-[18mm] object-contain mb-0.5 grayscale contrast-[2] brightness-75" />
         <div className="text-center w-full border border-black py-0.5 rounded-sm">
-          <p className="text-[7px] font-black uppercase tracking-widest mb-0.5">Venta</p>
-          <p className="text-lg font-black font-mono leading-none">#{sale.numeroVenta}</p>
+          <p className="text-[6px] font-black uppercase tracking-widest mb-0.2">Venta</p>
+          <p className="text-md font-black font-mono leading-none">#{sale.numeroVenta}</p>
         </div>
       </div>
-      <div className="text-center border-l border-dashed border-black pl-2 flex flex-col justify-between">
-        <div>
-          <p className="text-[7px] font-black uppercase tracking-tighter text-slate-600">Origen</p>
-          <p className="text-[8px] font-bold uppercase">{sale.tipoVenta}</p>
+      <div className="text-center border-l border-dashed border-black pl-1 flex flex-col justify-between h-full">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-[6px] font-black uppercase tracking-tighter text-slate-600">Origen</p>
+          <p className="text-[7px] font-bold uppercase">{sale.tipoVenta}</p>
         </div>
-        <div className="border-t border-dashed border-black pt-1">
-          <p className="text-[7px] font-black uppercase tracking-tighter text-slate-600">Tipo</p>
-          <p className="text-[8px] font-bold uppercase">{ (() => {
-              const stockItem = stock.find(item => item.codigo === sale.codigoFardo);
-              return stockItem ? stockItem.tipo : sale.tipo;
-            })()}</p>
+        <div className="border-t border-dashed border-black pt-0.5">
+          <p className="text-[6px] font-black uppercase tracking-tighter text-slate-600">Contacto</p>
+          <p className="text-[7px] font-black leading-tight break-all">{sale.telefono}</p>
         </div>
       </div>
     </div>
     <div className="flex-1 flex flex-col justify-between py-1">
       <div>
-        <div className="mb-2">
-          <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Destinatario / Cliente</p>
-          <p className="text-lg font-black uppercase leading-tight line-clamp-2">{sale.cliente}</p>
-          <p className="text-xs font-bold text-slate-700 mt-0.5">RUT: {sale.rut || 'PENDIENTE'}</p>
+        <div className="mb-1">
+          <p className="text-[7px] font-black uppercase text-slate-500 mb-0.2">Destinatario</p>
+          <p className="text-md font-black uppercase leading-tight line-clamp-2">{sale.cliente}</p>
+          <p className="text-[9px] font-bold text-slate-700 mt-0.2">RUT: {sale.rut || 'PENDIENTE'}</p>
         </div>
-        <div className="mb-2">
-          <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Dirección de Entrega</p>
-          <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-200">
-            <p className="text-xs font-black uppercase leading-snug line-clamp-3 italic">{sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}</p>
+        <div className="mb-1">
+          <p className="text-[7px] font-black uppercase text-slate-500 mb-0.2">Dirección de Entrega</p>
+          <div className="bg-slate-50 p-1 rounded-md border border-slate-200">
+            <p className="text-[9px] font-black uppercase leading-snug line-clamp-3 italic">{sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}</p>
           </div>
         </div>
         <div className="mb-2">
@@ -63,17 +60,6 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
           <div className="mt-4 p-2 bg-slate-100 border-l-4 border-slate-900">
             <p className="text-[10px] font-bold leading-tight">🔄 Para cambios, debe grabar un video de inicio a fin SIN EXCEPCIÓN</p>
             <p className="text-[9px] text-slate-600 mt-1">Grabe su video al recibir y abrir su compra, de inicio a fin ante problemas de etiquetado o error de entregas.</p>
-          </div>
-        </div>
-      </div>
-      <div className="border-t border-black pt-2">
-        <div className="flex justify-between items-end">
-          <div>
-            <p className="text-[8px] font-black uppercase text-slate-500">Contacto</p>
-            <p className="text-sm font-black leading-none">{sale.telefono}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[7px] font-bold uppercase text-slate-400">Cuaderno MDF S.A.</p>
           </div>
         </div>
       </div>

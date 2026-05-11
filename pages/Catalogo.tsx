@@ -249,27 +249,30 @@ export default function Catalogo() {
       <style>{`
         @media print {
           @page { 
-            size: portrait; 
-            margin: 10mm; 
+            size: A4 portrait; 
+            margin: 1cm; 
           }
           body { 
             background: white !important; 
-            -webkit-print-color-adjust: exact;
+            margin: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
           }
           .no-print { display: none !important; }
-          .catalogo-content { width: 100% !important; margin: 0 !important; }
-          main { margin-left: 0 !important; padding: 0 !important; }
+          .catalogo-content { 
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+          main { margin: 0 !important; padding: 0 !important; }
           header { display: none !important; }
           
-          /* ESTILOS DE IMPRESIÓN (Paginación automática) */
-          table {
-            page-break-inside: auto;
-          }
-
-          tr, .digital-card {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
+          table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+          tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+          .digital-card { page-break-inside: avoid !important; break-inside: avoid !important; display: inline-block !important; }
         }
       `}</style>
     </div>
