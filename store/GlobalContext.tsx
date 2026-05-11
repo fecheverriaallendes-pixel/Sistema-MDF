@@ -866,8 +866,26 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     deleteDoc(doc(db, 'coupons', id));
   };
 
-  const clearAllSales = () => {
-    sales.forEach(s => deleteDoc(doc(db, 'sales', s.id)));
+  const clearAllSales = async () => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede borrar todo el historial.");
+      return;
+    }
+    const salesDocs = await getDocs(collection(db, 'sales'));
+    let batch = writeBatch(db);
+    let count = 0;
+    
+    for (const docSnap of salesDocs.docs) {
+      batch.delete(docSnap.ref);
+      count++;
+      if (count === 500) {
+        await batch.commit();
+        batch = writeBatch(db);
+        count = 0;
+      }
+    }
+    if (count > 0) await batch.commit();
+    playSound('success');
   };
 
   const addStockItem = (item: Omit<StockItem, 'id' | 'disponible'>) => {
@@ -975,12 +993,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     deleteDoc(doc(db, 'customers', id));
   };
 
-  const deleteSale = (saleId: string) => {
+  const deleteSale = async (saleId: string) => {
     if (currentUser?.rol !== StaffRole.ADMIN) {
       alert("Solo el administrador puede borrar ventas.");
       return;
     }
-    deleteDoc(doc(db, 'sales', saleId));
+    await deleteDoc(doc(db, 'sales', saleId));
     playSound('click');
   };
 
@@ -989,9 +1007,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       alert("Solo el administrador puede borrar todo el historial.");
       return;
     }
-    const batch = writeBatch(db);
-    sales.forEach(s => batch.delete(doc(db, 'sales', s.id)));
-    await batch.commit();
+    const salesDocs = await getDocs(collection(db, 'sales'));
+    let batch = writeBatch(db);
+    let count = 0;
+    
+    for (const docSnap of salesDocs.docs) {
+      batch.delete(docSnap.ref);
+      count++;
+      if (count === 500) {
+        await batch.commit();
+        batch = writeBatch(db);
+        count = 0;
+      }
+    }
+    if (count > 0) await batch.commit();
     playSound('success');
   };
 
