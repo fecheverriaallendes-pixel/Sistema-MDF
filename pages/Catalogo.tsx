@@ -191,9 +191,9 @@ export default function Catalogo() {
 
         {viewMode === 'digital' ? (
           /* MODO DIGITAL: TARJETAS (Grilla en pantalla, Grilla optimizada en impresión) */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 print:grid-cols-2 print:gap-4 print:block">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 print:grid-cols-2 print:gap-4">
             {sortedAndFilteredStock.map(item => (
-              <div key={item.id} className="digital-card bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden flex flex-col group hover:border-emerald-400 transition-all print:break-inside-avoid print:shadow-none print:border-2 print:rounded-2xl print:mb-4 print:w-[48%] print:inline-flex print:mr-[2%]">
+              <div key={item.id} className="digital-card bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden flex flex-col group hover:border-emerald-400 transition-all print:break-inside-avoid print:shadow-none print:border-2 print:rounded-2xl print:mb-4">
                 <div className="p-6 bg-slate-900 text-white text-center relative print:bg-white print:text-slate-900 print:border-b print:p-3">
                   <div className="absolute top-2 right-4 flex items-center gap-1.5 px-2 py-0.5 bg-white/10 rounded-full text-[8px] font-black uppercase tracking-widest print:bg-slate-100 print:text-slate-500">
                     {item.unidad}
@@ -222,7 +222,7 @@ export default function Catalogo() {
             ))}
           </div>
         ) : (
-          /* MODO IMPRESIÓN / LISTADO (Tabla simple para mejor paginación) */
+          /* MODO LISTADO (Tabla simple para mejor paginación) */
           <div className="print-columns-container">
               <table className="w-full border-collapse">
                 <TableHeader />
@@ -261,19 +261,7 @@ export default function Catalogo() {
           main { margin-left: 0 !important; padding: 0 !important; }
           header { display: none !important; }
           
-          /* ESTILOS PARA MODO LISTA (DOS COLUMNAS) */
-          .view-is-list .catalogo-content > div {
-            display: flex !important;
-            flex-direction: row !important;
-            gap: 20px !important;
-          }
-
-          /* ESTILOS PARA MODO DIGITAL (TARJETAS) */
-          .view-is-digital .digital-card {
-            display: inline-flex !important;
-            vertical-align: top;
-          }
-
+          /* ESTILOS DE IMPRESIÓN (Paginación automática) */
           table {
             page-break-inside: auto;
           }
