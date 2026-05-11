@@ -26,7 +26,7 @@ const COMMISSION_VALUES: Record<string, number> = {
 };
 
 export default function Comisiones() {
-  const { sales, staff, adjustments, addAdjustment, removeAdjustment, playSound } = useStore();
+  const { sales, staff, adjustments, addAdjustment, removeAdjustment, playSound, stock } = useStore();
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
   const [newAdjustment, setNewAdjustment] = useState({
@@ -362,7 +362,7 @@ export default function Comisiones() {
                        <div className="flex items-center gap-6">
                          <span className="font-mono font-black text-slate-400 text-[10px]">#{s.numeroVenta}</span>
                          <div>
-                            <p className="text-xs font-black text-slate-900 uppercase">{s.codigoFardo}</p>
+                            <p className="text-xs font-black text-slate-900 uppercase">{stock.find(item => item.codigo === s.codigoFardo)?.tipo || s.codigoFardo}</p>
                             <p className="text-[9px] font-bold text-slate-400 uppercase">{s.fecha}</p>
                          </div>
                        </div>
@@ -416,7 +416,7 @@ export default function Comisiones() {
                    <tr key={s.id} className="border-b border-slate-200">
                      <td className="py-2">{s.fecha}</td>
                      <td className="py-2">#{s.numeroVenta}</td>
-                     <td className="py-2 font-bold uppercase">{s.codigoFardo}</td>
+                     <td className="py-2 font-bold uppercase">{stock.find(item => item.codigo === s.codigoFardo)?.tipo || s.codigoFardo}</td>
                      <td className="py-2 text-right font-black">${((s.tipoComision && COMMISSION_VALUES[s.tipoComision]) || 3000).toLocaleString()}</td>
                    </tr>
                  ))}
