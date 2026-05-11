@@ -872,6 +872,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       return;
     }
     const salesDocs = await getDocs(collection(db, 'sales'));
+    console.log("DEBUG: Limpiando ventas. Número de documentos encontrados en colección 'sales':", salesDocs.size);
+    
     let batch = writeBatch(db);
     let count = 0;
     
@@ -886,6 +888,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
     if (count > 0) await batch.commit();
     playSound('success');
+    alert(`Proceso completado. Documentos eliminados: ${salesDocs.size}. Por favor recarga la página.`);
   };
 
   const addStockItem = (item: Omit<StockItem, 'id' | 'disponible'>) => {
@@ -994,12 +997,25 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const deleteSale = async (saleId: string) => {
-    if (currentUser?.rol !== StaffRole.ADMIN) {
-      alert("Solo el administrador puede borrar ventas.");
+    console.log("DEBUG: Intentando eliminar venta:", saleId);
+    if (!currentUser) {
+      alert("No hay usuario autenticado.");
       return;
     }
-    await deleteDoc(doc(db, 'sales', saleId));
-    playSound('click');
+    if (currentUser?.rol !== StaffRole.ADMIN && currentUser?.rol !== StaffRole.DESPACHO) {
+      console.warn("Intento de borrado realizado por usuario sin permisos:", currentUser.nombre, currentUser.rol);
+      alert(`No tienes permisos para borrar ventas. Tu rol actual es: ${currentUser.rol}`);
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'sales', saleId));
+      playSound('click');
+      alert("Venta eliminada con éxito.");
+      console.log("Venta eliminada con éxito:", saleId);
+    } catch (e: any) {
+      console.error("Error al borrar venta:", e);
+      alert(`Error al borrar la venta: ${e.message}`);
+    }
   };
 
   const deleteAllSales = async () => {

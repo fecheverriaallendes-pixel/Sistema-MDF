@@ -20,7 +20,8 @@ import {
   Home,
   Building2,
   ArrowRight,
-  Camera
+  Camera,
+  Trash2
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
@@ -224,10 +225,20 @@ export default function Despachos() {
                   </div>
                   <p className="text-xs font-bold text-slate-500">{sale.fecha}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end gap-2">
                   <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                     {sale.status}
                   </span>
+                  <button 
+                    onClick={() => {
+                        if(confirm("¿Estás seguro de que quieres eliminar este despacho?")) {
+                            deleteSale(sale.id);
+                        }
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
 

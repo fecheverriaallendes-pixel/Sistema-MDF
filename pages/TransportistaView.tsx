@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Truck, CheckCircle2, AlertCircle, Camera } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, Camera, Trash2 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { DispatchStatus, Sale, StaffRole } from '../types';
 
 export default function TransportistaView() {
-  const { sales, updateDispatchStatus, currentUser } = useStore();
+  const { sales, updateDispatchStatus, currentUser, deleteSale } = useStore();
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [activeTab, setActiveTab] = useState<'PENDING' | 'FINISHED'>('PENDING');
 
@@ -40,7 +40,19 @@ export default function TransportistaView() {
           <div key={sale.id} className="bg-white p-6 rounded-3xl shadow-lg border border-slate-100">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-black text-lg">Venta #{sale.numeroVenta}</h2>
-              <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-3 py-1 rounded-full">{sale.estadoDespacho}</span>
+              <div className="flex items-center gap-2">
+                <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-3 py-1 rounded-full">{sale.estadoDespacho}</span>
+                <button 
+                    onClick={() => {
+                        if(confirm("¿Estás seguro de que quieres eliminar este despacho?")) {
+                            deleteSale(sale.id);
+                        }
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                    <Trash2 size={16} />
+                </button>
+              </div>
             </div>
             <p className="text-sm text-slate-600 mb-2">Cliente: {sale.cliente} - {sale.telefono}</p>
             <p className="text-sm font-bold text-slate-700 mb-2">Transportista: {sale.transportista || 'No asignado'}</p>
