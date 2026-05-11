@@ -248,31 +248,25 @@ export default function Catalogo() {
 
       <style>{`
         @media print {
-          @page { 
-            size: A4 portrait; 
-            margin: 1cm; 
-          }
-          body { 
-            background: white !important; 
-            margin: 0 !important;
-            height: auto !important;
-            overflow: visible !important;
-          }
+          @page { size: A4 portrait; margin: 1.5cm; }
+          body, .catalogo-content { background: white !important; margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important; }
           .no-print { display: none !important; }
-          .catalogo-content { 
-            width: 100% !important; 
-            margin: 0 !important; 
-            padding: 0 !important;
-            height: auto !important;
-            overflow: visible !important;
-            display: block !important;
-          }
-          main { margin: 0 !important; padding: 0 !important; }
-          header { display: none !important; }
+
+          /* Disable Grid Layout for Printing */
+          .grid { display: block !important; }
           
-          table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
-          tr { page-break-inside: avoid !important; break-inside: avoid !important; }
-          .digital-card { page-break-inside: avoid !important; break-inside: avoid !important; display: inline-block !important; width: 30% !important; margin: 1% !important; }
+          /* Cards: Allow to flow naturally as blocks */
+          .digital-card { 
+            display: inline-block !important; 
+            width: 47% !important; 
+            margin: 1.5% !important;
+            break-inside: avoid !important;
+            border: 1px solid #ddd !important;
+          }
+
+          /* Tables: ensure simple layout */
+          table { width: 100%; border-collapse: collapse; }
+          tr { break-inside: avoid !important; }
         }
       `}</style>
     </div>
