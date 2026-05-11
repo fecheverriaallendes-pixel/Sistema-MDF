@@ -67,10 +67,19 @@ export default function RegistrarVenta() {
     const foundItem = stock.find(s => s.codigo === code.toUpperCase());
     const price = foundItem ? foundItem.precioSugerido : 0;
     
+    // Check for promo to set commission type
+    const isPromo = foundItem && foundItem.promocion;
+    const newCommissionType = isPromo ? CommissionType.FARDO_PROMO : CommissionType.FARDO_NORMAL;
+    
     if (isNotaVenta) {
       setNewItem(prev => ({...prev, codigoFardo: code.toUpperCase(), valorUnitario: price}));
     } else {
-      setFormData(prev => ({...prev, codigoFardo: code.toUpperCase(), valorUnitario: price}));
+      setFormData(prev => ({
+          ...prev, 
+          codigoFardo: code.toUpperCase(), 
+          valorUnitario: price,
+          tipoComision: newCommissionType
+      }));
     }
   };
 

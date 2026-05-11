@@ -79,7 +79,6 @@ export default function Catalogo() {
 
   const sortedAndFilteredStock = useMemo(() => {
     let result = stock.filter(item => 
-      item.stockActual > 0 &&
       (item.tipo.toLowerCase().includes(searchTerm.toLowerCase()) || 
        item.codigo.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter)
@@ -95,14 +94,6 @@ export default function Catalogo() {
       }
     });
   }, [stock, searchTerm, providerFilter, sortOrder]);
-
-  const printColumns = useMemo(() => {
-    const half = Math.ceil(sortedAndFilteredStock.length / 2);
-    return {
-      left: sortedAndFilteredStock.slice(0, half),
-      right: sortedAndFilteredStock.slice(half)
-    };
-  }, [sortedAndFilteredStock]);
 
   const handlePrint = () => {
     playSound('success');
@@ -231,24 +222,14 @@ export default function Catalogo() {
             ))}
           </div>
         ) : (
-          /* MODO IMPRESIÓN / LISTADO (Dos columnas forzadas) */
-          <div className="print-columns-container flex flex-col md:flex-row print:flex-row gap-8">
-            <div className="flex-1">
+          /* MODO IMPRESIÓN / LISTADO (Dos columnas CSS) */
+          <div className="print-columns-container columns-2 gap-8">
               <table className="w-full border-collapse">
                 <TableHeader />
                 <tbody>
-                  {printColumns.left.map(item => <ProductRow key={item.id} item={item} />)}
+                  {sortedAndFilteredStock.map(item => <ProductRow key={item.id} item={item} />)}
                 </tbody>
               </table>
-            </div>
-            <div className="flex-1">
-              <table className="w-full border-collapse">
-                <TableHeader />
-                <tbody>
-                  {printColumns.right.map(item => <ProductRow key={item.id} item={item} />)}
-                </tbody>
-              </table>
-            </div>
           </div>
         )}
 

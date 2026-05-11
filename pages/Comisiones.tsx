@@ -84,11 +84,17 @@ export default function Comisiones() {
       if (!s || !s.fecha || typeof s.fecha !== 'string') return false;
       
       try {
-        const parts = s.fecha.split('/');
-        if (parts.length !== 3) return false;
-        
-        const [d, m, y] = parts;
-        const saleDate = new Date(Number(y), Number(m) - 1, Number(d));
+        // Verificar si la fecha tiene formato DD/MM/YYYY o YYYY-MM-DD
+        let saleDate: Date;
+        if (s.fecha.includes('/')) {
+            const parts = s.fecha.split('/');
+            if (parts.length !== 3) return false;
+            const [d, m, y] = parts;
+            saleDate = new Date(Number(y), Number(m) - 1, Number(d));
+        } else {
+            // Asumimos YYYY-MM-DD
+            saleDate = new Date(s.fecha);
+        }
         
         // Verificar si la fecha es válida
         if (isNaN(saleDate.getTime())) return false;
