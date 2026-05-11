@@ -765,7 +765,13 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   const updateSale = (id: string, updatedData: Partial<Sale>) => {
     const sale = sales.find(s => s.id === id);
-    if (sale) setDoc(doc(db, 'sales', id), { ...sale, ...updatedData });
+    if (sale) {
+      if (sale.datosCompletos && updatedData.total !== undefined && updatedData.total !== sale.total && currentUser?.rol !== StaffRole.ADMIN) {
+        alert("Solo el administrador puede editar el precio de una venta completada.");
+        return;
+      }
+      setDoc(doc(db, 'sales', id), { ...sale, ...updatedData });
+    }
   };
 
   const markAsSent = (saleId: string) => {
