@@ -10,10 +10,10 @@ const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
   <div className="w-[100mm] h-[150mm] box-border bg-white border-2 border-black p-4 flex flex-col items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[150mm]">
     <div className="flex flex-row border-b-2 border-dashed border-black pb-2 mb-2 justify-between items-center">
-      <div className="flex flex-col items-center">
-        <img src={LOGO_URL} alt="Logo" className="w-[18mm] object-contain mb-0.5 grayscale contrast-[2] brightness-75" />
-        <div className="text-center w-full border border-black py-0.5 rounded-sm">
-          <p className="text-[6px] font-black uppercase tracking-widest mb-0.2">Venta</p>
+      <div className="flex flex-row items-center gap-2">
+        <img src={LOGO_URL} alt="Logo" className="w-[18mm] object-contain grayscale contrast-[2] brightness-75" />
+        <div className="text-center w-full border border-black p-1 rounded-sm">
+          <p className="text-[6px] font-black uppercase tracking-widest leading-none">Venta</p>
           <p className="text-md font-black font-mono leading-none">#{sale.numeroVenta}</p>
         </div>
       </div>
@@ -44,8 +44,8 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
         <div className="mb-2">
           <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Agencia</p>
           <p className="text-xs font-black uppercase">{sale.agencia || 'NO ESPECIFICADO'}</p>
-          <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Producto / SKU</p>
-          <p className="text-lg font-black uppercase leading-none">
+          <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Producto</p>
+          <p className="text-lg font-black uppercase leading-tight">
             { (() => {
               const stockItem = stock.find(item => item.codigo === sale.codigoFardo);
               return stockItem ? `${stockItem.tipo}` : (sale.tipo || 'Producto');
