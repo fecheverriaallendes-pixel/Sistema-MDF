@@ -21,7 +21,7 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
         </div>
         <div className="border-t border-dashed border-black pt-0.5">
           <p className="text-[6px] font-black uppercase tracking-tighter text-slate-600">Contacto</p>
-          <p className="text-[7px] font-black leading-tight break-all">{sale.telefono}</p>
+          <p className="text-[10px] font-black leading-tight break-all">{sale.telefono}</p>
         </div>
       </div>
     </div>
