@@ -248,25 +248,30 @@ export default function Catalogo() {
 
       <style>{`
         @media print {
-          @page { size: A4 portrait; margin: 1.5cm; }
-          body, .catalogo-content { background: white !important; margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important; }
+          @page { size: A4 portrait; margin: 1cm; }
+          
+          /* Ensure everything is visible and not clipped */
+          body, #root, .catalogo-content { height: auto !important; overflow: visible !important; }
+          
+          /* Hide UI elements */
           .no-print { display: none !important; }
 
-          /* Disable Grid Layout for Printing */
+          /* Layout: Linearize everything */
           .grid { display: block !important; }
           
-          /* Cards: Allow to flow naturally as blocks */
+          /* Cards: Allow natural flow */
           .digital-card { 
             display: inline-block !important; 
-            width: 47% !important; 
-            margin: 1.5% !important;
+            width: 48% !important;
+            margin: 1% !important;
             break-inside: avoid !important;
             border: 1px solid #ddd !important;
           }
 
           /* Tables: ensure simple layout */
-          table { width: 100%; border-collapse: collapse; }
+          table { width: 100% !important; border-collapse: collapse !important; }
           tr { break-inside: avoid !important; }
+          thead { display: table-header-group; }
         }
       `}</style>
     </div>
