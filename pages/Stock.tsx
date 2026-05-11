@@ -6,7 +6,7 @@ import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 
 export default function Stock() {
-  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound } = useStore();
+  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, clearAllStock, currentUser, playSound } = useStore();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
@@ -137,6 +137,16 @@ export default function Stock() {
         </div>
         {canModify && (
           <div className="flex flex-wrap gap-4">
+            <button 
+              onClick={() => {
+                if(confirm("¿Estás SEGURO de querer eliminar TODO el inventario? Esto es irreversible.")) {
+                    clearAllStock();
+                }
+              }}
+              className="flex items-center gap-2 px-6 py-4 bg-red-50 text-red-600 border-2 border-red-100 rounded-[24px] font-black text-xs uppercase hover:bg-red-100 transition-all shadow-sm"
+            >
+              <Trash2 size={18} /> Purgar Stock
+            </button>
             <button 
               onClick={downloadFormat}
               className="flex items-center gap-2 px-8 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-sm"

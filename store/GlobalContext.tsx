@@ -442,6 +442,7 @@ interface StoreContextType {
   markChequeAsPaid: (id: string) => void;
   deleteCheque: (id: string) => void;
   clearAllSales: () => void;
+  clearAllStock: () => Promise<void>;
   addStockItem: (item: Omit<StockItem, 'id' | 'disponible'>) => void;
   updateStockItem: (id: string, updatedData: Partial<StockItem>) => void;
   togglePromocion: (id: string) => void;
@@ -891,6 +892,31 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     alert(`Proceso completado. Documentos eliminados: ${salesDocs.size}. Por favor recarga la página.`);
   };
 
+  const clearAllStock = async () => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede borrar todo el inventario.");
+      return;
+    }
+    const stockDocs = await getDocs(collection(db, 'stock'));
+    console.log("DEBUG: Limpiando stock. Número de documentos encontrados en colección 'stock':", stockDocs.size);
+    
+    let batch = writeBatch(db);
+    let count = 0;
+    
+    for (const docSnap of stockDocs.docs) {
+      batch.delete(docSnap.ref);
+      count++;
+      if (count === 500) {
+        await batch.commit();
+        batch = writeBatch(db);
+        count = 0;
+      }
+    }
+    if (count > 0) await batch.commit();
+    playSound('success');
+    alert(`Proceso completado. Inventario eliminado: ${stockDocs.size}. Por favor recarga la página.`);
+  };
+
   const addStockItem = (item: Omit<StockItem, 'id' | 'disponible'>) => {
     const newId = Math.random().toString(36).substr(2, 9);
     setDoc(doc(db, 'stock', newId), { ...item, id: newId, disponible: item.stockActual > 0 });
@@ -1146,7 +1172,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord
