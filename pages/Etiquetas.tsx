@@ -58,6 +58,7 @@ const Label = ({ sale, stock }: { sale: Sale, stock: any[] }) => (
             <p className="text-[10px] font-bold leading-tight">🔄 Para cambios, debe grabar un video de inicio a fin SIN EXCEPCIÓN</p>
             <p className="text-[9px] text-slate-600 mt-1">Grabe su video al recibir y abrir su compra, de inicio a fin ante problemas de etiquetado o error de entregas.</p>
           </div>
+          <p className="text-[8px] text-slate-500 uppercase mt-4 text-center">Vendedor: {sale.vendedor || 'N/A'}</p>
         </div>
       </div>
     </div>
