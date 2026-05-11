@@ -424,7 +424,7 @@ interface StoreContextType {
   purchases: Purchase[];
   carriers: string[];
   adjustments: CommissionAdjustment[];
-  addSale: (saleData: Partial<Sale>) => Sale;
+  addSale: (saleData: Partial<Sale>) => Promise<Sale>;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
   markAsSent: (saleId: string) => void;
   updateDispatchStatus: (saleId: string, status: DispatchStatus) => void;
@@ -590,8 +590,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
     const initFirebase = async () => {
       try {
-        const salesSnap = await getDocs(collection(db, 'sales'));
-        const stockSnap = await getDocs(collection(db, 'stock'));
+        const salesSnap = await getDocs(collection(db, 'sales')).catch(e => { console.error('Sales error', e.code, e.message); return { empty: true }; }) as any;
+        const stockSnap = await getDocs(collection(db, 'stock')).catch(e => { console.error('Stock error', e.code, e.message); return { empty: true }; }) as any;
         
         const cloudHasData = !salesSnap.empty || !stockSnap.empty;
         const localHasData = sales.length > 0 || stock.length > 0;
@@ -634,8 +634,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
           setCustomers(snapshot.docs.map(doc => doc.data() as Customer));
         });
-      } catch (error) {
-        console.error("Error inicializando Firebase:", error);
+      } catch (error: any) {
+        console.error("Error inicializando Firebase:", error.code, error.message);
       }
     };
 
@@ -684,7 +684,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('click');
   };
 
-  const addSale = (saleData: Partial<Sale>) => {
+  const addSale = async (saleData: Partial<Sale>) => {
     const now = new Date();
     const items = saleData.items || [];
     
@@ -713,22 +713,30 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     // Remove undefined values to prevent Firestore errors
     const cleanSale = Object.fromEntries(Object.entries(newSale).filter(([_, v]) => v !== undefined));
     
-    setDoc(doc(db, 'sales', newSale.id), cleanSale);
 
-    if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
-        items.forEach(item => {
-            const stockItem = stock.find(s => s.codigo === item.codigoFardo);
-            if (stockItem) {
-                const nuevoStockVal = Math.max(0, stockItem.stockActual - item.cantidad);
-                setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
-            }
-        });
-    } else {
-        const stockItem = stock.find(item => item.codigo === saleData.codigoFardo);
-        if (stockItem) {
-            const nuevoStockVal = Math.max(0, stockItem.stockActual - (saleData.cantidad || 0));
-            setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
-        }
+    try {
+      console.log("Saving sale to Firestore...", newSale.id, cleanSale);
+      await setDoc(doc(db, 'sales', newSale.id), cleanSale);
+      console.log("Sale saved successfully.");
+
+      if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
+          for (const item of items) {
+              const stockItem = stock.find(s => s.codigo === item.codigoFardo);
+              if (stockItem) {
+                  const nuevoStockVal = Math.max(0, stockItem.stockActual - item.cantidad);
+                  await setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
+              }
+          }
+      } else {
+          const stockItem = stock.find(item => item.codigo === saleData.codigoFardo);
+          if (stockItem) {
+              const nuevoStockVal = Math.max(0, stockItem.stockActual - (saleData.cantidad || 0));
+              await setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
+          }
+      }
+    } catch(error) {
+        console.error("Error adding sale:", error);
+        alert("Error al registrar venta. Revisa la consola.");
     }
 
     return newSale;

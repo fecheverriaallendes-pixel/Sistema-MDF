@@ -180,7 +180,7 @@ export default function Stock() {
             onChange={(e) => { setProviderFilter(e.target.value); playSound('click'); }}
           >
             {uniqueProviders.map(p => (
-              <option key={p} value={p}>{p === 'TODOS' ? 'Filtrar: TODOS LOS PROVEEDORES' : `Proveedor: ${p}`}</option>
+              <option key={`${p}-option`} value={p}>{p === 'TODOS' ? 'Filtrar: TODOS LOS PROVEEDORES' : `Proveedor: ${p}`}</option>
             ))}
           </select>
         </div>
@@ -202,7 +202,7 @@ export default function Stock() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredStock.map((item) => (
-                <tr key={item.id} className={`group hover:bg-slate-50 transition-colors ${item.stockActual < 3 && item.stockActual > 0 ? 'bg-red-50/30' : ''}`}>
+                <tr key={`${item.id}-${item.codigo}`} className={`group hover:bg-slate-50 transition-colors ${item.stockActual < 3 && item.stockActual > 0 ? 'bg-red-50/30' : ''}`}>
                   <td className="px-8 py-6">
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.unidad === 'FARDO' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
                       {item.unidad === 'FARDO' ? <Layers size={12} /> : <Square size={12} />} {item.unidad}
