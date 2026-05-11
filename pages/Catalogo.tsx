@@ -70,9 +70,8 @@ export default function Catalogo() {
   const [sortOrder, setSortOrder] = useState<SortOption>('alpha-asc');
   
   const searchParams = new URLSearchParams(location.search);
-  const [viewMode, setViewMode] = useState<'digital' | 'print'>(
-    (searchParams.get('mode') as 'digital' | 'print') || 'digital'
-  );
+  const [viewMode, setViewMode] = useState<'digital' | 'print'>((searchParams.get('mode') as 'digital' | 'print') || 'digital');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const uniqueProviders = useMemo(() => {
     const providers = stock.map(item => item.proveedor.toUpperCase());
@@ -106,12 +105,16 @@ export default function Catalogo() {
   
   const handleDownloadPDF = async () => {
     playSound('success');
-    const input = contentRef.current;
-    if (!input) return;
+    setIsDownloading(true);
+    
+    // Give time to render the 'downloading' state
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    // We need to temporarily remove some print specific classes that might hide things
-    // or affect layout when capturing via html2canvas.
-    // The current Catalogo-content div has print:p-0 etc.
+    const input = contentRef.current;
+    if (!input) {
+        setIsDownloading(false);
+        return;
+    }
     
     const canvas = await html2canvas(input, { 
       scale: 2,
@@ -119,15 +122,15 @@ export default function Catalogo() {
       logging: false,
     });
     
+    setIsDownloading(false);
+    
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
     
     const imgProps = pdf.getImageProperties(imgData);
     const pdfWidth = pdf.internal.pageSize.getWidth();
-    // Calculate aspect ratio height
     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
     
-    // Multi-page handling
     let heightLeft = pdfHeight;
     let position = 0;
     
@@ -217,19 +220,19 @@ export default function Catalogo() {
       </div>
 
       {/* ÁREA DE CONTENIDO */}
-      <div ref={contentRef} className="catalogo-content bg-white p-4 print:p-0">
+      <div ref={contentRef} className={`catalogo-content bg-white p-8 ${isDownloading ? 'px-4' : 'p-4'}`}>
         
-        {/* Header Impresión Común */}
-        <div className="hidden print:flex items-center justify-between border-b-4 border-slate-900 pb-4 mb-6">
+        {/* Header Impresión - visible siempre para captura */}
+        <div className="flex items-center justify-between border-b-4 border-slate-900 pb-4 mb-6">
           <div className="flex items-center gap-4">
             <img src={LOGO_URL} alt="Logo" className="w-12 h-12 grayscale contrast-150" />
-            <h1 className="text-xl font-black uppercase tracking-tighter">
-              {viewMode === 'digital' ? 'Catálogo Maestro MDF' : 'Lista Oficial de Precios MDF'}
-            </h1>
+            <div>
+                <h1 className="text-xl font-black uppercase tracking-tighter">CUADERNO MDF S.A.</h1>
+                <p className="text-xs font-bold text-slate-500">{viewMode === 'digital' ? 'Catálogo Maestro' : 'Lista Oficial de Precios'}</p>
+            </div>
           </div>
           <div className="text-right">
             <p className="text-[10px] font-black uppercase">Fecha: {today}</p>
-            <p className="text-[8px] font-bold text-slate-400">CUADERNO MDF S.A.</p>
           </div>
         </div>
 
@@ -306,14 +309,15 @@ export default function Catalogo() {
           /* Cards: Allow natural flow */
           .digital-card { 
             display: inline-block !important; 
-            width: 48% !important;
+            width: 31% !important;
             margin: 1% !important;
             break-inside: avoid !important;
             border: 1px solid #ddd !important;
           }
 
           /* Tables: ensure simple layout */
-          table { width: 100% !important; border-collapse: collapse !important; }
+          table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
+          td, th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           tr { break-inside: avoid !important; }
           thead { display: table-header-group; }
         }
