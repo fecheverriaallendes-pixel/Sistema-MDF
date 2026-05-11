@@ -193,7 +193,7 @@ export default function Catalogo() {
           /* MODO DIGITAL: TARJETAS (Grilla en pantalla, Grilla optimizada en impresión) */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 print:grid-cols-2 print:gap-4">
             {sortedAndFilteredStock.map(item => (
-              <div key={item.id} className="digital-card bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden flex flex-col group hover:border-emerald-400 transition-all print:break-inside-avoid print:shadow-none print:border-2 print:rounded-2xl print:mb-4">
+              <div key={item.id} className="digital-card bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden flex flex-col group hover:border-emerald-400 transition-all print:break-inside-avoid print:shadow-none print:border-2 print:rounded-2xl print:mb-4 print:w-full print:inline-block">
                 <div className="p-6 bg-slate-900 text-white text-center relative print:bg-white print:text-slate-900 print:border-b print:p-3">
                   <div className="absolute top-2 right-4 flex items-center gap-1.5 px-2 py-0.5 bg-white/10 rounded-full text-[8px] font-black uppercase tracking-widest print:bg-slate-100 print:text-slate-500">
                     {item.unidad}
@@ -272,7 +272,7 @@ export default function Catalogo() {
           
           table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
           tr { page-break-inside: avoid !important; break-inside: avoid !important; }
-          .digital-card { page-break-inside: avoid !important; break-inside: avoid !important; display: inline-block !important; }
+          .digital-card { page-break-inside: avoid !important; break-inside: avoid !important; display: inline-block !important; width: 30% !important; margin: 1% !important; }
         }
       `}</style>
     </div>

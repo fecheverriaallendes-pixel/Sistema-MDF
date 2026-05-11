@@ -249,6 +249,16 @@ export default function RegistrarVenta() {
           {mode === 'NORMAL' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-blue-50/30 rounded-[40px] border-2 border-blue-100 animate-in fade-in slide-in-from-top duration-500">
                <div className="md:col-span-1">
+                <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Tag size={14} /> Variante</label>
+                <select required className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black text-lg" value={formData.variante} onChange={(e) => setFormData({...formData, variante: e.target.value})}>
+                    <option value="">ELEGIR...</option>
+                    <option value="FARDO">FARDO</option>
+                    <option value="MEDIO FARDO">MEDIO FARDO</option>
+                    <option value="SACO">SACO</option>
+                    <option value="LOTE">LOTE</option>
+                </select>
+              </div>
+               <div className="md:col-span-1">
                 <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><CreditCard size={14} /> RUT Cliente</label>
                 <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black" placeholder="12.345.678-9" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})}/>
               </div>
