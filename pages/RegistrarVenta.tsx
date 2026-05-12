@@ -204,6 +204,17 @@ export default function RegistrarVenta() {
               </select>
             </div>
           </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="md:col-span-1">
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><CreditCard size={14} className="text-blue-500" /> RUT Cliente</label>
+              <input required type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" placeholder="12.345.678-9" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})}/>
+            </div>
+            <div className="md:col-span-1">
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><MapPin size={14} className="text-blue-500" /> Dirección Despacho</label>
+              <input required type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase" placeholder="CALLE, COMUNA" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value.toUpperCase()})}/>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              <div className="relative">
@@ -251,7 +262,7 @@ export default function RegistrarVenta() {
 
           {mode === 'NORMAL' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-blue-50/30 rounded-[40px] border-2 border-blue-100 animate-in fade-in slide-in-from-top duration-500">
-               <div className="md:col-span-1">
+               <div className="md:col-span-2">
                 <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Tag size={14} /> Variante</label>
                 <select required className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black text-lg" value={formData.variante} onChange={(e) => setFormData({...formData, variante: e.target.value})}>
                     <option value="">ELEGIR...</option>
@@ -260,44 +271,6 @@ export default function RegistrarVenta() {
                     <option value="SACO">SACO</option>
                     <option value="LOTE">LOTE</option>
                 </select>
-              </div>
-               <div className="md:col-span-1">
-                <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><CreditCard size={14} /> RUT Cliente</label>
-                <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black" placeholder="12.345.678-9" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})}/>
-              </div>
-              <div className="md:col-span-1">
-                <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><MapPin size={14} /> Dirección Despacho</label>
-                <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black uppercase" placeholder="CALLE, COMUNA" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value.toUpperCase()})}/>
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Truck size={14} /> Tipo de Entrega</label>
-                <div className="flex bg-white p-1.5 rounded-[24px] border-2 border-blue-100 shadow-sm">
-                  <button 
-                    type="button"
-                    onClick={() => setFormData({...formData, tipoDespacho: DispatchType.AGENCIA})}
-                    className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${formData.tipoDespacho === DispatchType.AGENCIA ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                  >
-                    <Building2 size={16} /> Agencia
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setFormData({...formData, tipoDespacho: DispatchType.DOMICILIO})}
-                    className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${formData.tipoDespacho === DispatchType.DOMICILIO ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                  >
-                    <Home size={16} /> Domicilio
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setFormData({...formData, tipoDespacho: DispatchType.RETIRO})}
-                    className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${formData.tipoDespacho === DispatchType.RETIRO ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                  >
-                    <Package size={16} /> Retiro
-                  </button>
-                </div>
-                {formData.tipoDespacho === DispatchType.AGENCIA && (
-                   <input required type="text" className="w-full mt-4 px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={formData.agencia} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>
-                )}
               </div>
             </div>
           )}

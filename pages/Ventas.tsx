@@ -17,7 +17,7 @@ export default function Ventas() {
   const pendingLiveSales = sales.filter(s => s && !s.datosCompletos && s.tipoVenta === SaleType.LIVE && (isAdmin || s.vendedor === currentUser?.nombre));
   const readySales = sales.filter(s => {
     if (!s) return false;
-    if (!(s.datosCompletos || s.tipoVenta === SaleType.NORMAL)) return false;
+    if (!(s.datosCompletos || s.tipoVenta === SaleType.NORMAL || s.tipoVenta === SaleType.NOTA_VENTA)) return false;
     if (!(isAdmin || s.vendedor === currentUser?.nombre)) return false;
     
     // Attempt parsing; if it fails, default to today or skip

@@ -703,7 +703,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       hora: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: SaleStatus.PENDIENTE,
       enviado: false,
-      datosCompletos: saleData.tipoVenta === SaleType.NORMAL,
+      datosCompletos: saleData.tipoVenta === SaleType.NORMAL || saleData.tipoVenta === SaleType.NOTA_VENTA,
       estadoDespacho: DispatchStatus.PREPARACION,
       itemsDespachados: 0,
       tipoDespacho: saleData.tipoDespacho || '',
@@ -1033,14 +1033,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const deleteSale = async (saleId: string) => {
-    console.log("DEBUG: Intentando eliminar venta:", saleId);
+    console.log("DEBUG: Intentando eliminar venta:", saleId, "Usuario actual:", currentUser?.nombre, "Rol:", currentUser?.rol);
     if (!currentUser) {
       alert("No hay usuario autenticado.");
       return;
     }
-    if (currentUser?.rol !== StaffRole.ADMIN && currentUser?.rol !== StaffRole.DESPACHO) {
-      console.warn("Intento de borrado realizado por usuario sin permisos:", currentUser.nombre, currentUser.rol);
-      alert(`No tienes permisos para borrar ventas. Tu rol actual es: ${currentUser.rol}`);
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      console.warn("Intento de borrado realizado por usuario sin permisos:", currentUser?.nombre, currentUser?.rol);
+      alert(`No tienes permisos para borrar ventas. Solo el administrador puede hacerlo.`);
       return;
     }
     try {
