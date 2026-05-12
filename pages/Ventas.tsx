@@ -70,7 +70,7 @@ export default function Ventas() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="hidden print-only">
-        {printSale && printType === 'FACTURA' && <div className="invoice-container"><Invoice sale={printSale} /></div>}
+        {printSale && printType === 'FACTURA' && <div className="invoice-container"><Invoice sale={printSale} stock={stock} /></div>}
         {printSale && printType === 'ETIQUETAS' && (
           (printSale.items && printSale.items.length > 0 ? printSale.items : [{codigoFardo: printSale.codigoFardo || 'N/A', cantidad: printSale.cantidad || 1}]).map((item, idx) => (
             <div key={idx} className="label-container"><Label sale={printSale} stock={stock} item={item} /></div>
@@ -79,10 +79,9 @@ export default function Ventas() {
       </div>
       <style>{`
           @media print {
-            .no-print { display: none !important; }
-            .print-only { display: block !important; }
-            .invoice-container { width: 100%; }
-            .label-container { width: 100mm; height: 150mm; box-sizing: border-box; page-break-after: always; }
+            body > * { display: none !important; }
+            .print-only, .print-only * { display: block !important; visibility: visible !important; }
+            .print-only { position: absolute; left: 0; top: 0; width: 100%; }
           }
         `}</style>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 no-print">
@@ -288,6 +287,9 @@ export default function Ventas() {
                     <Package size={16} /> Retiro
                   </button>
                 </div>
+                {editingSale.tipoDespacho === DispatchType.AGENCIA && (
+                  <input required type="text" className="w-full mt-4 px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={editingSale.agencia || ''} onChange={(e) => setEditingSale({...editingSale, agencia: e.target.value.toUpperCase()})}/>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-8">

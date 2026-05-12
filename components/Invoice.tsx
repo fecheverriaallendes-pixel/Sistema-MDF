@@ -2,9 +2,9 @@
 import React from 'react';
 import { Sale } from '../types';
 
-export const Invoice = React.forwardRef<HTMLDivElement, { sale: Sale }>(({ sale }, ref) => {
+export const Invoice = React.forwardRef<HTMLDivElement, { sale: Sale, stock: any[] }>(({ sale, stock }, ref) => {
   return (
-    <div ref={ref} className="p-4 sm:p-8 bg-white border border-slate-200 print:p-2 print:border-0">
+    <div ref={ref} className="p-4 sm:p-8 bg-white print:p-0 print:border-0 print:absolute print:left-0 print:top-0 print:w-full">
       <div className="flex justify-between items-start mb-8">
         <div>
           <h1 className="text-3xl font-black uppercase text-slate-900">Nota de Venta</h1>
@@ -29,9 +29,9 @@ export const Invoice = React.forwardRef<HTMLDivElement, { sale: Sale }>(({ sale 
           </tr>
         </thead>
         <tbody>
-          {(sale.items || [{ codigoFardo: sale.codigoFardo || 'N/A', cantidad: sale.cantidad || 0, valorUnitario: sale.valorUnitario || 0 }]).map((item, index) => (
+          {(sale.items && sale.items.length > 0 ? sale.items : [{ codigoFardo: sale.codigoFardo || 'N/A', cantidad: sale.cantidad || 0, valorUnitario: sale.valorUnitario || 0 }]).map((item, index) => (
             <tr key={index} className="border-b border-slate-100">
-              <td className="py-2">{item.codigoFardo}</td>
+              <td className="py-2">{stock.find(s => s.codigo === item.codigoFardo)?.tipo || item.codigoFardo}</td>
               <td className="text-right py-2">{item.cantidad}</td>
               <td className="text-right py-2">${(item.cantidad * item.valorUnitario).toLocaleString()}</td>
             </tr>

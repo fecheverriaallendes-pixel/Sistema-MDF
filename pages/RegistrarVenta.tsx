@@ -32,6 +32,7 @@ export default function RegistrarVenta() {
     juntaCompra: string;
     observaciones: string;
     tipoDespacho?: DispatchType;
+    agencia?: string;
   }>({
     cliente: '',
     vendedor: '',
@@ -104,7 +105,8 @@ export default function RegistrarVenta() {
       status: SaleStatus.PENDIENTE,
       datosCompletos: !isQuick,
       variante: isQuick ? '' : formData.variante, 
-      tipoDespacho: isQuick ? undefined : (formData.tipoDespacho || DispatchType.AGENCIA)
+      tipoDespacho: isQuick ? undefined : (formData.tipoDespacho || DispatchType.AGENCIA),
+      agencia: isQuick ? undefined : formData.agencia
     };
 
     console.log("Final data to be saved:", finalData);
@@ -260,6 +262,19 @@ export default function RegistrarVenta() {
             )}
           </div>
 
+          {mode === 'NOTA_VENTA' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-amber-50/30 rounded-[40px] border-2 border-amber-100 animate-in fade-in slide-in-from-top duration-500">
+              <div className="md:col-span-2 space-y-4">
+                <label className="flex items-center gap-2 text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3 ml-2"><Truck size={14} /> Opciones de Despacho</label>
+                <div className="flex bg-white p-1.5 rounded-[24px] border-2 border-amber-100 shadow-sm">
+                  <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.AGENCIA})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.AGENCIA ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400'}`}>Agencia</button>
+                  <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.DOMICILIO})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.DOMICILIO ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400'}`}>Domicilio</button>
+                  <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.RETIRO})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.RETIRO ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400'}`}>Retiro</button>
+                </div>
+                {formData.tipoDespacho === DispatchType.AGENCIA && <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-amber-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={formData.agencia || ''} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>}
+              </div>
+            </div>
+          )}
           {mode === 'NORMAL' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-blue-50/30 rounded-[40px] border-2 border-blue-100 animate-in fade-in slide-in-from-top duration-500">
                <div className="md:col-span-2">
