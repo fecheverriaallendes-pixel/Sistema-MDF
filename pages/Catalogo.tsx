@@ -23,7 +23,7 @@ import { useStore } from '../store/GlobalContext';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
-type SortOption = 'alpha-asc' | 'alpha-desc' | 'price-asc' | 'price-desc';
+type SortOption = 'alpha-asc' | 'alpha-desc' | 'price-asc' | 'price-desc' | 'stock-asc' | 'stock-desc';
 
 const TableHeader = () => (
   <thead>
@@ -91,6 +91,8 @@ export default function Catalogo() {
         case 'alpha-desc': return b.tipo.localeCompare(a.tipo);
         case 'price-asc': return a.precioSugerido - b.precioSugerido;
         case 'price-desc': return b.precioSugerido - a.precioSugerido;
+        case 'stock-asc': return a.stockActual - b.stockActual;
+        case 'stock-desc': return b.stockActual - a.stockActual;
         default: return 0;
       }
     });
@@ -215,6 +217,8 @@ export default function Catalogo() {
             <option value="alpha-desc">Orden: Z - A</option>
             <option value="price-asc">Precio: Menor a Mayor</option>
             <option value="price-desc">Precio: Mayor a Menor</option>
+            <option value="stock-asc">Stock: Menor a Mayor</option>
+            <option value="stock-desc">Stock: Mayor a Menor</option>
           </select>
         </div>
       </div>

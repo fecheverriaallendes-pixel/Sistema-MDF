@@ -1,8 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
+import { Label } from '../components/Label';
+import { Invoice } from '../components/Invoice';
 
 export default function Ventas() {
   const { sales, updateSale, playSound, deleteSale, deleteAllSales, currentUser, stock } = useStore();
@@ -11,6 +13,8 @@ export default function Ventas() {
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [printSale, setPrintSale] = useState<Sale | null>(null);
+  const [printType, setPrintType] = useState<'FACTURA' | 'ETIQUETAS' | null>(null);
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
 
@@ -57,9 +61,31 @@ export default function Ventas() {
     playSound('success');
   };
 
+  const handlePrint = (sale: Sale, type: 'FACTURA' | 'ETIQUETAS') => {
+    setPrintSale(sale);
+    setPrintType(type);
+    setTimeout(() => window.print(), 50);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="hidden print-only">
+        {printSale && printType === 'FACTURA' && <div className="invoice-container"><Invoice sale={printSale} /></div>}
+        {printSale && printType === 'ETIQUETAS' && (
+          (printSale.items && printSale.items.length > 0 ? printSale.items : [{codigoFardo: printSale.codigoFardo || 'N/A', cantidad: printSale.cantidad || 1}]).map((item, idx) => (
+            <div key={idx} className="label-container"><Label sale={printSale} stock={stock} item={item} /></div>
+          ))
+        )}
+      </div>
+      <style>{`
+          @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            .invoice-container { width: 100%; }
+            .label-container { width: 100mm; height: 150mm; box-sizing: border-box; page-break-after: always; }
+          }
+        `}</style>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 no-print">
         <div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase">Historial de Ventas</h2>
           <p className="text-slate-500 italic font-medium">Gestión de clientes y recolección de datos pendientes</p>
@@ -167,21 +193,29 @@ export default function Ventas() {
                       <BadgeDollarSign size={14} /> {sale.estadoPago}
                     </button>
                   </td>
-                  <td className="px-8 py-6 text-center">
-                      <button 
-                        onClick={() => setEditingSale(sale)}
-                        className={`px-6 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 mx-auto shadow-xl ${activeTab === 'PENDING' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
-                      >
-                        <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
-                      </button>
-                      {isAdmin && (
-                        <button
-                          onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
-                          className="mt-2 text-red-500 hover:text-red-700 block mx-auto pt-2"
+                      <td className="px-8 py-6 text-center">
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => setEditingSale(sale)}
+                          className={`px-6 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 mx-auto shadow-xl ${activeTab === 'PENDING' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
                         >
-                          <Trash2 size={16} />
+                          <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
                         </button>
-                      )}
+                        {sale.datosCompletos && (
+                          <div className="flex gap-2 justify-center">
+                            <button onClick={() => { handlePrint(sale, 'FACTURA'); }} className="text-blue-500 hover:text-blue-700">Factura</button>
+                            <button onClick={() => { handlePrint(sale, 'ETIQUETAS'); }} className="text-emerald-500 hover:text-emerald-700">Etiquetas</button>
+                          </div>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
+                            className="mt-2 text-red-500 hover:text-red-700 block mx-auto pt-2"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
                   </td>
                 </tr>
               ))}
