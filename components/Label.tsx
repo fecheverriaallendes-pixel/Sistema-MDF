@@ -20,7 +20,7 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
           </div>
           <div className="border-t border-dashed border-black pt-0.5">
             <p className="text-[6px] font-black uppercase tracking-tighter text-slate-600">Contacto</p>
-            <p className="text-[10px] font-black leading-tight break-all">{sale.telefono}</p>
+            <p className="text-xl font-black leading-tight break-all">{sale.telefono}</p>
           </div>
         </div>
       </div>

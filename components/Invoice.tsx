@@ -4,7 +4,7 @@ import { Sale } from '../types';
 
 export const Invoice = React.forwardRef<HTMLDivElement, { sale: Sale }>(({ sale }, ref) => {
   return (
-    <div ref={ref} className="p-8 bg-white border border-slate-200">
+    <div ref={ref} className="p-4 sm:p-8 bg-white border border-slate-200 print:p-2 print:border-0">
       <div className="flex justify-between items-start mb-8">
         <div>
           <h1 className="text-3xl font-black uppercase text-slate-900">Nota de Venta</h1>

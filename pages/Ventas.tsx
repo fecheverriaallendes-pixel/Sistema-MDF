@@ -201,7 +201,7 @@ export default function Ventas() {
                         >
                           <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
                         </button>
-                        {sale.datosCompletos && (
+                        {(sale.datosCompletos || sale.tipoVenta === SaleType.NOTA_VENTA) && (
                           <div className="flex gap-2 justify-center">
                             <button onClick={() => { handlePrint(sale, 'FACTURA'); }} className="text-blue-500 hover:text-blue-700">Factura</button>
                             <button onClick={() => { handlePrint(sale, 'ETIQUETAS'); }} className="text-emerald-500 hover:text-emerald-700">Etiquetas</button>
