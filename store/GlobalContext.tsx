@@ -603,7 +603,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         }
 
         unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
-          setSales(snap.docs.map(d => d.data() as Sale));
+          const salesData = snap.docs.map(d => d.data() as Sale);
+          console.log("DEBUG: Retrived sales numbers:", salesData.map(s => s.numeroVenta));
+          setSales(salesData);
         });
         unsubStock = onSnapshot(collection(db, 'stock'), (snap) => {
           setStock(snap.docs.map(d => d.data() as StockItem));

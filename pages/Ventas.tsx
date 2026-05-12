@@ -82,6 +82,8 @@ export default function Ventas() {
             body > * { display: none !important; }
             .print-only, .print-only * { display: block !important; visibility: visible !important; }
             .print-only { position: absolute; left: 0; top: 0; width: 100%; }
+            .label-container { width: 100mm; height: 150mm; page-break-after: always; }
+            .invoice-container { page-break-after: always; }
           }
         `}</style>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 no-print">
@@ -105,7 +107,7 @@ export default function Ventas() {
         </div>
       </div>
 
-      <div className="relative group">
+      <div className="relative group no-print">
         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-900 transition-colors" size={28} />
         <input 
           type="text" 
@@ -117,7 +119,7 @@ export default function Ventas() {
       </div>
       
       {activeTab === 'READY' && (
-        <div className="flex gap-4 p-4 bg-slate-50 rounded-[24px]">
+        <div className="flex gap-4 p-4 bg-slate-50 rounded-[24px] no-print">
           <select className="px-6 py-3 rounded-xl border font-bold" value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))}>
             {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
@@ -127,7 +129,7 @@ export default function Ventas() {
         </div>
       )}
 
-      <div className="bg-white rounded-[48px] border border-slate-100 shadow-2xl overflow-hidden">
+      <div className="bg-white rounded-[48px] border border-slate-100 shadow-2xl overflow-hidden no-print">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -200,7 +202,7 @@ export default function Ventas() {
                         >
                           <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
                         </button>
-                        {(sale.datosCompletos || sale.tipoVenta === SaleType.NOTA_VENTA) && (
+                        {(sale.datosCompletos || sale.tipoVenta === SaleType.NOTA_VENTA || console.log(`Debug sale: ${sale.numeroVenta}, tipoVenta: ${sale.tipoVenta}, datosCompletos: ${sale.datosCompletos}`)) && (
                           <div className="flex gap-2 justify-center">
                             <button onClick={() => { handlePrint(sale, 'FACTURA'); }} className="text-blue-500 hover:text-blue-700">Factura</button>
                             <button onClick={() => { handlePrint(sale, 'ETIQUETAS'); }} className="text-emerald-500 hover:text-emerald-700">Etiquetas</button>
