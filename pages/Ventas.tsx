@@ -64,12 +64,20 @@ export default function Ventas() {
   const handlePrint = (sale: Sale, type: 'FACTURA' | 'ETIQUETAS') => {
     setPrintSale(sale);
     setPrintType(type);
-    setTimeout(() => window.print(), 500);
   };
+
+  React.useEffect(() => {
+    if (printSale && printType) {
+      const timer = setTimeout(() => {
+        window.print();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [printSale, printType]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="hidden print-only">
+      <div className="print-only">
         {printSale && printType === 'FACTURA' && <div className="invoice-container"><Invoice sale={printSale} stock={stock} /></div>}
         {printSale && printType === 'ETIQUETAS' && (
           (printSale.items && printSale.items.length > 0 ? printSale.items : [{codigoFardo: printSale.codigoFardo || 'N/A', cantidad: printSale.cantidad || 1}]).map((item, idx) => (
@@ -85,6 +93,11 @@ export default function Ventas() {
             .label-container { width: 100mm; height: 150mm; page-break-after: always; overflow: hidden; }
             .invoice-container { width: 100%; height: auto; page-break-after: always; overflow: hidden; }
             @page { size: auto; margin: 0; }
+          }
+          
+          /* Hide print-only on screen */
+          @media screen {
+            .print-only { display: none; }
           }
         `}</style>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 no-print">
