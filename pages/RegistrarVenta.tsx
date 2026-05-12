@@ -287,6 +287,15 @@ export default function RegistrarVenta() {
                     <option value="LOTE">LOTE</option>
                 </select>
               </div>
+              <div className="md:col-span-2 space-y-4">
+                <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Truck size={14} /> Opciones de Despacho</label>
+                <div className="flex bg-white p-1.5 rounded-[24px] border-2 border-blue-100 shadow-sm">
+                  <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.AGENCIA})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.AGENCIA ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Agencia</button>
+                  <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.DOMICILIO})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.DOMICILIO ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Domicilio</button>
+                  <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.RETIRO})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.RETIRO ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Retiro</button>
+                </div>
+                {formData.tipoDespacho === DispatchType.AGENCIA && <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={formData.agencia || ''} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>}
+              </div>
             </div>
           )}
 
