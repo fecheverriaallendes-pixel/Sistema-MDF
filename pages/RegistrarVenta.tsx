@@ -91,7 +91,7 @@ export default function RegistrarVenta() {
     if (mode === 'QUICK') quickNameRef.current?.focus();
   }, [mode, success]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isQuick = mode === 'QUICK';
     const isNotaVenta = mode === 'NOTA_VENTA';
@@ -107,7 +107,10 @@ export default function RegistrarVenta() {
       tipoDespacho: isQuick ? undefined : (formData.tipoDespacho || DispatchType.AGENCIA)
     };
 
-    addSale(finalData);
+    console.log("Final data to be saved:", finalData);
+    console.log("Items to be saved:", items);
+
+    await addSale(finalData);
     setSuccess(true);
     playSound('success');
     

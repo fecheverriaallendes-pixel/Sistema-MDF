@@ -721,11 +721,15 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       console.log("Sale saved successfully.");
 
       if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
+          console.log("Processing Nota de Venta items:", items);
           for (const item of items) {
               const stockItem = stock.find(s => s.codigo === item.codigoFardo);
               if (stockItem) {
+                  console.log("Found stock item for Nota de Venta:", stockItem.codigo);
                   const nuevoStockVal = Math.max(0, stockItem.stockActual - item.cantidad);
                   await setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
+              } else {
+                  console.log("Stock item NOT found for Nota de Venta:", item.codigoFardo);
               }
           }
       } else {
