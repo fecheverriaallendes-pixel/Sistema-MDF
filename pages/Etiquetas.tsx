@@ -30,8 +30,11 @@ export default function Etiquetas() {
                           (s.codigoFardo && s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase()));
     if (!matchesSearch) return false;
 
-    const isSellerReady = s.datosCompletos && !s.enviado;
-    if (!isSellerReady) return false;
+    const isSellerReady = s.datosCompletos;
+    if (!isSellerReady) {
+      console.log(`Sale ${s.numeroVenta}: datosCompletos=${s.datosCompletos}`);
+      return false;
+    }
     if (!showPrinted && s.impresa) return false;
     if (isAdmin) return true;
     return s.vendedor === currentUser?.nombre;

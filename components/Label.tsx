@@ -44,7 +44,7 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
             <p className="text-lg font-black uppercase leading-tight">
               { (() => {
                 const stockItem = stock.find(i => i.codigo === displayItem.codigoFardo);
-                return stockItem ? `${stockItem.tipo}` : (displayItem.codigoFardo || 'SIN CÓDIGO');
+                return stockItem ? stockItem.tipo : (displayItem.codigoFardo || 'SIN CÓDIGO');
               })()}
             </p>
             <p className="text-[9px] font-bold text-slate-500 mt-0.5">SKU: {displayItem.codigoFardo || 'N/A'}</p>

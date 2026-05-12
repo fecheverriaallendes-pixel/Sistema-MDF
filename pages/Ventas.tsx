@@ -64,7 +64,7 @@ export default function Ventas() {
   const handlePrint = (sale: Sale, type: 'FACTURA' | 'ETIQUETAS') => {
     setPrintSale(sale);
     setPrintType(type);
-    setTimeout(() => window.print(), 50);
+    setTimeout(() => window.print(), 500);
   };
 
   return (
@@ -82,8 +82,9 @@ export default function Ventas() {
             body > * { display: none !important; }
             .print-only, .print-only * { display: block !important; visibility: visible !important; }
             .print-only { position: absolute; left: 0; top: 0; width: 100%; }
-            .label-container { width: 100mm; height: 150mm; page-break-after: always; }
-            .invoice-container { page-break-after: always; }
+            .label-container { width: 100mm; height: 150mm; page-break-after: always; overflow: hidden; }
+            .invoice-container { width: 100%; height: auto; page-break-after: always; overflow: hidden; }
+            @page { size: auto; margin: 0; }
           }
         `}</style>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 no-print">
