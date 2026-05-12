@@ -68,9 +68,15 @@ export default function Ventas() {
 
   React.useEffect(() => {
     if (printSale && printType) {
+      console.log(`Debug print: ${printType} for ${printSale.numeroVenta}`);
       const timer = setTimeout(() => {
         window.print();
-      }, 500);
+        // Clear print state after printing
+        setTimeout(() => {
+          setPrintSale(null);
+          setPrintType(null);
+        }, 1000);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [printSale, printType]);
@@ -78,7 +84,12 @@ export default function Ventas() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="print-only">
-        {printSale && printType === 'FACTURA' && <div className="invoice-container"><Invoice sale={printSale} stock={stock} /></div>}
+        {printSale && printType === 'FACTURA' && (
+          <div className="invoice-container">
+            <Invoice sale={printSale} stock={stock} />
+            {console.log("Invoice rendered")}
+          </div>
+        )}
         {printSale && printType === 'ETIQUETAS' && (
           (printSale.items && printSale.items.length > 0 ? printSale.items : [{codigoFardo: printSale.codigoFardo || 'N/A', cantidad: printSale.cantidad || 1}]).map((item, idx) => (
             <div key={idx} className="label-container"><Label sale={printSale} stock={stock} item={item} /></div>
@@ -91,7 +102,7 @@ export default function Ventas() {
             .print-only, .print-only * { display: block !important; visibility: visible !important; }
             .print-only { position: absolute; left: 0; top: 0; width: 100%; }
             .label-container { width: 100mm; height: 150mm; page-break-after: always; overflow: hidden; }
-            .invoice-container { width: 100%; height: auto; page-break-after: always; overflow: hidden; }
+            .invoice-container { width: 100%; height: 297mm; page-break-after: always; overflow: hidden; }
             @page { size: auto; margin: 0; }
           }
           
