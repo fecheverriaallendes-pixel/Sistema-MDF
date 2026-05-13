@@ -15,6 +15,8 @@ export default function Ventas() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [printSale, setPrintSale] = useState<Sale | null>(null);
   const [printType, setPrintType] = useState<'FACTURA' | 'ETIQUETAS' | null>(null);
+  const [sortKey, setSortKey] = useState<'numeroVenta' | 'fecha'>('numeroVenta');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
 
@@ -32,11 +34,21 @@ export default function Ventas() {
   });
   const currentSales = activeTab === 'PENDING' ? pendingLiveSales : readySales;
 
-  const filteredSales = currentSales.filter(s => 
-    s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (s.codigoFardo && s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    s.numeroVenta.toString().includes(searchTerm)
-  );
+  const filteredSales = currentSales
+    .filter(s => 
+      s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (s.codigoFardo && s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      s.numeroVenta.toString().includes(searchTerm)
+    )
+    .sort((a, b) => {
+      let comparison = 0;
+      if (sortKey === 'numeroVenta') {
+        comparison = a.numeroVenta - b.numeroVenta;
+      } else {
+        comparison = new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
 
   const handleSaveSale = (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +163,13 @@ export default function Ventas() {
           <select className="px-6 py-3 rounded-xl border font-bold" value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))}>
             {Array.from({length: 12}).map((_, i) => <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('es-ES', { month: 'long' })}</option>)}
           </select>
+          <select className="px-6 py-3 rounded-xl border font-bold" value={sortKey} onChange={(e) => setSortKey(e.target.value as 'numeroVenta' | 'fecha')}>
+            <option value="numeroVenta">Ordenar por Nº Venta</option>
+            <option value="fecha">Ordenar por Fecha</option>
+          </select>
+          <button className="px-6 py-3 rounded-xl border font-bold bg-white" onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
+             {sortOrder === 'asc' ? 'A-Z (Asc)' : 'Z-A (Desc)'}
+          </button>
         </div>
       )}
 
@@ -159,7 +178,7 @@ export default function Ventas() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Operación</th>
+                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Operación / Fecha</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Producto / Mercadería</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
@@ -170,8 +189,11 @@ export default function Ventas() {
             <tbody className="divide-y divide-slate-100">
               {filteredSales.map((sale) => (
                 <tr key={sale.id} className="group hover:bg-slate-50/80 transition-colors">
-                  <td className="px-8 py-6 font-mono font-black text-slate-900 text-lg flex items-center gap-2">
-                    #{sale.numeroVenta}
+                  <td className="px-8 py-6 font-mono font-black text-slate-900 text-lg flex items-center gap-3">
+                    <div className="flex flex-col">
+                      <span>#{sale.numeroVenta}</span>
+                      <span className="text-[10px] text-slate-500 font-bold">{new Date(sale.fecha).toLocaleDateString()}</span>
+                    </div>
                     {sale.comprobante && (
                       <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-700">
                         <Camera size={16} />
