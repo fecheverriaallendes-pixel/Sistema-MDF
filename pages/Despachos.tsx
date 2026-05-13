@@ -253,8 +253,8 @@ export default function Despachos() {
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-[24px] border border-slate-100">
-                  <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                    <MapPin size={10} /> Destino
+                    <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <MapPin size={10} /> Destino {sale.agencia && <span className="text-blue-500">| Agencia: {sale.agencia}</span>}
                   </p>
                   <p className="text-xs font-bold text-slate-700 uppercase leading-snug">
                     {sale.direccion || 'RETIRO EN TIENDA'}

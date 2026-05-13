@@ -55,7 +55,8 @@ export default function TransportistaView() {
               </div>
             </div>
             <p className="text-sm text-slate-600 mb-2">Cliente: {sale.cliente} - {sale.telefono}</p>
-            <p className="text-sm font-bold text-slate-700 mb-2">Transportista: {sale.transportista || 'No asignado'}</p>
+                        <p className="text-sm font-bold text-slate-700 mb-2">Transportista: {sale.transportista || 'No asignado'}</p>
+            {sale.agencia && <p className="text-sm font-bold text-blue-700 mb-2">Agencia: {sale.agencia}</p>}
             <a 
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${sale.direccion}, Chile`)}`}
               target="_blank"
@@ -96,7 +97,7 @@ export default function TransportistaView() {
               >
                 <Truck size={16} /> EN RUTA
               </button>
-              <button 
+                            <button 
                 onClick={() => handleUpdateStatus(selectedSale.id, DispatchStatus.CLIENTE_NO_RECIBIO)}
                 className="flex items-center justify-center gap-2 p-3 bg-amber-500 text-white rounded-xl font-bold text-xs"
               >
@@ -107,6 +108,18 @@ export default function TransportistaView() {
                 className="flex items-center justify-center gap-2 p-3 bg-red-500 text-white rounded-xl font-bold text-xs"
               >
                 <AlertCircle size={16} /> NO ENCONTRADA
+              </button>
+              <button 
+                onClick={() => handleUpdateStatus(selectedSale.id, DispatchStatus.AGENCIA_MAL_ASIGNADA)}
+                className="flex items-center justify-center gap-2 p-3 bg-red-700 text-white rounded-xl font-bold text-xs"
+              >
+                <AlertCircle size={16} /> AGENCIA MAL ASIGNADA
+              </button>
+              <button 
+                onClick={() => handleUpdateStatus(selectedSale.id, DispatchStatus.ERROR_ETIQUETADO)}
+                className="flex items-center justify-center gap-2 p-3 bg-red-700 text-white rounded-xl font-bold text-xs"
+              >
+                <AlertCircle size={16} /> ERROR ETIQUETADO
               </button>
               <button 
                 onClick={() => setSelectedSale(null)}

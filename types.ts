@@ -28,7 +28,9 @@ export enum DispatchStatus {
   ENTREGADO = 'Entregado',
   CLIENTE_AUSENTE = 'Cliente ausente',
   DIRECCION_NO_ENCONTRADA = 'Dirección no encontrada',
-  CLIENTE_NO_RECIBIO = 'Cliente no recibió'
+  CLIENTE_NO_RECIBIO = 'Cliente no recibió',
+  AGENCIA_MAL_ASIGNADA = 'Agencia Mal Asignada',
+  ERROR_ETIQUETADO = 'Error de Etiquetado'
 }
 
 export enum SaleType {
