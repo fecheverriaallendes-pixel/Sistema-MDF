@@ -41,9 +41,9 @@ const ProductRow = ({ item }: { item: any }) => (
     <td className="px-2 py-1.5 font-mono font-bold text-slate-400 text-[10px] uppercase">
       {item.codigo.replace('MDF-','')}
     </td>
-    <td className="px-2 py-1.5">
+    <td className="px-2 py-1.5 product-detail-cell">
       <div className="flex flex-col">
-        <span className="font-black text-slate-900 uppercase text-[11px] leading-tight italic line-clamp-1">
+        <span className="font-black text-slate-900 uppercase text-[11px] leading-tight italic line-clamp-2">
           {item.tipo}
         </span>
         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
@@ -322,6 +322,7 @@ export default function Catalogo() {
           /* Tables: ensure simple layout */
           table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
           td, th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .product-detail-cell { white-space: normal !important; }
           tr { break-inside: avoid !important; }
           thead { display: table-header-group; }
         }
