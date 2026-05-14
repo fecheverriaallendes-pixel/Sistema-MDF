@@ -74,6 +74,7 @@ export default function Catalogo() {
   const searchParams = new URLSearchParams(location.search);
   const [viewMode, setViewMode] = useState<'digital' | 'print'>((searchParams.get('mode') as 'digital' | 'print') || 'digital');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showCopyFeedback, setShowCopyFeedback] = useState(false);
 
   const uniqueProviders = useMemo(() => {
     const providers = stock.map(item => item.proveedor.toUpperCase());
@@ -154,9 +155,10 @@ export default function Catalogo() {
   const handleShareLink = () => {
     playSound('success');
     const catalogUrl = `${window.location.origin}${window.location.pathname}#/c`;
-    const message = `¡Hola! Te comparto nuestro catálogo de fardos en tiempo real para que veas nuestro stock actualizado: ${catalogUrl}`;
-    const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+    navigator.clipboard.writeText(catalogUrl).then(() => {
+      setShowCopyFeedback(true);
+      setTimeout(() => setShowCopyFeedback(false), 3000);
+    });
   };
 
   const today = new Date().toLocaleDateString('es-CL');
@@ -200,10 +202,10 @@ export default function Catalogo() {
             </button>
             <button 
               onClick={handleShareLink}
-              className="flex items-center gap-3 px-8 py-4 bg-emerald-500 text-white rounded-[24px] font-black text-xs uppercase tracking-widest transition-all shadow-2xl hover:bg-emerald-600 active:scale-95"
+              className={`flex items-center gap-3 px-8 py-4 text-white rounded-[24px] font-black text-xs uppercase tracking-widest transition-all shadow-2xl active:scale-95 ${showCopyFeedback ? 'bg-slate-900 animate-bounce' : 'bg-emerald-500 hover:bg-emerald-600'}`}
             >
-              <MessageCircle size={18} />
-              Compartir Link
+              <Share2 size={18} />
+              {showCopyFeedback ? '¡Link Copiado!' : 'Compartir Link'}
             </button>
           </div>
         </div>
