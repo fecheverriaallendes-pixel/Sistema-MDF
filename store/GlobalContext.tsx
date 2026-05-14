@@ -449,6 +449,7 @@ interface StoreContextType {
   removeStockItem: (id: string) => void;
   bulkAddStock: (items: Omit<StockItem, 'id' | 'disponible'>[]) => void;
   fixDuplicateStock: () => Promise<void>;
+  fixDuplicateStockByName: () => Promise<void>;
   resetToMasterStock: () => void;
   addStaff: (member: Omit<StaffMember, 'id' | 'activo'>) => void;
   removeStaff: (id: string) => void;
@@ -932,11 +933,21 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   const addStockItem = (item: Omit<StockItem, 'id' | 'disponible'>) => {
     const code = item.codigo.trim().toUpperCase();
-    const existing = stock.find(s => s.codigo.trim().toUpperCase() === code);
-    if (existing) {
-      alert(`El código ${code} ya existe en el inventario (${existing.tipo}). No se puede duplicar.`);
+    const name = item.tipo.trim().toUpperCase();
+    
+    const existingCode = stock.find(s => s.codigo.trim().toUpperCase() === code);
+    if (existingCode) {
+      alert(`El código ${code} ya existe en el inventario (${existingCode.tipo}). No se puede duplicar.`);
       return;
     }
+
+    const existingName = stock.find(s => s.tipo.trim().toUpperCase() === name);
+    if (existingName) {
+      if (!confirm(`Ya existe un producto con el nombre "${item.tipo}" (Código: ${existingName.codigo}). ¿Estás seguro de que quieres crear otro igual con distinto código?`)) {
+        return;
+      }
+    }
+
     const newId = Math.random().toString(36).substr(2, 9);
     setDoc(doc(db, 'stock', newId), { ...item, codigo: code, id: newId, disponible: item.stockActual > 0 });
   };
@@ -953,6 +964,16 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         return;
       }
       updatedData.codigo = newCode;
+    }
+
+    if (updatedData.tipo) {
+      const newName = updatedData.tipo.trim().toUpperCase();
+      const conflict = stock.find(s => s.tipo.trim().toUpperCase() === newName && s.id !== id);
+      if (conflict) {
+        if (!confirm(`Atención: Ya existe otro producto con el nombre "${updatedData.tipo}" (Código: ${conflict.codigo}). ¿Deseas continuar de todas formas?`)) {
+          return;
+        }
+      }
     }
 
     setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
@@ -1030,12 +1051,72 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       for (const [code, items] of codeMap.entries()) {
         if (items.length > 1) {
           totalMerged++;
-          // Keep the first one found as original, but merge stock from others
+          // Keep the first one found as original
           const [original, ...duplicates] = items;
-          let combinedStock = original.stockActual;
           
           for (const duplicate of duplicates) {
-            combinedStock += duplicate.stockActual;
+            batch.delete(doc(db, 'stock', duplicate.id));
+            deletedCount++;
+            count++;
+            
+            if (count >= 450) {
+              await batch.commit();
+              batch = writeBatch(db);
+              count = 0;
+            }
+          }
+      
+          if (count >= 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+      }
+      
+      if (count > 0) await batch.commit();
+      alert(`✅ LIMPIEZA EXITOSA: Se corrigieron ${totalMerged} códigos duplicados. Se eliminaron ${deletedCount} registros excedentes, conservando únicamente el registro original de cada uno.`);
+      playSound('success');
+    } catch (error: any) {
+      console.error("Error en fixDuplicateStock:", error);
+      alert("Error al limpiar duplicados: " + error.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const fixDuplicateStockByName = async () => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede realizar esta limpieza.");
+      return;
+    }
+    
+    setIsSyncing(true);
+    try {
+      const stockDocs = await getDocs(collection(db, 'stock'));
+      const stockItems = stockDocs.docs.map(d => d.data() as StockItem);
+      
+      const nameMap = new Map<string, StockItem[]>();
+      stockItems.forEach(item => {
+        const name = item.tipo.trim().toUpperCase();
+        if (!nameMap.has(name)) {
+          nameMap.set(name, []);
+        }
+        nameMap.get(name)!.push(item);
+      });
+      
+      let batch = writeBatch(db);
+      let count = 0;
+      let totalMerged = 0;
+      let deletedCount = 0;
+      
+      for (const [name, items] of nameMap.entries()) {
+        if (items.length > 1) {
+          totalMerged++;
+          const sortedItems = [...items].sort((a, b) => a.codigo.localeCompare(b.codigo));
+          const [original, ...duplicates] = sortedItems;
+          
+          for (const duplicate of duplicates) {
             batch.delete(doc(db, 'stock', duplicate.id));
             deletedCount++;
             count++;
@@ -1047,13 +1128,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
             }
           }
           
-          // Update the original with merged stock
-          batch.update(doc(db, 'stock', original.id), { 
-            stockActual: combinedStock,
-            disponible: combinedStock > 0 
-          });
-          count++;
-          
           if (count >= 450) {
             await batch.commit();
             batch = writeBatch(db);
@@ -1063,11 +1137,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
       
       if (count > 0) await batch.commit();
-      alert(`✅ LIMPIEZA EXITOSA: Se corrigieron ${totalMerged} códigos duplicados. Se eliminaron ${deletedCount} registros excedentes sumando su stock al registro original.`);
+      alert(`✅ LIMPIEZA POR NOMBRE EXITOSA: Se corrigieron ${totalMerged} productos con nombres idénticos. Se eliminaron ${deletedCount} registros excedentes, conservando solo el registro con el código más antiguo.`);
       playSound('success');
     } catch (error: any) {
-      console.error("Error en fixDuplicateStock:", error);
-      alert("Error al limpiar duplicados: " + error.message);
+      console.error("Error en fixDuplicateStockByName:", error);
+      alert("Error al limpiar duplicados por nombre: " + error.message);
     } finally {
       setIsSyncing(false);
     }
@@ -1290,7 +1364,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
-      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
+      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord
     }}>

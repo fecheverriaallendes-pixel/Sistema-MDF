@@ -17,7 +17,7 @@ export default function Configuracion() {
     settings, updateSettings, playSound, syncWithCloud, pushToCloud,
     isSyncing, lastSync, staff, addStaff, removeStaff, sales, stock, purchases,
     clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier,
-    fixDuplicateStock
+    fixDuplicateStock, fixDuplicateStockByName
   } = useStore();
   
   const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS'>('RED');
@@ -407,11 +407,11 @@ export default function Configuracion() {
                       <h4 className="text-emerald-600 font-black text-sm uppercase">Saneamiento de Inventario</h4>
                    </div>
                    <p className="text-slate-500 text-[11px] font-medium leading-relaxed italic">
-                      Detecta y combina productos duplicados con el mismo código, sumando sus existencias en un solo registro maestro.
+                      Detecta productos duplicados con el mismo código y elimina los excedentes, conservando únicamente el registro original.
                    </p>
                    <button 
                      onClick={() => {
-                        if(confirm("¿Deseas fusionar todos los productos duplicados? Se sumará el stock de los repetidos al registro principal.")) {
+                        if(confirm("¿Deseas eliminar los productos con código duplicado? Se conservará solo el registro más antiguo y NO se sumará el stock.")) {
                             fixDuplicateStock();
                         }
                      }}
@@ -421,6 +421,24 @@ export default function Configuracion() {
                      <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /> 
                      {isSyncing ? 'LIMPIANDO...' : 'CORREGIR CÓDIGOS DUPLICADOS'}
                    </button>
+
+                   <div className="pt-4 border-t border-slate-100">
+                     <p className="text-slate-500 text-[11px] font-medium leading-relaxed italic mb-4">
+                        Detecta productos con el <b>mismo nombre</b> pero <b>distinto código</b> y elimina los repetidos.
+                     </p>
+                     <button 
+                       onClick={() => {
+                          if(confirm("¿Deseas eliminar productos que tengan NOMBRES idénticos? Se mantendrá solo el registro con el código más antiguo y NO se sumará el stock.")) {
+                              fixDuplicateStockByName();
+                          }
+                       }}
+                       disabled={isSyncing}
+                       className="w-full py-5 bg-white text-emerald-600 border-2 border-emerald-100 rounded-[24px] font-black text-xs uppercase tracking-widest hover:border-emerald-500 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                     >
+                       <Layers size={18} className={isSyncing ? 'animate-spin' : ''} /> 
+                       {isSyncing ? 'PROCESANDO...' : 'FUSIONAR POR NOMBRE IDÉNTICO'}
+                     </button>
+                   </div>
                 </div>
               </div>
             </div>
