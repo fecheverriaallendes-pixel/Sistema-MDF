@@ -130,66 +130,94 @@ export default function Catalogo() {
         const todayStr = new Date().toLocaleDateString('es-CL');
 
         if (viewMode === 'print') {
-          // MODE: LIST (Professional Table using autoTable)
-          // Header info
-          pdf.setFontSize(18);
-          pdf.setTextColor(15, 23, 42); // slate-900
-          pdf.text('CUADERNO MDF S.A.', 14, 22);
+          // --- NUEVO ENCABEZADO PROFESIONAL ---
+          pdf.setFillColor(15, 23, 42); // Dark slate
+          pdf.rect(0, 0, 210, 35, 'F');
           
-          pdf.setFontSize(10);
-          pdf.setTextColor(100, 116, 139); // slate-500
-          pdf.text('LISTA OFICIAL DE PRECIOS', 14, 28);
+          pdf.setTextColor(255, 255, 255);
+          pdf.setFontSize(20);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('CUADERNO MDF S.A.', 14, 18);
+          
+          pdf.setFontSize(9);
+          pdf.setFont('helvetica', 'normal');
+          pdf.text('LISTA OFICIAL DE PRECIOS • VENTA MAYORISTA', 14, 26);
           
           pdf.setFontSize(8);
-          pdf.text(`Fecha: ${todayStr}`, 196, 22, { align: 'right' });
+          pdf.text(`FECHA DE EMISIÓN: ${todayStr}`, 196, 18, { align: 'right' });
+          pdf.text('TELAS, CUEROS SINTÉTICOS Y TAPICERÍA', 196, 26, { align: 'right' });
 
-          const tableRows = sortedAndFilteredStock.map(item => [
+          // --- OPTIMIZACIÓN DE DATOS (Doble Columna) ---
+          // Dividimos el stock en dos mitades para aprovechar el ancho de la página
+          const midPoint = Math.ceil(sortedAndFilteredStock.length / 2);
+          const leftItems = sortedAndFilteredStock.slice(0, midPoint);
+          const rightItems = sortedAndFilteredStock.slice(midPoint);
+
+          const leftRows = leftItems.map(item => [
             item.codigo.replace('MDF-', ''),
             item.tipo.toUpperCase(),
-            item.proveedor.toUpperCase(),
-            `$ ${item.precioSugerido.toLocaleString('es-CL')}`,
-            item.stockActual.toString()
+            `$ ${item.precioSugerido.toLocaleString('es-CL')}`
           ]);
 
-          autoTable(pdf, {
-            startY: 35,
-            head: [['CÓD', 'PRODUCTO', 'ORIGEN', 'VALOR', 'STK']],
-            body: tableRows,
+          const rightRows = rightItems.map(item => [
+            item.codigo.replace('MDF-', ''),
+            item.tipo.toUpperCase(),
+            `$ ${item.precioSugerido.toLocaleString('es-CL')}`
+          ]);
+
+          // Estilos comunes para ambas tablas
+          const tableStyles: any = {
             theme: 'striped',
             headStyles: { 
-              fillColor: [15, 23, 42], 
+              fillColor: [51, 65, 85], 
               textColor: [255, 255, 255], 
-              fontSize: 9, 
+              fontSize: 7, 
               fontStyle: 'bold',
-              cellPadding: 3
+              cellPadding: 1.5
             },
             bodyStyles: { 
-              fontSize: 8,
-              cellPadding: 2,
-              textColor: [51, 65, 85]
+              fontSize: 6.5,
+              cellPadding: 1,
+              textColor: [30, 41, 59]
             },
             columnStyles: {
-              0: { cellWidth: 15, fontStyle: 'bold' },
-              1: { cellWidth: 'auto', fontStyle: 'bold' },
-              2: { cellWidth: 25 },
-              3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
-              4: { cellWidth: 15, halign: 'center' }
+              0: { cellWidth: 12, fontStyle: 'bold' },
+              1: { cellWidth: 'auto' },
+              2: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }
             },
-            alternateRowStyles: {
-              fillColor: [248, 250, 252]
-            },
-            margin: { top: 35, bottom: 20 },
+            margin: { top: 40, bottom: 15 }
+          };
+
+          // Tabla Izquierda
+          autoTable(pdf, {
+            ...tableStyles,
+            startY: 40,
+            tableWidth: 90,
+            margin: { left: 12 },
+            head: [['CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR UNIT.']],
+            body: leftRows,
+          });
+
+          // Tabla Derecha (en la misma página si es posible, jspdf-autotable maneja esto con startY del anterior)
+          // Pero para que sea paralelo perfecto en cada página usamos un truco de dibujo
+          autoTable(pdf, {
+            ...tableStyles,
+            startY: 40,
+            tableWidth: 90,
+            margin: { left: 108 },
+            head: [['CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR UNIT.']],
+            body: rightRows,
             didDrawPage: (data: any) => {
-              // Footer on each page
-              const str = `Página ${pdf.internal.getNumberOfPages()}`;
-              pdf.setFontSize(8);
+              // Footer info
+              pdf.setFontSize(7);
               pdf.setTextColor(148, 163, 184);
-              pdf.text(str, data.settings.margin.left, pdf.internal.pageSize.getHeight() - 10);
-              pdf.text('CUADERNO MDF • CHILE', pdf.internal.pageSize.getWidth() / 2, pdf.internal.pageSize.getHeight() - 10, { align: 'center' });
+              const pageNum = pdf.internal.getNumberOfPages();
+              pdf.text(`Página ${pageNum}`, 14, pdf.internal.pageSize.getHeight() - 8);
+              pdf.text('Precios sujetos a cambio sin previo aviso • CUADERNO MDF CHILE', 105, pdf.internal.pageSize.getHeight() - 8, { align: 'center' });
             }
           });
 
-          pdf.save(`lista_precios_${new Date().toISOString().slice(0, 10)}.pdf`);
+          pdf.save(`Lista_Precios_MDF_${new Date().toISOString().slice(0, 10)}.pdf`);
         } else {
           // MODE: DIGITAL (Canvas screenshot)
           const input = contentRef.current;
