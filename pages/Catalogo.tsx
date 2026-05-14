@@ -141,11 +141,11 @@ export default function Catalogo() {
           
           pdf.setFontSize(9);
           pdf.setFont('helvetica', 'normal');
-          pdf.text('LISTA OFICIAL DE PRECIOS • VENTA MAYORISTA', 14, 26);
+          pdf.text('LISTA OFICIAL DE PRECIOS', 14, 26);
           
           pdf.setFontSize(8);
           pdf.text(`FECHA DE EMISIÓN: ${todayStr}`, 196, 18, { align: 'right' });
-          pdf.text('TELAS, CUEROS SINTÉTICOS Y TAPICERÍA', 196, 26, { align: 'right' });
+          // Eliminado texto de Tapicería
 
           // --- OPTIMIZACIÓN DE DATOS (Doble Columna en una sola tabla) ---
           // Emparejamos los productos para que vayan uno al lado del otro en la misma fila
@@ -156,11 +156,11 @@ export default function Catalogo() {
             
             pairedRows.push([
               left.codigo.replace('MDF-', ''),
-              left.tipo.toUpperCase().substring(0, 35),
+              left.tipo.toUpperCase().substring(0, 32),
               `$ ${left.precioSugerido.toLocaleString('es-CL')}`,
               '', // Espaciador
               right ? right.codigo.replace('MDF-', '') : '',
-              right ? right.tipo.toUpperCase().substring(0, 35) : '',
+              right ? right.tipo.toUpperCase().substring(0, 32) : '',
               right ? `$ ${right.precioSugerido.toLocaleString('es-CL')}` : ''
             ]);
           }
@@ -184,14 +184,14 @@ export default function Catalogo() {
             },
             columnStyles: {
               0: { cellWidth: 10, fontStyle: 'bold' },
-              1: { cellWidth: 70 },
-              2: { cellWidth: 18, halign: 'right', fontStyle: 'bold' },
+              1: { cellWidth: 63 },
+              2: { cellWidth: 17, halign: 'right', fontStyle: 'bold' },
               3: { cellWidth: 4 }, // Spacer
               4: { cellWidth: 10, fontStyle: 'bold' },
-              5: { cellWidth: 70 },
-              6: { cellWidth: 18, halign: 'right', fontStyle: 'bold' }
+              5: { cellWidth: 63 },
+              6: { cellWidth: 17, halign: 'right', fontStyle: 'bold' }
             },
-            margin: { top: 40, bottom: 15 },
+            margin: { top: 40, bottom: 15, left: 10, right: 10 },
             didDrawPage: (data: any) => {
               // Dibujar encabezado en cada página (opcional, el rectangulo oscuro solo en la 1)
               if (pdf.internal.getNumberOfPages() > 1) {
