@@ -9,7 +9,8 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
     match /stock/{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
     match /users/{userId} {
       allow read, write: if isAuthenticated() && (request.auth.uid == userId);

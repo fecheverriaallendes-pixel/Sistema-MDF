@@ -16,7 +16,9 @@ import {
   Layers,
   Square,
   Filter,
-  FileDown
+  FileDown,
+  MessageCircle,
+  Share2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
@@ -149,6 +151,14 @@ export default function Catalogo() {
     pdf.save(`catalogo_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
+  const handleShareLink = () => {
+    playSound('success');
+    const catalogUrl = `${window.location.origin}${window.location.pathname}#/c`;
+    const message = `¡Hola! Te comparto nuestro catálogo de fardos en tiempo real para que veas nuestro stock actualizado: ${catalogUrl}`;
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
   const today = new Date().toLocaleDateString('es-CL');
 
   return (
@@ -187,6 +197,13 @@ export default function Catalogo() {
             >
               <FileDown size={18} />
               Guardar PDF
+            </button>
+            <button 
+              onClick={handleShareLink}
+              className="flex items-center gap-3 px-8 py-4 bg-emerald-500 text-white rounded-[24px] font-black text-xs uppercase tracking-widest transition-all shadow-2xl hover:bg-emerald-600 active:scale-95"
+            >
+              <MessageCircle size={18} />
+              Compartir Link
             </button>
           </div>
         </div>
