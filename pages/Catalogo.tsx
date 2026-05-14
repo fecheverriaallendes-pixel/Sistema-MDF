@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import { 
   Printer, 
@@ -22,6 +23,13 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
+
+// Extend jsPDF interface for autotable
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
@@ -112,44 +120,115 @@ export default function Catalogo() {
     playSound('success');
     setIsDownloading(true);
     
-    // Give time to render the 'downloading' state
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Brief delay to allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-    const input = contentRef.current;
-    if (!input) {
+    try {
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const todayStr = new Date().toLocaleDateString('es-CL');
+
+        if (viewMode === 'print') {
+          // MODE: LIST (Professional Table using autoTable)
+          // Header info
+          pdf.setFontSize(18);
+          pdf.setTextColor(15, 23, 42); // slate-900
+          pdf.text('CUADERNO MDF S.A.', 14, 22);
+          
+          pdf.setFontSize(10);
+          pdf.setTextColor(100, 116, 139); // slate-500
+          pdf.text('LISTA OFICIAL DE PRECIOS', 14, 28);
+          
+          pdf.setFontSize(8);
+          pdf.text(`Fecha: ${todayStr}`, 196, 22, { align: 'right' });
+
+          const tableRows = sortedAndFilteredStock.map(item => [
+            item.codigo.replace('MDF-', ''),
+            item.tipo.toUpperCase(),
+            item.proveedor.toUpperCase(),
+            `$ ${item.precioSugerido.toLocaleString('es-CL')}`,
+            item.stockActual.toString()
+          ]);
+
+          pdf.autoTable({
+            startY: 35,
+            head: [['CÓD', 'PRODUCTO', 'ORIGEN', 'VALOR', 'STK']],
+            body: tableRows,
+            theme: 'striped',
+            headStyles: { 
+              fillColor: [15, 23, 42], 
+              textColor: [255, 255, 255], 
+              fontSize: 9, 
+              fontStyle: 'bold',
+              cellPadding: 3
+            },
+            bodyStyles: { 
+              fontSize: 8,
+              cellPadding: 2,
+              textColor: [51, 65, 85]
+            },
+            columnStyles: {
+              0: { cellWidth: 15, fontStyle: 'bold' },
+              1: { cellWidth: 'auto', fontStyle: 'bold' },
+              2: { cellWidth: 25 },
+              3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+              4: { cellWidth: 15, halign: 'center' }
+            },
+            alternateRowStyles: {
+              fillColor: [248, 250, 252]
+            },
+            margin: { top: 35, bottom: 20 },
+            didDrawPage: (data: any) => {
+              // Footer on each page
+              const str = `Página ${pdf.internal.getNumberOfPages()}`;
+              pdf.setFontSize(8);
+              pdf.setTextColor(148, 163, 184);
+              pdf.text(str, data.settings.margin.left, pdf.internal.pageSize.getHeight() - 10);
+              pdf.text('CUADERNO MDF • CHILE', pdf.internal.pageSize.getWidth() / 2, pdf.internal.pageSize.getHeight() - 10, { align: 'center' });
+            }
+          });
+
+          pdf.save(`lista_precios_${new Date().toISOString().slice(0, 10)}.pdf`);
+        } else {
+          // MODE: DIGITAL (Canvas screenshot)
+          const input = contentRef.current;
+          if (!input) return;
+
+          const canvas = await html2canvas(input, { 
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+          });
+          
+          const imgData = canvas.toDataURL('image/jpeg', 0.9);
+          const imgProps = pdf.getImageProperties(imgData);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+          
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          let heightLeft = pdfHeight;
+          let position = 0;
+          
+          // First page
+          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+          heightLeft -= pageHeight;
+          
+          // Subsequent pages
+          while (heightLeft > 0) {
+            position = heightLeft - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+          }
+          
+          pdf.save(`catalogo_mdf_${new Date().toISOString().slice(0, 10)}.pdf`);
+        }
+    } catch (err) {
+        console.error('PDF Generation Error:', err);
+        alert('Hubo un error al generar el PDF. Por favor intenta usando el botón de imprimir y selecciona "Guardar como PDF".');
+    } finally {
         setIsDownloading(false);
-        return;
     }
-    
-    const canvas = await html2canvas(input, { 
-      scale: 2,
-      useCORS: true,
-      logging: false,
-    });
-    
-    setIsDownloading(false);
-    
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    
-    let heightLeft = pdfHeight;
-    let position = 0;
-    
-    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-    heightLeft -= 297; 
-    
-    while (heightLeft > 0) {
-      position = heightLeft - pdfHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= 297;
-    }
-    
-    pdf.save(`catalogo_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const handleShareLink = () => {
