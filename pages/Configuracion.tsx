@@ -7,7 +7,7 @@ import {
   Table as TableIcon, Server, HardDrive, UserPlus, Shield,
   SearchCode, Eye, UploadCloud,
   FileText, Package, Wallet, 
-  Boxes, Truck
+  Boxes, Truck, Layers
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole } from '../types';
