@@ -145,29 +145,31 @@ export default function Catalogo() {
           
           pdf.setFontSize(8);
           pdf.text(`FECHA DE EMISIÓN: ${todayStr}`, 196, 18, { align: 'right' });
-          // Eliminado texto de Tapicería
 
-          // --- OPTIMIZACIÓN DE DATOS (Doble Columna en una sola tabla) ---
-          // Emparejamos los productos para que vayan uno al lado del otro en la misma fila
+          // --- OPTIMIZACIÓN DE DATOS (Doble Columna con Stock y Filtro > 0) ---
+          const onlyWithStock = sortedAndFilteredStock.filter(item => item.stockActual > 0);
+          
           const pairedRows = [];
-          for (let i = 0; i < sortedAndFilteredStock.length; i += 2) {
-            const left = sortedAndFilteredStock[i];
-            const right = sortedAndFilteredStock[i+1];
+          for (let i = 0; i < onlyWithStock.length; i += 2) {
+            const left = onlyWithStock[i];
+            const right = onlyWithStock[i+1];
             
             pairedRows.push([
               left.codigo.replace('MDF-', ''),
-              left.tipo.toUpperCase().substring(0, 32),
+              left.tipo.toUpperCase().substring(0, 28),
+              left.stockActual.toString(),
               `$ ${left.precioSugerido.toLocaleString('es-CL')}`,
               '', // Espaciador
               right ? right.codigo.replace('MDF-', '') : '',
-              right ? right.tipo.toUpperCase().substring(0, 32) : '',
+              right ? right.tipo.toUpperCase().substring(0, 28) : '',
+              right ? right.stockActual.toString() : '',
               right ? `$ ${right.precioSugerido.toLocaleString('es-CL')}` : ''
             ]);
           }
 
           autoTable(pdf, {
             startY: 40,
-            head: [['CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR', '', 'CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR']],
+            head: [['CÓD', 'PRODUCTO', 'STK', 'VALOR', '', 'CÓD', 'PRODUCTO', 'STK', 'VALOR']],
             body: pairedRows,
             theme: 'striped',
             headStyles: { 
@@ -184,14 +186,16 @@ export default function Catalogo() {
             },
             columnStyles: {
               0: { cellWidth: 10, fontStyle: 'bold' },
-              1: { cellWidth: 63 },
-              2: { cellWidth: 17, halign: 'right', fontStyle: 'bold' },
-              3: { cellWidth: 4 }, // Spacer
-              4: { cellWidth: 10, fontStyle: 'bold' },
-              5: { cellWidth: 63 },
-              6: { cellWidth: 17, halign: 'right', fontStyle: 'bold' }
+              1: { cellWidth: 55 },
+              2: { cellWidth: 10, halign: 'center' },
+              3: { cellWidth: 17, halign: 'right', fontStyle: 'bold' },
+              4: { cellWidth: 4 }, // Spacer
+              5: { cellWidth: 10, fontStyle: 'bold' },
+              6: { cellWidth: 55 },
+              7: { cellWidth: 10, halign: 'center' },
+              8: { cellWidth: 17, halign: 'right', fontStyle: 'bold' }
             },
-            margin: { top: 40, bottom: 15, left: 10, right: 10 },
+            margin: { top: 40, bottom: 15, left: 8, right: 8 },
             didDrawPage: (data: any) => {
               // Dibujar encabezado en cada página (opcional, el rectangulo oscuro solo en la 1)
               if (pdf.internal.getNumberOfPages() > 1) {
