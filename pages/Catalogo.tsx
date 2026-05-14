@@ -91,12 +91,17 @@ export default function Catalogo() {
     return ['TODOS', ...Array.from(new Set(providers))].sort();
   }, [stock]);
 
+  const normalizeText = (text: string) => 
+    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const sortedAndFilteredStock = useMemo(() => {
-    let result = stock.filter(item => 
-      (item.tipo.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       item.codigo.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter)
-    );
+    const normalizedSearch = normalizeText(searchTerm);
+    let result = stock.filter(item => {
+      const matchesSearch = normalizeText(item.tipo).includes(normalizedSearch) || 
+                           normalizeText(item.codigo).includes(normalizedSearch);
+      const matchesProvider = providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter;
+      return matchesSearch && matchesProvider;
+    });
 
     return result.sort((a, b) => {
       switch (sortOrder) {

@@ -34,12 +34,16 @@ export default function Ventas() {
   });
   const currentSales = activeTab === 'PENDING' ? pendingLiveSales : readySales;
 
+  const normalizeText = (text: string) => 
+    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const filteredSales = currentSales
-    .filter(s => 
-      s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (s.codigoFardo && s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      s.numeroVenta.toString().includes(searchTerm)
-    )
+    .filter(s => {
+      const normalizedSearch = normalizeText(searchTerm);
+      return normalizeText(s.cliente).includes(normalizedSearch) || 
+             (s.codigoFardo && normalizeText(s.codigoFardo).includes(normalizedSearch)) ||
+             s.numeroVenta.toString().includes(searchTerm);
+    })
     .sort((a, b) => {
       let comparison = 0;
       if (sortKey === 'numeroVenta') {

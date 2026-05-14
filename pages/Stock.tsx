@@ -40,10 +40,14 @@ export default function Stock() {
     return ['TODOS', ...Array.from(new Set(providers))].sort();
   }, [stock]);
 
+  const normalizeText = (text: string) => 
+    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const filteredStock = useMemo(() => {
+    const normalizedSearch = normalizeText(searchTerm);
     return stock.filter(item => {
-      const matchesSearch = item.codigo.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           item.tipo.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = normalizeText(item.codigo).includes(normalizedSearch) || 
+                           normalizeText(item.tipo).includes(normalizedSearch);
       const matchesProvider = providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter;
       return matchesSearch && matchesProvider;
     });

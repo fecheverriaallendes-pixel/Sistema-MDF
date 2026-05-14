@@ -10,10 +10,14 @@ export default function CRM() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [newNote, setNewNote] = useState('');
 
-  const filteredCustomers = customers.filter(c => 
-    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.telefono.includes(searchTerm)
-  );
+  const normalizeText = (text: string) => 
+    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  const filteredCustomers = customers.filter(c => {
+    const normalizedSearch = normalizeText(searchTerm);
+    return normalizeText(c.nombre).includes(normalizedSearch) ||
+           c.telefono.includes(searchTerm);
+  });
 
   const handleWhatsApp = (telefono: string) => {
     const formattedPhone = telefono.replace(/\D/g, ''); 
