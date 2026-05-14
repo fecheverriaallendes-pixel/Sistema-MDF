@@ -147,26 +147,28 @@ export default function Catalogo() {
           pdf.text(`FECHA DE EMISIÓN: ${todayStr}`, 196, 18, { align: 'right' });
           pdf.text('TELAS, CUEROS SINTÉTICOS Y TAPICERÍA', 196, 26, { align: 'right' });
 
-          // --- OPTIMIZACIÓN DE DATOS (Doble Columna) ---
-          // Dividimos el stock en dos mitades para aprovechar el ancho de la página
-          const midPoint = Math.ceil(sortedAndFilteredStock.length / 2);
-          const leftItems = sortedAndFilteredStock.slice(0, midPoint);
-          const rightItems = sortedAndFilteredStock.slice(midPoint);
+          // --- OPTIMIZACIÓN DE DATOS (Doble Columna en una sola tabla) ---
+          // Emparejamos los productos para que vayan uno al lado del otro en la misma fila
+          const pairedRows = [];
+          for (let i = 0; i < sortedAndFilteredStock.length; i += 2) {
+            const left = sortedAndFilteredStock[i];
+            const right = sortedAndFilteredStock[i+1];
+            
+            pairedRows.push([
+              left.codigo.replace('MDF-', ''),
+              left.tipo.toUpperCase().substring(0, 35),
+              `$ ${left.precioSugerido.toLocaleString('es-CL')}`,
+              '', // Espaciador
+              right ? right.codigo.replace('MDF-', '') : '',
+              right ? right.tipo.toUpperCase().substring(0, 35) : '',
+              right ? `$ ${right.precioSugerido.toLocaleString('es-CL')}` : ''
+            ]);
+          }
 
-          const leftRows = leftItems.map(item => [
-            item.codigo.replace('MDF-', ''),
-            item.tipo.toUpperCase(),
-            `$ ${item.precioSugerido.toLocaleString('es-CL')}`
-          ]);
-
-          const rightRows = rightItems.map(item => [
-            item.codigo.replace('MDF-', ''),
-            item.tipo.toUpperCase(),
-            `$ ${item.precioSugerido.toLocaleString('es-CL')}`
-          ]);
-
-          // Estilos comunes para ambas tablas
-          const tableStyles: any = {
+          autoTable(pdf, {
+            startY: 40,
+            head: [['CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR', '', 'CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR']],
+            body: pairedRows,
             theme: 'striped',
             headStyles: { 
               fillColor: [51, 65, 85], 
@@ -181,33 +183,25 @@ export default function Catalogo() {
               textColor: [30, 41, 59]
             },
             columnStyles: {
-              0: { cellWidth: 12, fontStyle: 'bold' },
-              1: { cellWidth: 'auto' },
-              2: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }
+              0: { cellWidth: 10, fontStyle: 'bold' },
+              1: { cellWidth: 70 },
+              2: { cellWidth: 18, halign: 'right', fontStyle: 'bold' },
+              3: { cellWidth: 4 }, // Spacer
+              4: { cellWidth: 10, fontStyle: 'bold' },
+              5: { cellWidth: 70 },
+              6: { cellWidth: 18, halign: 'right', fontStyle: 'bold' }
             },
-            margin: { top: 40, bottom: 15 }
-          };
-
-          // Tabla Izquierda
-          autoTable(pdf, {
-            ...tableStyles,
-            startY: 40,
-            tableWidth: 90,
-            margin: { left: 12 },
-            head: [['CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR UNIT.']],
-            body: leftRows,
-          });
-
-          // Tabla Derecha (en la misma página si es posible, jspdf-autotable maneja esto con startY del anterior)
-          // Pero para que sea paralelo perfecto en cada página usamos un truco de dibujo
-          autoTable(pdf, {
-            ...tableStyles,
-            startY: 40,
-            tableWidth: 90,
-            margin: { left: 108 },
-            head: [['CÓD', 'PRODUCTO / DESCRIPCIÓN', 'VALOR UNIT.']],
-            body: rightRows,
+            margin: { top: 40, bottom: 15 },
             didDrawPage: (data: any) => {
+              // Dibujar encabezado en cada página (opcional, el rectangulo oscuro solo en la 1)
+              if (pdf.internal.getNumberOfPages() > 1) {
+                pdf.setFillColor(15, 23, 42);
+                pdf.rect(0, 0, 210, 15, 'F');
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFontSize(10);
+                pdf.text('CUADERNO MDF S.A. - LISTA DE PRECIOS', 14, 10);
+              }
+
               // Footer info
               pdf.setFontSize(7);
               pdf.setTextColor(148, 163, 184);
