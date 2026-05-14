@@ -107,6 +107,12 @@ export default function Stock() {
         finalCodigo = `MDF-${String(nextNum).padStart(4, '0')}`;
     }
 
+    const codeExists = stock.some(s => s.codigo.toUpperCase() === finalCodigo.toUpperCase());
+    if (codeExists) {
+        alert(`ERROR: El código ${finalCodigo} ya está en uso. Por favor ingresa uno diferente.`);
+        return;
+    }
+
     addStockItem({ ...newBale, codigo: finalCodigo, proveedor: newBale.proveedor.toUpperCase() });
     setNewBale({ codigo: '', tipo: '', proveedor: '', precioCosto: 0, precioSugerido: 0, stockActual: 1, unidad: 'FARDO' });
     setIsAdding(false);
@@ -116,6 +122,13 @@ export default function Stock() {
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem || !canModify) return;
+    
+    const conflict = stock.find(s => s.id !== editingItem.id && s.codigo.toUpperCase() === editingItem.codigo.toUpperCase());
+    if (conflict) {
+      alert(`ERROR: No puedes usar el código ${editingItem.codigo} porque ya pertenece a otro producto (${conflict.tipo}).`);
+      return;
+    }
+
     updateStockItem(editingItem.id, { ...editingItem, proveedor: editingItem.proveedor.toUpperCase() });
     setEditingItem(null);
     playSound('success');

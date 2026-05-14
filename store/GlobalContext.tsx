@@ -448,6 +448,7 @@ interface StoreContextType {
   togglePromocion: (id: string) => void;
   removeStockItem: (id: string) => void;
   bulkAddStock: (items: Omit<StockItem, 'id' | 'disponible'>[]) => void;
+  fixDuplicateStock: () => Promise<void>;
   resetToMasterStock: () => void;
   addStaff: (member: Omit<StaffMember, 'id' | 'activo'>) => void;
   removeStaff: (id: string) => void;
@@ -930,13 +931,31 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const addStockItem = (item: Omit<StockItem, 'id' | 'disponible'>) => {
+    const code = item.codigo.trim().toUpperCase();
+    const existing = stock.find(s => s.codigo.trim().toUpperCase() === code);
+    if (existing) {
+      alert(`El código ${code} ya existe en el inventario (${existing.tipo}). No se puede duplicar.`);
+      return;
+    }
     const newId = Math.random().toString(36).substr(2, 9);
-    setDoc(doc(db, 'stock', newId), { ...item, id: newId, disponible: item.stockActual > 0 });
+    setDoc(doc(db, 'stock', newId), { ...item, codigo: code, id: newId, disponible: item.stockActual > 0 });
   };
 
   const updateStockItem = (id: string, updatedData: Partial<StockItem>) => {
     const item = stock.find(i => i.id === id);
-    if (item) setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
+    if (!item) return;
+
+    if (updatedData.codigo) {
+      const newCode = updatedData.codigo.trim().toUpperCase();
+      const conflict = stock.find(s => s.codigo.trim().toUpperCase() === newCode && s.id !== id);
+      if (conflict) {
+        alert(`Error: El código ${newCode} ya está siendo usado por otro producto (${conflict.tipo}).`);
+        return;
+      }
+      updatedData.codigo = newCode;
+    }
+
+    setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
   };
 
   const togglePromocion = (id: string) => {
@@ -961,11 +980,97 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   const bulkAddStock = (items: Omit<StockItem, 'id' | 'disponible'>[]) => {
     const batch = writeBatch(db);
+    const codesInBatch = new Set();
+    const skipped = [];
+    
     items.forEach(i => {
-      const newId = Math.random().toString(36).substr(2, 9);
-      batch.set(doc(db, 'stock', newId), { ...i, id: newId, disponible: i.stockActual > 0 });
+      const code = i.codigo.trim().toUpperCase();
+      const existsInState = stock.some(s => s.codigo.trim().toUpperCase() === code);
+      
+      if (existsInState || codesInBatch.has(code)) {
+        skipped.push(code);
+      } else {
+        codesInBatch.add(code);
+        const newId = Math.random().toString(36).substr(2, 9);
+        batch.set(doc(db, 'stock', newId), { ...i, codigo: code, id: newId, disponible: i.stockActual > 0 });
+      }
     });
+
     batch.commit();
+    if (skipped.length > 0) {
+      alert(`Se omitieron ${skipped.length} productos porque sus códigos ya existen.`);
+    }
+  };
+
+  const fixDuplicateStock = async () => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede realizar esta limpieza.");
+      return;
+    }
+    
+    setIsSyncing(true);
+    try {
+      const stockDocs = await getDocs(collection(db, 'stock'));
+      const stockItems = stockDocs.docs.map(d => d.data() as StockItem);
+      
+      const codeMap = new Map<string, StockItem[]>();
+      stockItems.forEach(item => {
+        const code = item.codigo.trim().toUpperCase();
+        if (!codeMap.has(code)) {
+          codeMap.set(code, []);
+        }
+        codeMap.get(code)!.push(item);
+      });
+      
+      let batch = writeBatch(db);
+      let count = 0;
+      let totalMerged = 0;
+      let deletedCount = 0;
+      
+      for (const [code, items] of codeMap.entries()) {
+        if (items.length > 1) {
+          totalMerged++;
+          // Keep the first one found as original, but merge stock from others
+          const [original, ...duplicates] = items;
+          let combinedStock = original.stockActual;
+          
+          for (const duplicate of duplicates) {
+            combinedStock += duplicate.stockActual;
+            batch.delete(doc(db, 'stock', duplicate.id));
+            deletedCount++;
+            count++;
+            
+            if (count >= 450) {
+              await batch.commit();
+              batch = writeBatch(db);
+              count = 0;
+            }
+          }
+          
+          // Update the original with merged stock
+          batch.update(doc(db, 'stock', original.id), { 
+            stockActual: combinedStock,
+            disponible: combinedStock > 0 
+          });
+          count++;
+          
+          if (count >= 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+      }
+      
+      if (count > 0) await batch.commit();
+      alert(`✅ LIMPIEZA EXITOSA: Se corrigieron ${totalMerged} códigos duplicados. Se eliminaron ${deletedCount} registros excedentes sumando su stock al registro original.`);
+      playSound('success');
+    } catch (error: any) {
+      console.error("Error en fixDuplicateStock:", error);
+      alert("Error al limpiar duplicados: " + error.message);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const resetToMasterStock = async () => {
@@ -1185,7 +1290,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
-      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
+      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord
     }}>

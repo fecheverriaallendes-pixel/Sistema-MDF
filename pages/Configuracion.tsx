@@ -16,7 +16,8 @@ export default function Configuracion() {
   const { 
     settings, updateSettings, playSound, syncWithCloud, pushToCloud,
     isSyncing, lastSync, staff, addStaff, removeStaff, sales, stock, purchases,
-    clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier
+    clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier,
+    fixDuplicateStock
   } = useStore();
   
   const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS'>('RED');
@@ -391,11 +392,34 @@ export default function Configuracion() {
                    <p className="text-slate-500 text-[11px] font-medium leading-relaxed italic">
                      Utiliza esta opción al iniciar una nueva temporada o año fiscal.
                    </p>
-                   <button 
+                  <button 
                     onClick={handleClearSales}
                     className="w-full py-5 bg-red-50 text-red-600 border-2 border-red-200 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-3"
                    >
                      <Trash2 size={18} /> PURGAR HISTORIAL DE VENTAS (RESET)
+                   </button>
+                </div>
+
+                {/* Saneamiento de Stock */}
+                <div className="p-8 border-2 border-dashed border-emerald-100 rounded-[32px] space-y-6">
+                   <div className="flex items-center gap-4">
+                      <ShieldCheck className="text-emerald-500" size={24} />
+                      <h4 className="text-emerald-600 font-black text-sm uppercase">Saneamiento de Inventario</h4>
+                   </div>
+                   <p className="text-slate-500 text-[11px] font-medium leading-relaxed italic">
+                      Detecta y combina productos duplicados con el mismo código, sumando sus existencias en un solo registro maestro.
+                   </p>
+                   <button 
+                     onClick={() => {
+                        if(confirm("¿Deseas fusionar todos los productos duplicados? Se sumará el stock de los repetidos al registro principal.")) {
+                            fixDuplicateStock();
+                        }
+                     }}
+                     disabled={isSyncing}
+                     className="w-full py-5 bg-emerald-50 text-emerald-600 border-2 border-emerald-200 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                   >
+                     <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /> 
+                     {isSyncing ? 'LIMPIANDO...' : 'CORREGIR CÓDIGOS DUPLICADOS'}
                    </button>
                 </div>
               </div>
