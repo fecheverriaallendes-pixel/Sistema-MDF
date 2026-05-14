@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import { 
   Printer, 
@@ -27,7 +27,9 @@ import { useStore } from '../store/GlobalContext';
 // Extend jsPDF interface for autotable
 declare module 'jspdf' {
   interface jsPDF {
-    autoTable: (options: any) => jsPDF;
+    lastAutoTable: {
+      finalY: number;
+    };
   }
 }
 
@@ -149,7 +151,7 @@ export default function Catalogo() {
             item.stockActual.toString()
           ]);
 
-          pdf.autoTable({
+          autoTable(pdf, {
             startY: 35,
             head: [['CÓD', 'PRODUCTO', 'ORIGEN', 'VALOR', 'STK']],
             body: tableRows,
@@ -372,8 +374,8 @@ export default function Catalogo() {
           </div>
         ) : (
           /* MODO LISTADO (Tabla simple para mejor paginación) */
-          <div className="print-columns-container">
-              <table className="w-full border-collapse">
+          <div className="print-columns-container overflow-visible h-auto">
+              <table className="w-full border-collapse table-auto">
                 <TableHeader />
                 <tbody>
                   {sortedAndFilteredStock.map(item => <ProductRow key={item.id} item={item} />)}
