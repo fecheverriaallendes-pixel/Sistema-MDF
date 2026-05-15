@@ -479,13 +479,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   
   const [stock, setStock] = useState<StockItem[]>(() => {
     const saved = localStorage.getItem('mdf_stock');
-    if (saved && JSON.parse(saved).length > 0) return JSON.parse(saved);
-    
-    return INITIAL_MASTER_STOCK.map(item => ({
-      ...item,
-      id: item.codigo.trim().toUpperCase(),
-      disponible: item.stockActual > 0
-    }));
+    if (saved) return JSON.parse(saved);
+    return [];
   });
 
   const [staff, setStaff] = useState<StaffMember[]>(() => JSON.parse(localStorage.getItem('mdf_staff') || '[]'));
@@ -593,17 +588,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
     const initFirebase = async () => {
       try {
-        const salesSnap = await getDocs(collection(db, 'sales')).catch(e => { console.error('Sales error', e.code, e.message); return { empty: true }; }) as any;
-        const stockSnap = await getDocs(collection(db, 'stock')).catch(e => { console.error('Stock error', e.code, e.message); return { empty: true }; }) as any;
-        
-        const cloudHasData = !salesSnap.empty || !stockSnap.empty;
-        const localHasData = sales.length > 0 || stock.length > 0;
-
-        if (!cloudHasData && localHasData) {
-          console.log("Migrando datos locales a Firebase...");
-          await pushToCloud(sales, stock, staff, purchases, carriers, adjustments);
-        }
-
         unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
           const salesData = snap.docs.map(d => d.data() as Sale);
           console.log("DEBUG: Retrived sales numbers:", salesData.map(s => s.numeroVenta));
