@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/GlobalContext';
 import { jsPDF } from 'jspdf';
-import { Ticket, Download, Plus, AlertCircle } from 'lucide-react';
-import { StaffRole } from '../types';
+import { Ticket, Download, Plus, AlertCircle, Search, ArrowUpDown, Calendar } from 'lucide-react';
+import { StaffRole, Coupon } from '../types';
 
 export default function PostVenta() {
   const { coupons, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, currentUser } = useStore();
@@ -10,6 +10,26 @@ export default function PostVenta() {
   const [validDays, setValidDays] = useState('30');
   const [customerName, setCustomerName] = useState('');
   const [redeemCode, setRedeemCode] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+
+  const normalizeText = (text: string) => 
+    (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  const filteredAndSortedCoupons = useMemo(() => {
+    const normalizedSearch = normalizeText(searchTerm);
+    
+    let result = coupons.filter(c => 
+      normalizeText(c.customerName).includes(normalizedSearch) || 
+      normalizeText(c.code).includes(normalizedSearch)
+    );
+
+    return result.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+  }, [coupons, searchTerm, sortOrder]);
 
   const handleRedeemByCode = () => {
       try {
@@ -165,36 +185,109 @@ export default function PostVenta() {
       </div>
       
       <div className="bg-white p-6 rounded-3xl border border-slate-100">
-        <h2 className="font-bold text-lg mb-4">Historial de Cupones</h2>
-        <table className="w-full text-left">
-            <thead>
-                <tr className="border-b">
-                    <th className="p-4 uppercase text-[10px] text-slate-400">Código</th>
-                    <th className="p-4 uppercase text-[10px] text-slate-400">Cliente</th>
-                    <th className="p-4 uppercase text-[10px] text-slate-400">Valor</th>
-                    <th className="p-4 uppercase text-[10px] text-slate-400">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {coupons.map(c => (
-                    <tr key={c.id} className="border-b">
-                        <td className="p-4 font-bold">{c.code}</td>
-                        <td className="p-4">{c.customerName}</td>
-                        <td className="p-4">${c.value}</td>
-                        <td className="p-4 flex gap-2">
-                            {!c.used && (
-                                <>
-                                    <button onClick={() => downloadPDF(c)} className="text-emerald-500"><Download size={16}/></button>
-                                    <button onClick={() => handleRedeem(c)} className="px-3 py-1 bg-amber-500 text-white rounded-lg text-xs font-bold">Canjear</button>
-                                </>
-                            )}
-                            {c.used && <span className="text-xs text-slate-400">Canjeado</span>}
-                            {isAdmin && <button onClick={() => deleteCoupon(c.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-bold">Eliminar</button>}
-                        </td>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          <h2 className="font-bold text-lg">Historial de Cupones</h2>
+          
+          <div className="flex flex-wrap gap-3 w-full md:w-auto">
+            <div className="relative flex-grow md:flex-grow-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text" 
+                placeholder="Buscar por cliente o código..." 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-2xl text-sm w-full md:w-64 focus:ring-2 focus:ring-emerald-500 transition-all outline-none"
+              />
+            </div>
+            
+            <div className="relative min-w-[160px]">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <select 
+                value={sortOrder}
+                onChange={e => setSortOrder(e.target.value as any)}
+                className="pl-9 pr-8 py-2 bg-slate-50 border-none rounded-2xl text-sm w-full appearance-none focus:ring-2 focus:ring-emerald-500 transition-all outline-none cursor-pointer font-medium"
+              >
+                <option value="newest">Más recientes</option>
+                <option value="oldest">Más antiguos</option>
+              </select>
+              <ArrowUpDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12} />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+              <thead>
+                  <tr className="border-b">
+                      <th className="p-4 uppercase text-[10px] text-slate-400">Fecha</th>
+                      <th className="p-4 uppercase text-[10px] text-slate-400">Código</th>
+                      <th className="p-4 uppercase text-[10px] text-slate-400">Cliente</th>
+                      <th className="p-4 uppercase text-[10px] text-slate-400">Valor</th>
+                      <th className="p-4 uppercase text-[10px] text-slate-400">Estado</th>
+                      <th className="p-4 uppercase text-[10px] text-slate-400">Acciones</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {filteredAndSortedCoupons.length > 0 ? (
+                    filteredAndSortedCoupons.map(c => (
+                      <tr key={c.id} className="border-b hover:bg-slate-50 transition-colors">
+                          <td className="p-4 text-xs text-slate-500">
+                            {new Date(c.createdAt || "").toLocaleDateString('es-CL')}
+                          </td>
+                          <td className="p-4 font-bold text-slate-700">{c.code}</td>
+                          <td className="p-4 text-slate-600">{c.customerName}</td>
+                          <td className="p-4 font-black text-emerald-600">
+                            ${c.value?.toLocaleString('es-CL')}
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                              c.used ? 'bg-slate-100 text-slate-400' : 'bg-emerald-100 text-emerald-600'
+                            }`}>
+                              {c.used ? 'Canjeado' : 'Pendiente'}
+                            </span>
+                          </td>
+                          <td className="p-4 flex gap-2">
+                              {!c.used && (
+                                  <>
+                                      <button 
+                                        onClick={() => downloadPDFEnhanced(c)} 
+                                        title="Descargar cupón"
+                                        className="p-2 hover:bg-emerald-50 text-emerald-500 rounded-lg transition-colors"
+                                      >
+                                        <Download size={16}/>
+                                      </button>
+                                      <button 
+                                        onClick={() => handleRedeem(c)} 
+                                        className="px-3 py-1 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors shadow-sm"
+                                      >
+                                        Canjear
+                                      </button>
+                                  </>
+                              )}
+                              {isAdmin && (
+                                <button 
+                                  onClick={() => {
+                                    if(confirm("¿Estás seguro de eliminar este cupón?")) deleteCoupon(c.id);
+                                  }} 
+                                  className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-colors"
+                                  title="Eliminar"
+                                >
+                                  <AlertCircle size={16}/>
+                                </button>
+                              )}
+                          </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                        No se encontraron cupones que coincidan con la búsqueda.
+                      </td>
                     </tr>
-                ))}
-            </tbody>
-        </table>
+                  )}
+              </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
