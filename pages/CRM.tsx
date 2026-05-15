@@ -83,7 +83,7 @@ export default function CRM() {
             <input name="telefono" defaultValue={editingCustomer?.telefono} placeholder="Teléfono" className="w-full p-2 mb-2 border rounded" required />
             <input name="rut" defaultValue={editingCustomer?.rut} placeholder="RUT" className="w-full p-2 mb-2 border rounded" />
             <input name="email" defaultValue={editingCustomer?.email} placeholder="Email" className="w-full p-2 mb-2 border rounded" />
-            <input name="direccion" defaultValue={editingCustomer?.direccion} placeholder="Dirección" className="w-full p-2 mb-4 border rounded" />
+            <textarea name="direccion" defaultValue={editingCustomer?.direccion} placeholder="Dirección Completa" className="w-full p-2 mb-4 border rounded h-24 resize-none" />
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-slate-100 rounded-xl">Cancelar</button>
               <button type="submit" className="px-4 py-2 bg-amber-500 text-white rounded-xl font-bold">Guardar</button>

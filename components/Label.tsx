@@ -28,13 +28,13 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
         <div>
           <div className="mb-1">
             <p className="text-[7px] font-black uppercase text-slate-500 mb-0.2">Destinatario</p>
-            <p className="text-md font-black uppercase leading-tight line-clamp-2">{sale.cliente}</p>
+            <p className="text-md font-black uppercase leading-tight">{sale.cliente}</p>
             <p className="text-xs font-bold text-slate-700 mt-0.2">RUT: {sale.rut || 'PENDIENTE'}</p>
           </div>
           <div className="mb-1">
             <p className="text-[7px] font-black uppercase text-slate-500 mb-0.2">Dirección de Entrega</p>
             <div className="bg-slate-50 p-1 rounded-md border border-slate-200">
-              <p className="text-[9px] font-black uppercase leading-snug line-clamp-3 italic">{sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}</p>
+              <p className="text-[9px] font-black uppercase leading-snug italic">{sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}</p>
             </div>
           </div>
           <div className="mb-2">

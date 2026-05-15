@@ -214,7 +214,7 @@ export default function RegistrarVenta() {
             </div>
             <div className="md:col-span-1">
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><MapPin size={14} className="text-blue-500" /> Dirección Despacho</label>
-              <input required type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase" placeholder="CALLE, COMUNA" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value.toUpperCase()})}/>
+              <textarea required className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase resize-none h-24" placeholder="CALLE, NÚMERO, DEPTO/OFICINA, COMUNA, CIUDAD" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value.toUpperCase()})}/>
             </div>
           </div>
 
