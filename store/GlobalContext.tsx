@@ -483,7 +483,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     
     return INITIAL_MASTER_STOCK.map(item => ({
       ...item,
-      id: Math.random().toString(36).substr(2, 9),
+      id: item.codigo.trim().toUpperCase(),
       disponible: item.stockActual > 0
     }));
   });
@@ -931,52 +931,40 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     alert(`Proceso completado. Inventario eliminado: ${stockDocs.size}. Por favor recarga la página.`);
   };
 
-  const addStockItem = (item: Omit<StockItem, 'id' | 'disponible'>) => {
+  const addStockItem = async (item: Omit<StockItem, 'id' | 'disponible'>) => {
     const code = item.codigo.trim().toUpperCase();
     const name = item.tipo.trim().toUpperCase();
     
+    // Check if it already exists locally to alert user
     const existingCode = stock.find(s => s.codigo.trim().toUpperCase() === code);
     if (existingCode) {
-      alert(`El código ${code} ya existe en el inventario (${existingCode.tipo}). No se puede duplicar.`);
-      return;
-    }
-
-    const existingName = stock.find(s => s.tipo.trim().toUpperCase() === name);
-    if (existingName) {
-      if (!confirm(`Ya existe un producto con el nombre "${item.tipo}" (Código: ${existingName.codigo}). ¿Estás seguro de que quieres crear otro igual con distinto código?`)) {
+      if (!confirm(`El código ${code} ya existe (${existingCode.tipo}). ¿Deseas SOBREESCRIBIR su información con los nuevos datos?`)) {
         return;
       }
     }
 
-    const newId = Math.random().toString(36).substr(2, 9);
-    setDoc(doc(db, 'stock', newId), { ...item, codigo: code, id: newId, disponible: item.stockActual > 0 });
+    const newId = code; // ID is the code
+    await setDoc(doc(db, 'stock', newId), { ...item, codigo: code, id: newId, disponible: item.stockActual > 0 });
   };
 
-  const updateStockItem = (id: string, updatedData: Partial<StockItem>) => {
+  const updateStockItem = async (id: string, updatedData: Partial<StockItem>) => {
     const item = stock.find(i => i.id === id);
     if (!item) return;
 
+    // If code is being changed, we must be careful
     if (updatedData.codigo) {
       const newCode = updatedData.codigo.trim().toUpperCase();
-      const conflict = stock.find(s => s.codigo.trim().toUpperCase() === newCode && s.id !== id);
-      if (conflict) {
-        alert(`Error: El código ${newCode} ya está siendo usado por otro producto (${conflict.tipo}).`);
+      if (newCode !== item.codigo) {
+        // Create new doc with new ID (code)
+        const newItem = { ...item, ...updatedData, codigo: newCode, id: newCode, disponible: (updatedData.stockActual ?? item.stockActual) > 0 };
+        await setDoc(doc(db, 'stock', newCode), newItem);
+        // Delete old doc
+        await deleteDoc(doc(db, 'stock', id));
         return;
       }
-      updatedData.codigo = newCode;
     }
 
-    if (updatedData.tipo) {
-      const newName = updatedData.tipo.trim().toUpperCase();
-      const conflict = stock.find(s => s.tipo.trim().toUpperCase() === newName && s.id !== id);
-      if (conflict) {
-        if (!confirm(`Atención: Ya existe otro producto con el nombre "${updatedData.tipo}" (Código: ${conflict.codigo}). ¿Deseas continuar de todas formas?`)) {
-          return;
-        }
-      }
-    }
-
-    setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
+    await setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
   };
 
   const togglePromocion = (id: string) => {
@@ -999,28 +987,25 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     deleteDoc(doc(db, 'stock', id));
   };
 
-  const bulkAddStock = (items: Omit<StockItem, 'id' | 'disponible'>[]) => {
-    const batch = writeBatch(db);
-    const codesInBatch = new Set();
-    const skipped = [];
+  const bulkAddStock = async (items: Omit<StockItem, 'id' | 'disponible'>[]) => {
+    let batch = writeBatch(db);
+    let count = 0;
     
-    items.forEach(i => {
+    for (const i of items) {
       const code = i.codigo.trim().toUpperCase();
-      const existsInState = stock.some(s => s.codigo.trim().toUpperCase() === code);
+      const newId = code;
+      batch.set(doc(db, 'stock', newId), { ...i, codigo: code, id: newId, disponible: i.stockActual > 0 });
+      count++;
       
-      if (existsInState || codesInBatch.has(code)) {
-        skipped.push(code);
-      } else {
-        codesInBatch.add(code);
-        const newId = Math.random().toString(36).substr(2, 9);
-        batch.set(doc(db, 'stock', newId), { ...i, codigo: code, id: newId, disponible: i.stockActual > 0 });
+      if (count === 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        count = 0;
       }
-    });
-
-    batch.commit();
-    if (skipped.length > 0) {
-      alert(`Se omitieron ${skipped.length} productos porque sus códigos ya existen.`);
     }
+
+    if (count > 0) await batch.commit();
+    alert(`Carga masiva completada. Se procesaron ${items.length} productos.`);
   };
 
   const fixDuplicateStock = async () => {
@@ -1032,41 +1017,50 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     setIsSyncing(true);
     try {
       const stockDocs = await getDocs(collection(db, 'stock'));
-      const stockItems = stockDocs.docs.map(d => d.data() as StockItem);
+      const stockItems = stockDocs.docs.map(d => ({ ...d.data(), firestoreId: d.id } as StockItem & { firestoreId: string }));
       
-      const codeMap = new Map<string, StockItem[]>();
+      // Group by code
+      const codeMap = new Map<string, (StockItem & { firestoreId: string })[]>();
       stockItems.forEach(item => {
         const code = item.codigo.trim().toUpperCase();
-        if (!codeMap.has(code)) {
-          codeMap.set(code, []);
-        }
+        if (!codeMap.has(code)) codeMap.set(code, []);
         codeMap.get(code)!.push(item);
       });
       
       let batch = writeBatch(db);
       let count = 0;
       let totalMerged = 0;
-      let deletedCount = 0;
       
       for (const [code, items] of codeMap.entries()) {
-        if (items.length > 1) {
+        // If an item has an ID that is NOT the code, it's a candidate for migration/fix
+        // If there are multiple items for the same code, we must merge them
+        if (items.length > 1 || items[0].firestoreId !== code) {
           totalMerged++;
-          // Keep the first one found as original
-          const [original, ...duplicates] = items;
           
-          for (const duplicate of duplicates) {
-            batch.delete(doc(db, 'stock', duplicate.id));
-            deletedCount++;
+          // Strategy: Summarize stock of all items with same code
+          const totalStock = items.reduce((acc, i) => acc + i.stockActual, 0);
+          const representativeItem = items[0];
+          
+          // 1. Delete all current documents (some might have random IDs)
+          for (const item of items) {
+            batch.delete(doc(db, 'stock', item.firestoreId));
             count++;
-            
-            if (count >= 450) {
-              await batch.commit();
-              batch = writeBatch(db);
-              count = 0;
-            }
           }
-      
-          if (count >= 450) {
+          
+          // 2. Create/Set a single document with ID = code
+          const fixedItem: StockItem = {
+            ...representativeItem,
+            id: code,
+            codigo: code,
+            stockActual: totalStock,
+            disponible: totalStock > 0
+          };
+          delete (fixedItem as any).firestoreId;
+          
+          batch.set(doc(db, 'stock', code), fixedItem);
+          count++;
+          
+          if (count >= 400) {
             await batch.commit();
             batch = writeBatch(db);
             count = 0;
@@ -1075,7 +1069,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
       
       if (count > 0) await batch.commit();
-      alert(`✅ LIMPIEZA EXITOSA: Se corrigieron ${totalMerged} códigos duplicados. Se eliminaron ${deletedCount} registros excedentes, conservando únicamente el registro original de cada uno.`);
+      alert(`✅ MIGRACIÓN EXITOSA: Se normalizaron y unificaron ${totalMerged} códigos. Ahora el inventario utiliza IDs únicos por producto.`);
       playSound('success');
     } catch (error: any) {
       console.error("Error en fixDuplicateStock:", error);
@@ -1170,7 +1164,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       let addCount = 0;
       
       for (const item of INITIAL_MASTER_STOCK) {
-        const newId = Math.random().toString(36).substr(2, 9);
+        const newId = item.codigo.trim().toUpperCase();
         addBatch.set(doc(db, 'stock', newId), { ...item, id: newId, disponible: item.stockActual > 0 });
         addCount++;
         if (addCount === 400) {

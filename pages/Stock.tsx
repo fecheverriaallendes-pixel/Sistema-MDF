@@ -6,7 +6,7 @@ import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 
 export default function Stock() {
-  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, clearAllStock, currentUser, playSound } = useStore();
+  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, clearAllStock, fixDuplicateStock, fixDuplicateStockByName, currentUser, playSound } = useStore();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
@@ -154,6 +154,26 @@ export default function Stock() {
         </div>
         {canModify && (
           <div className="flex flex-wrap gap-4">
+            <button 
+              onClick={() => {
+                if(confirm("¿Deseas UNIFICAR todos los productos que tengan el mismo código? Se sumará el stock de los duplicados y se conservará un solo registro único.")) {
+                    fixDuplicateStock();
+                }
+              }}
+              className="flex items-center gap-2 px-6 py-4 bg-blue-50 text-blue-600 border-2 border-blue-100 rounded-[24px] font-black text-xs uppercase hover:bg-blue-100 transition-all shadow-sm"
+            >
+              <Layers size={18} /> Unificar por Código
+            </button>
+            <button 
+              onClick={() => {
+                if(confirm("¿Deseas UNIFICAR productos con el MISMO NOMBRE? Esta opción es más agresiva y unirá fardos que se llamen igual aunque tengan códigos distintos. ¿Continuar?")) {
+                    fixDuplicateStockByName();
+                }
+              }}
+              className="flex items-center gap-2 px-6 py-4 bg-amber-50 text-amber-600 border-2 border-amber-100 rounded-[24px] font-black text-xs uppercase hover:bg-amber-100 transition-all shadow-sm"
+            >
+              <Boxes size={18} /> Unificar por Nombre
+            </button>
             <button 
               onClick={() => {
                 if(confirm("¿Estás SEGURO de querer eliminar TODO el inventario? Esto es irreversible.")) {
