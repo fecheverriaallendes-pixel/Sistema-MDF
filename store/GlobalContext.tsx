@@ -1038,8 +1038,22 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         if (items.length > 1 || items[0].firestoreId !== code) {
           totalFixed++;
           
-          // Sumar todo el stock para no perder existencias
-          const totalStock = items.reduce((acc, i) => acc + (i.stockActual || 0), 0);
+          // Sumar el stock solo si NO parecen duplicaciones idénticas (mismo nombre, mismo precio, mismo proveedor)
+          // Si son idénticos, probablemente sean duplicados de importación, así que tomamos el valor máximo
+          let totalStock = 0;
+          const first = items[0];
+          const allIdentical = items.every(it => 
+              it.tipo.trim().toUpperCase() === first.tipo.trim().toUpperCase() &&
+              it.precioSugerido === first.precioSugerido &&
+              it.proveedor.trim().toUpperCase() === first.proveedor.trim().toUpperCase()
+          );
+
+          if (allIdentical) {
+              totalStock = Math.max(...items.map(i => i.stockActual || 0));
+          } else {
+              totalStock = items.reduce((acc, i) => acc + (i.stockActual || 0), 0);
+          }
+          
           const representativeItem = items[0];
           
           // Borrar todas las versiones (incluyendo las de IDs aleatorios)
