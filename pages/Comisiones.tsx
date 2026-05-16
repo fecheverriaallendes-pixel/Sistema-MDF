@@ -156,9 +156,24 @@ export default function Comisiones() {
       }
 
       // Helper function to process a single commissionable entry
-      const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string, esManual: boolean = false) => {
-          const finalTipo = tipo || (codigo.startsWith('L') ? CommissionType.LOTE : CommissionType.FARDO_NORMAL);
-          const commValue = (COMMISSION_VALUES[finalTipo] || 0) * qty;
+      const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string, esManual: boolean = false, saleVariante?: string) => {
+          let finalTipo = tipo;
+          
+          // Fallback detection for older or manually entered sales
+          if (!finalTipo) {
+             const uppercaseCode = (codigo || '').toUpperCase();
+             const variantUpper = (saleVariante || '').toUpperCase();
+             
+             if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
+                finalTipo = CommissionType.LOTE;
+             } else if (variantUpper.includes('MEDIO')) {
+                finalTipo = CommissionType.MEDIO_FARDO;
+             } else {
+                finalTipo = CommissionType.FARDO_NORMAL;
+             }
+          }
+
+          const commValue = (COMMISSION_VALUES[finalTipo as string] || 0) * qty;
           
           report[vendedorName].total += commValue;
           report[vendedorName].count += qty;
@@ -188,11 +203,11 @@ export default function Comisiones() {
       if (s.items && s.items.length > 0) {
           // Multi-item sale (Nota de Venta)
           s.items.forEach(item => {
-              processEntry(item.tipoComision, item.cantidad, item.codigoFardo, item.esManual || false);
+              processEntry(item.tipoComision, item.cantidad, item.codigoFardo, item.esManual || false, s.variante);
           });
       } else {
           // Individual sale
-          processEntry(s.tipoComision, s.cantidad || 1, s.codigoFardo || '', s.esManual || false);
+          processEntry(s.tipoComision, s.cantidad || 1, s.codigoFardo || '', s.esManual || false, s.variante);
       }
     });
 
