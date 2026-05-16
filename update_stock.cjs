@@ -318,7 +318,6 @@ Poleron S/G Canada 2,0		0	$70.000	FARDO
 Poleron S/G TIGRE		4	$55.000	FARDO
 Poleron S/G TOM Y JERRY		17	$80.000	FARDO
 Poleron Sin Gorro Marca  25 KG TOM Y JERRY		0	$240.000	FARDO
-PROVISORIO		198637	$0	
 Ravanas BETA		10	$140.000	FARDO
 Retorno Traje de Baño Target		0	$350.000	FARDO
 Ropa Clinica TOM Y JERRY		0	$100.000	FARDO

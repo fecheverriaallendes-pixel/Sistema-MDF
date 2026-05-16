@@ -367,7 +367,6 @@ Poleron sin gorro mujer 		48	$100.000	FARDO
 poleron sin gorro poms 1Y2		0	$60.000	FARDO
 POLERON Y BUZO NYLON POMS		0	$180.000	FARDO
 PREMIUN WINTER MIX DUBAY		0	$220.000	FARDO
-PROVISORIO		196184	$0	
 Ralph lauren formal inv 25kg		10	$220.000	FARDO, 25 KILOS
 Ravanas BETA		9	$140.000	FARDO
 Retorno Traje de Baño Target		0	$350.000	FARDO

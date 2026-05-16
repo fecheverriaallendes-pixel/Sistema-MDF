@@ -114,7 +114,7 @@ export default function Stock() {
             const numbers = existingCodes.map(c => parseInt(c.split('-')[1]) || 0);
             nextNum = Math.max(...numbers) + 1;
         }
-        finalCodigo = `MDF-${String(nextNum).padStart(4, '0')}`;
+        finalCodigo = `MDF-${String(nextNum).padStart(3, '0')}`;
     }
 
     const codeExists = stock.some(s => s.codigo.toUpperCase() === finalCodigo.toUpperCase());
