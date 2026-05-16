@@ -44,6 +44,7 @@ export interface SaleItem {
   cantidad: number;
   valorUnitario: number;
   tipoComision?: CommissionType;
+  esManual?: boolean;
 }
 
 export enum CommissionType {
@@ -153,6 +154,7 @@ export interface Sale {
   transportista?: string; // Nombre del transportista para despacho a domicilio
   timestamp?: string; // ISO date
   impresa?: boolean;
+  esManual?: boolean;
 }
 
 export interface CommissionAdjustment {

@@ -11,8 +11,8 @@ export default function RegistrarVenta() {
   const [mode, setMode] = useState<'QUICK' | 'NORMAL' | 'NOTA_VENTA'>('QUICK');
   const [success, setSuccess] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
-  const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number}[]>([]);
-  const [newItem, setNewItem] = useState({codigoFardo: '', cantidad: 1, valorUnitario: 0});
+  const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number, esManual?: boolean, tipoComision?: CommissionType}[]>([]);
+  const [newItem, setNewItem] = useState({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
   
   const vendedores = staff.filter(m => m.rol === StaffRole.VENDEDOR);
   const quickNameRef = useRef<HTMLInputElement>(null);
@@ -23,6 +23,7 @@ export default function RegistrarVenta() {
     telefono: string;
     rut: string;
     codigoFardo: string;
+    esManual: boolean;
     variante: string;
     valorUnitario: number;
     cantidad: number;
@@ -39,6 +40,7 @@ export default function RegistrarVenta() {
     telefono: '',
     rut: '',
     codigoFardo: '',
+    esManual: true,
     variante: '', // Se completará después en ventas rápidas
     valorUnitario: 0,
     cantidad: 1,
@@ -64,9 +66,11 @@ export default function RegistrarVenta() {
       }
   };
 
-  const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
-    const foundItem = stock.find(s => s.codigo === code.toUpperCase());
+    const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
+    const uppercaseCode = code.toUpperCase();
+    const foundItem = stock.find(s => s.codigo === uppercaseCode);
     const price = foundItem ? foundItem.precioSugerido : 0;
+    const esManual = !foundItem;
     
     // Determine commission type correctly
     let newCommissionType = CommissionType.FARDO_NORMAL;
@@ -78,16 +82,19 @@ export default function RegistrarVenta() {
         } else if (foundItem.promocion) {
             newCommissionType = CommissionType.FARDO_PROMO;
         }
+    } else if (uppercaseCode.startsWith('L')) {
+        newCommissionType = CommissionType.LOTE;
     }
     
     if (isNotaVenta) {
-      setNewItem(prev => ({...prev, codigoFardo: code.toUpperCase(), valorUnitario: price, tipoComision: newCommissionType}));
+      setNewItem(prev => ({...prev, codigoFardo: uppercaseCode, valorUnitario: price, tipoComision: newCommissionType, esManual}));
     } else {
       setFormData(prev => ({
           ...prev, 
-          codigoFardo: code.toUpperCase(), 
+          codigoFardo: uppercaseCode, 
           valorUnitario: price,
-          tipoComision: newCommissionType
+          tipoComision: newCommissionType,
+          esManual
       }));
     }
   };
@@ -126,11 +133,12 @@ export default function RegistrarVenta() {
     
     setFormData({
       cliente: '', vendedor: formData.vendedor, telefono: '', rut: '',
-      codigoFardo: '', variante: isQuick ? '' : 'Fardo', valorUnitario: 0, cantidad: 1,
+      codigoFardo: '', esManual: true, variante: isQuick ? '' : 'Fardo', valorUnitario: 0, cantidad: 1,
       direccion: '', estadoPago: 'Pendiente', tipoComision: CommissionType.FARDO_NORMAL,
       juntaCompra: 'DESPACHO INMEDIATO', observaciones: '', tipoDespacho: undefined
     });
     setItems([]);
+    setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
     
     setTimeout(() => setSuccess(false), 2000);
   };
@@ -231,14 +239,20 @@ export default function RegistrarVenta() {
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Package size={18} className="text-blue-500" /> {mode === 'NOTA_VENTA' ? 'Agregar Producto' : 'Código de Fardo'}</label>
               
               {mode === 'NOTA_VENTA' ? (
-                <div className="flex gap-2">
-                    <input list="stock-suggestions" type="text" className="w-[150px] px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CODIGO" value={newItem.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, true)}/>
-                    <input type="number" className="w-20 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CANT" value={newItem.cantidad} onChange={(e) => setNewItem({...newItem, cantidad: Number(e.target.value)})}/>
+                <div className="flex flex-wrap gap-2">
+                    <input list="stock-suggestions" type="text" className="w-[120px] px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CODIGO" value={newItem.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, true)}/>
+                    <input type="number" className="w-16 px-2 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CANT" value={newItem.cantidad} onChange={(e) => setNewItem({...newItem, cantidad: Number(e.target.value)})}/>
                     <input type="number" className="w-24 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="VALOR" value={newItem.valorUnitario} onChange={(e) => setNewItem({...newItem, valorUnitario: Number(e.target.value)})}/>
+                    <select className="px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none text-[10px]" value={newItem.tipoComision} onChange={(e) => setNewItem({...newItem, tipoComision: e.target.value as CommissionType})}>
+                        <option value={CommissionType.FARDO_NORMAL}>FARDO</option>
+                        <option value={CommissionType.FARDO_PROMO}>PROMO</option>
+                        <option value={CommissionType.MEDIO_FARDO}>MEDIO</option>
+                        <option value={CommissionType.LOTE}>LOTE</option>
+                    </select>
                     <button type="button" onClick={() => { 
                         if(newItem.codigoFardo && newItem.cantidad > 0 && newItem.valorUnitario > 0) {
                             setItems([...items, newItem]);
-                            setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0});
+                            setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
                         }
                     }} className="bg-amber-600 text-white rounded-2xl px-4">+</button>
                 </div>
@@ -287,7 +301,16 @@ export default function RegistrarVenta() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-blue-50/30 rounded-[40px] border-2 border-blue-100 animate-in fade-in slide-in-from-top duration-500">
                <div className="md:col-span-2">
                 <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Tag size={14} /> Variante</label>
-                <select required className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black text-lg" value={formData.variante} onChange={(e) => setFormData({...formData, variante: e.target.value})}>
+                <select required className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black text-lg" value={formData.variante} onChange={(e) => {
+                    const newVar = e.target.value;
+                    let newComm = formData.tipoComision;
+                    if (formData.esManual) {
+                        if (newVar === 'LOTE') newComm = CommissionType.LOTE;
+                        else if (newVar === 'MEDIO FARDO') newComm = CommissionType.MEDIO_FARDO;
+                        else if (newVar === 'FARDO') newComm = CommissionType.FARDO_NORMAL;
+                    }
+                    setFormData({...formData, variante: newVar, tipoComision: newComm});
+                }}>
                     <option value="">ELEGIR...</option>
                     <option value="FARDO">FARDO</option>
                     <option value="MEDIO FARDO">MEDIO FARDO</option>

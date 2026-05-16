@@ -132,7 +132,18 @@ export default function Comisiones() {
       total: number, 
       count: number, 
       details: { type: CommissionType, qty: number, subtotal: number }[],
-      sales: Sale[],
+      entries: {
+          id: string;
+          fecha: string;
+          vendedor: string;
+          tipo: CommissionType;
+          qty: number;
+          subtotal: number;
+          codigo: string;
+          saleNumber: number;
+          source: string;
+          esManual: boolean;
+      }[],
       adjustments: CommissionAdjustment[]
     }> = {};
 
@@ -141,11 +152,11 @@ export default function Comisiones() {
       const vendedorName = s.vendedor || 'Sin Vendedor';
       
       if (!report[vendedorName]) {
-        report[vendedorName] = { total: 0, count: 0, details: [], sales: [], adjustments: [] };
+        report[vendedorName] = { total: 0, count: 0, details: [], entries: [], adjustments: [] };
       }
 
       // Helper function to process a single commissionable entry
-      const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string) => {
+      const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string, esManual: boolean = false) => {
           const finalTipo = tipo || (codigo.startsWith('L') ? CommissionType.LOTE : CommissionType.FARDO_NORMAL);
           const commValue = (COMMISSION_VALUES[finalTipo] || 0) * qty;
           
@@ -159,25 +170,36 @@ export default function Comisiones() {
           } else {
             report[vendedorName].details.push({ type: finalTipo, qty: qty, subtotal: commValue });
           }
+
+          report[vendedorName].entries.push({
+              id: `${s.id}-${codigo}`,
+              fecha: s.fecha,
+              vendedor: s.vendedor,
+              tipo: finalTipo,
+              qty: qty,
+              subtotal: commValue,
+              codigo: codigo,
+              saleNumber: s.numeroVenta,
+              source: s.tipoVenta,
+              esManual: esManual
+          });
       };
 
       if (s.items && s.items.length > 0) {
           // Multi-item sale (Nota de Venta)
           s.items.forEach(item => {
-              processEntry(item.tipoComision, item.cantidad, item.codigoFardo);
+              processEntry(item.tipoComision, item.cantidad, item.codigoFardo, item.esManual || false);
           });
       } else {
           // Individual sale
-          processEntry(s.tipoComision, s.cantidad || 1, s.codigoFardo || '');
+          processEntry(s.tipoComision, s.cantidad || 1, s.codigoFardo || '', s.esManual || false);
       }
-      
-      report[vendedorName].sales.push(s);
     });
 
     // Process Adjustments
     weeklyAdjustments.forEach(a => {
       if (!report[a.vendedor]) {
-        report[a.vendedor] = { total: 0, count: 0, details: [], sales: [], adjustments: [] };
+        report[a.vendedor] = { total: 0, count: 0, details: [], entries: [], adjustments: [] };
       }
       report[a.vendedor].total += a.monto;
       report[a.vendedor].adjustments.push(a);
@@ -371,18 +393,28 @@ export default function Comisiones() {
                    <Info size={14} /> Detalle Individual de Ventas
                  </h5>
                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
-                   {data.sales.map((s) => (
-                     <div key={s.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-[24px] border border-transparent hover:border-slate-200 transition-all">
+                   {data.entries.map((entry) => (
+                     <div key={entry.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-[24px] border border-transparent hover:border-slate-200 transition-all">
                        <div className="flex items-center gap-6">
-                         <span className="font-mono font-black text-slate-400 text-[10px]">#{s.numeroVenta}</span>
+                         <span className="font-mono font-black text-slate-400 text-[10px]">#{entry.saleNumber}</span>
                          <div>
-                            <p className="text-xs font-black text-slate-900 uppercase">{stock.find(item => item.codigo === s.codigoFardo)?.tipo || s.codigoFardo}</p>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase">{s.fecha}</p>
+                            <div className="flex items-center gap-2 mb-1">
+                               <p className="text-xs font-black text-slate-900 uppercase">{stock.find(item => item.codigo === entry.codigo)?.tipo || entry.codigo}</p>
+                               {entry.source === 'Nota de Venta' && (
+                                 <span className="px-2 py-0.5 bg-amber-100 text-amber-600 text-[8px] font-black rounded-md uppercase tracking-tighter">Nota</span>
+                               )}
+                               {entry.esManual ? (
+                                 <span className="px-2 py-0.5 bg-red-50 text-red-400 text-[8px] font-black rounded-md uppercase tracking-tighter">Manual</span>
+                               ) : (
+                                 <span className="px-2 py-0.5 bg-emerald-50 text-emerald-500 text-[8px] font-black rounded-md uppercase tracking-tighter">Stock</span>
+                               )}
+                            </div>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">{entry.fecha}</p>
                          </div>
                        </div>
                         <div className="text-right">
-                          <p className="text-sm font-black text-slate-900">+ ${((COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000) * (s.cantidad || 1)).toLocaleString()}</p>
-                          {(s.cantidad || 1) > 1 && <p className="text-[9px] text-slate-400 font-bold uppercase">{s.cantidad} Unid. x ${(COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000).toLocaleString()}</p>}
+                          <p className="text-sm font-black text-slate-900">+ ${entry.subtotal.toLocaleString()}</p>
+                          {entry.qty > 1 && <p className="text-[9px] text-slate-400 font-bold uppercase">{entry.qty} Unid. x ${(entry.subtotal / entry.qty).toLocaleString()}</p>}
                         </div>
                      </div>
                    ))}
@@ -427,17 +459,22 @@ export default function Comisiones() {
                  </tr>
                </thead>
                <tbody>
-                 {data.sales.map(s => (
-                   <tr key={s.id} className="border-b border-slate-200">
-                     <td className="py-2">{s.fecha}</td>
-                     <td className="py-2">#{s.numeroVenta}</td>
-                     <td className="py-2 font-bold uppercase">{stock.find(item => item.codigo === s.codigoFardo)?.tipo || s.codigoFardo}</td>
-                      <td className="py-2 text-right font-black">
-                        ${((COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000) * (s.cantidad || 1)).toLocaleString()}
-                        {(s.cantidad || 1) > 1 && <span className="block text-[8px] opacity-70">({s.cantidad} x {(COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000).toLocaleString()})</span>}
+                  {data.entries.map(entry => (
+                    <tr key={entry.id} className="border-b border-slate-200">
+                      <td className="py-2">{entry.fecha}</td>
+                      <td className="py-2">#{entry.saleNumber}</td>
+                      <td className="py-2 font-bold uppercase">
+                        {stock.find(item => item.codigo === entry.codigo)?.tipo || entry.codigo}
+                        <span className="ml-2 text-[7px] text-slate-400">
+                           ({entry.source === 'Nota de Venta' ? 'NOTA' : 'REG'}) · {entry.esManual ? 'MANUAL' : 'STOCK'}
+                        </span>
                       </td>
-                   </tr>
-                 ))}
+                       <td className="py-2 text-right font-black">
+                         ${entry.subtotal.toLocaleString()}
+                         {entry.qty > 1 && <span className="block text-[8px] opacity-70">({entry.qty} x ${(entry.subtotal / entry.qty).toLocaleString()})</span>}
+                       </td>
+                    </tr>
+                  ))}
                  {data.adjustments.map(adj => (
                    <tr key={adj.id} className="border-b border-red-100 bg-red-50/30">
                      <td className="py-2 text-red-600">{adj.fecha}</td>
