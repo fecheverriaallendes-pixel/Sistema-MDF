@@ -713,12 +713,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
           console.log("Processing Nota de Venta items:", items);
           for (const item of items) {
-              const stockRef = doc(db, 'stock', item.codigoFardo);
-              batch.update(stockRef, {
-                  stockActual: increment(-item.cantidad)
-              });
+              if (!item.esManual) {
+                const stockRef = doc(db, 'stock', item.codigoFardo);
+                batch.update(stockRef, {
+                    stockActual: increment(-item.cantidad)
+                });
+              }
           }
-      } else if (saleData.codigoFardo) {
+      } else if (saleData.codigoFardo && !saleData.esManual) {
           const stockRef = doc(db, 'stock', saleData.codigoFardo);
           batch.update(stockRef, {
               stockActual: increment(-(saleData.cantidad || 0))
@@ -1281,9 +1283,32 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       return;
     }
     try {
-      await deleteDoc(doc(db, 'sales', saleId));
+      const saleToDelete = sales.find(s => s.id === saleId);
+      const batch = writeBatch(db);
+      
+      batch.delete(doc(db, 'sales', saleId));
+
+      if (saleToDelete) {
+        if (saleToDelete.tipoVenta === SaleType.NOTA_VENTA && saleToDelete.items) {
+          for (const item of saleToDelete.items) {
+            if (!item.esManual) {
+              const stockRef = doc(db, 'stock', item.codigoFardo);
+              batch.update(stockRef, {
+                stockActual: increment(item.cantidad)
+              });
+            }
+          }
+        } else if (saleToDelete.codigoFardo && !saleToDelete.esManual) {
+          const stockRef = doc(db, 'stock', saleToDelete.codigoFardo);
+          batch.update(stockRef, {
+            stockActual: increment(saleToDelete.cantidad || 0)
+          });
+        }
+      }
+
+      await batch.commit();
       playSound('click');
-      alert("Venta eliminada con éxito.");
+      alert("Venta eliminada con éxito y productos retornados al stock.");
       console.log("Venta eliminada con éxito:", saleId);
     } catch (e: any) {
       console.error("Error al borrar venta:", e);
