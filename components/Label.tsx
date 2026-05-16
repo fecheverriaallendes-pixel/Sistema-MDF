@@ -33,31 +33,54 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
           </div>
           <div className="mb-1">
             <p className="text-[7px] font-black uppercase text-slate-500 mb-0.2">Dirección de Entrega</p>
-            <div className="bg-slate-50 p-1 rounded-md border border-slate-200">
-              <p className="text-[9px] font-black uppercase leading-snug italic">{sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}</p>
+            <div className="bg-slate-50 p-1.5 rounded-md border border-slate-200">
+              <p className={`font-black uppercase leading-tight italic ${sale.direccion && sale.direccion.length > 50 ? 'text-[8px]' : 'text-[10px]'}`}>
+                {sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}
+              </p>
             </div>
           </div>
           <div className="mb-2">
-            <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Agencia</p>
-            <p className="text-xs font-black uppercase">{sale.agencia || 'NO ESPECIFICADO'}</p>
-            <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Producto</p>
-            <p className="text-lg font-black uppercase leading-tight">
-              { (() => {
+            <div className="flex justify-between items-start gap-2 mb-2">
+              <div className="flex-1">
+                <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Agencia / Destino</p>
+                <p className="text-xs font-black uppercase leading-tight">{sale.agencia || 'DOMICILIO'}</p>
+              </div>
+              {(() => {
                 const stockItem = stock.find(i => i.codigo === displayItem.codigoFardo);
-                return stockItem ? stockItem.tipo : (displayItem.codigoFardo || 'SIN CÓDIGO');
+                if (stockItem?.categoria === 'LOTE' && stockItem?.peso) {
+                  return (
+                    <div className="text-right">
+                      <p className="text-[8px] font-black uppercase text-amber-600 mb-0.5">Peso</p>
+                      <p className="text-lg font-black text-amber-600 leading-none">{stockItem.peso} KG</p>
+                    </div>
+                  )
+                }
+                return null;
               })()}
-            </p>
-            <p className="text-[9px] font-bold text-slate-500 mt-0.5">SKU: {displayItem.codigoFardo || 'N/A'}</p>
-            <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Cantidad</p>
-            <p className="text-lg font-black uppercase leading-none">{displayItem.cantidad || 1}</p>
-            <p className="text-[8px] font-black uppercase text-slate-500 mt-2 mb-0.5">Variante</p>
-            <p className="text-md font-bold uppercase leading-none">{sale.variante || 'N/A'}</p>
-
-            <div className="mt-4 p-2 bg-slate-100 border-l-4 border-slate-900">
-              <p className="text-[10px] font-bold leading-tight">🔄 Para cambios, debe grabar un video de inicio a fin SIN EXCEPCIÓN</p>
-              <p className="text-[9px] text-slate-600 mt-1">Grabe su video al recibir y abrir su compra, de inicio a fin ante problemas de etiquetado o error de entregas.</p>
             </div>
-            <p className="text-[8px] text-slate-500 uppercase mt-4 text-center">Vendedor: {sale.vendedor || 'N/A'}</p>
+
+            <div className="grid grid-cols-2 gap-4 border-t border-dashed border-slate-200 pt-2">
+              <div>
+                <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Producto / SKU</p>
+                <p className="text-[13px] font-black uppercase leading-tight">
+                  { (() => {
+                    const stockItem = stock.find(i => i.codigo === displayItem.codigoFardo);
+                    return stockItem ? stockItem.tipo : (displayItem.codigoFardo || 'SIN CÓDIGO');
+                  })()}
+                </p>
+                <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase leading-none italic">{displayItem.codigoFardo || 'N/A'}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[8px] font-black uppercase text-slate-500 mb-0.5">Cantidad x Var.</p>
+                <p className="text-lg font-black leading-none uppercase">x{displayItem.cantidad || 1} {sale.variante || 'N/A'}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 p-2 bg-slate-100 border-l-4 border-slate-900 rounded-r-md">
+              <p className="text-[10px] font-bold leading-tight uppercase">🔄 VIDEO OBLIGATORIO PARA CAMBIOS</p>
+              <p className="text-[8px] text-slate-600 mt-1 leading-snug">Grabe la apertura de su paquete de inicio a fin sin cortes ni ediciones.</p>
+            </div>
+            <p className="text-[8px] text-slate-500 uppercase mt-4 text-center font-bold">Vendedor: {sale.vendedor || 'SISTEMA'}</p>
           </div>
         </div>
       </div>

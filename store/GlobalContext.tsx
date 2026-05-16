@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord } from '../types';
 import { db, storage } from '../firebase';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const INITIAL_MASTER_STOCK: Omit<StockItem, 'id' | 'disponible'>[] = [
@@ -323,7 +323,6 @@ const INITIAL_MASTER_STOCK: Omit<StockItem, 'id' | 'disponible'>[] = [
   { codigo: 'MDF-316', tipo: 'Poleron S/G TIGRE', proveedor: 'TIGRE', precioCosto: 0, precioSugerido: 55000, stockActual: 4, unidad: 'FARDO' },
   { codigo: 'MDF-317', tipo: 'Poleron S/G TOM Y JERRY', proveedor: 'TOM Y JERRY', precioCosto: 0, precioSugerido: 80000, stockActual: 17, unidad: 'FARDO' },
   { codigo: 'MDF-318', tipo: 'Poleron Sin Gorro Marca  25 KG TOM Y JERRY', proveedor: 'TOM Y JERRY', precioCosto: 0, precioSugerido: 240000, stockActual: 0, unidad: 'FARDO' },
-  { codigo: 'MDF-319', tipo: 'PROVISORIO', proveedor: 'General', precioCosto: 0, precioSugerido: 0, stockActual: 198637, unidad: 'FARDO' },
   { codigo: 'MDF-320', tipo: 'Ravanas BETA', proveedor: 'BETA', precioCosto: 0, precioSugerido: 140000, stockActual: 10, unidad: 'FARDO' },
   { codigo: 'MDF-321', tipo: 'Retorno Traje de Baño Target', proveedor: 'TARGET', precioCosto: 0, precioSugerido: 350000, stockActual: 0, unidad: 'FARDO' },
   { codigo: 'MDF-322', tipo: 'Ropa Clinica TOM Y JERRY', proveedor: 'TOM Y JERRY', precioCosto: 0, precioSugerido: 100000, stockActual: 0, unidad: 'FARDO' },
@@ -450,6 +449,7 @@ interface StoreContextType {
   bulkAddStock: (items: Omit<StockItem, 'id' | 'disponible'>[]) => void;
   fixDuplicateStock: () => Promise<void>;
   fixDuplicateStockByName: () => Promise<void>;
+  purgeUnusedStock: () => Promise<void>;
   resetToMasterStock: () => void;
   addStaff: (member: Omit<StaffMember, 'id' | 'activo'>) => void;
   removeStaff: (id: string) => void;
@@ -705,28 +705,26 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
     try {
       console.log("Saving sale to Firestore...", newSale.id, cleanSale);
-      await setDoc(doc(db, 'sales', newSale.id), cleanSale);
-      console.log("Sale saved successfully.");
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'sales', newSale.id), cleanSale);
 
       if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
           console.log("Processing Nota de Venta items:", items);
           for (const item of items) {
-              const stockItem = stock.find(s => s.codigo === item.codigoFardo);
-              if (stockItem) {
-                  console.log("Found stock item for Nota de Venta:", stockItem.codigo);
-                  const nuevoStockVal = Math.max(0, stockItem.stockActual - item.cantidad);
-                  await setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
-              } else {
-                  console.log("Stock item NOT found for Nota de Venta:", item.codigoFardo);
-              }
+              const stockRef = doc(db, 'stock', item.codigoFardo);
+              batch.update(stockRef, {
+                  stockActual: increment(-item.cantidad)
+              });
           }
-      } else {
-          const stockItem = stock.find(item => item.codigo === saleData.codigoFardo);
-          if (stockItem) {
-              const nuevoStockVal = Math.max(0, stockItem.stockActual - (saleData.cantidad || 0));
-              await setDoc(doc(db, 'stock', stockItem.id), { ...stockItem, stockActual: nuevoStockVal, disponible: nuevoStockVal > 0 });
-          }
+      } else if (saleData.codigoFardo) {
+          const stockRef = doc(db, 'stock', saleData.codigoFardo);
+          batch.update(stockRef, {
+              stockActual: increment(-(saleData.cantidad || 0))
+          });
       }
+
+      await batch.commit();
+      console.log("Sale and stock updates committed successfully.");
     } catch(error) {
         console.error("Error adding sale:", error);
         alert("Error al registrar venta. Revisa la consola.");
@@ -928,7 +926,13 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
 
     const newId = code; // ID is the code
-    await setDoc(doc(db, 'stock', newId), { ...item, codigo: code, id: newId, disponible: item.stockActual > 0 });
+    await setDoc(doc(db, 'stock', newId), { 
+      ...item, 
+      codigo: code, 
+      id: newId, 
+      disponible: item.stockActual > 0,
+      categoria: item.categoria || 'FARDO'
+    });
   };
 
   const updateStockItem = async (id: string, updatedData: Partial<StockItem>) => {
@@ -960,9 +964,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       const item = stock.find(i => i.codigo === codigoFardo);
       if (!item) return CommissionType.FARDO_NORMAL;
       
-      const tipo = item.tipo.toLowerCase();
-      if (tipo.includes('saco') || tipo.includes('lote')) return CommissionType.LOTE_SACO;
-      if (item.promocion) return CommissionType.FARDO_PROMO;
+      // Si es LOTE
+      if (item.categoria === 'LOTE' || item.unidad === 'LOTE') {
+          return CommissionType.LOTE;
+      }
+
+      // Si es MEDIO FARDO
+      if (item.unidad === 'MEDIO FARDO') {
+          return CommissionType.MEDIO_FARDO;
+      }
+      
+      // Si es FARDO (Normal o Promo)
+      if (item.promocion) {
+          return CommissionType.FARDO_PROMO;
+      }
       
       return CommissionType.FARDO_NORMAL;
   };
@@ -1003,41 +1018,40 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       const stockDocs = await getDocs(collection(db, 'stock'));
       const stockItems = stockDocs.docs.map(d => ({ ...d.data(), firestoreId: d.id } as StockItem & { firestoreId: string }));
       
-      // Group by code
       const codeMap = new Map<string, (StockItem & { firestoreId: string })[]>();
       stockItems.forEach(item => {
-        const code = item.codigo.trim().toUpperCase();
+        const code = (item.codigo || '').trim().toUpperCase();
+        if (!code) return;
         if (!codeMap.has(code)) codeMap.set(code, []);
         codeMap.get(code)!.push(item);
       });
       
       let batch = writeBatch(db);
       let count = 0;
-      let totalMerged = 0;
+      let totalFixed = 0;
       
       for (const [code, items] of codeMap.entries()) {
-        // If an item has an ID that is NOT the code, it's a candidate for migration/fix
-        // If there are multiple items for the same code, we must merge them
         if (items.length > 1 || items[0].firestoreId !== code) {
-          totalMerged++;
+          totalFixed++;
           
-          // Strategy: Summarize stock of all items with same code
-          const totalStock = items.reduce((acc, i) => acc + i.stockActual, 0);
+          // Sumar todo el stock para no perder existencias
+          const totalStock = items.reduce((acc, i) => acc + (i.stockActual || 0), 0);
           const representativeItem = items[0];
           
-          // 1. Delete all current documents (some might have random IDs)
+          // Borrar todas las versiones (incluyendo las de IDs aleatorios)
           for (const item of items) {
             batch.delete(doc(db, 'stock', item.firestoreId));
             count++;
           }
           
-          // 2. Create/Set a single document with ID = code
+          // Crear la versión única y limpia con ID = Código
           const fixedItem: StockItem = {
             ...representativeItem,
             id: code,
             codigo: code,
             stockActual: totalStock,
-            disponible: totalStock > 0
+            disponible: totalStock > 0,
+            categoria: representativeItem.categoria || 'FARDO'
           };
           delete (fixedItem as any).firestoreId;
           
@@ -1053,11 +1067,56 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
       
       if (count > 0) await batch.commit();
-      alert(`✅ MIGRACIÓN EXITOSA: Se normalizaron y unificaron ${totalMerged} códigos. Ahora el inventario utiliza IDs únicos por producto.`);
+      alert(`✅ LIMPIEZA COMPLETADA: Se unificaron ${totalFixed} productos. El inventario ahora es consistente.`);
       playSound('success');
     } catch (error: any) {
       console.error("Error en fixDuplicateStock:", error);
-      alert("Error al limpiar duplicados: " + error.message);
+      alert("Error en limpieza: " + error.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const purgeUnusedStock = async () => {
+    if (currentUser?.rol !== StaffRole.ADMIN) return;
+    if (!confirm("⚠️ ¿PURGAR PRODUCTOS SIN USO? Se eliminarán permanentemente todos los productos con STOCK 0 que NO tengan ventas registradas. Esto limpiará tu catálogo de artículos que no usas.")) return;
+    
+    setIsSyncing(true);
+    try {
+      const salesDocs = await getDocs(collection(db, 'sales'));
+      const activeCodes = new Set<string>();
+      salesDocs.docs.forEach(d => {
+        const sale = d.data() as Sale;
+        if (sale.codigoFardo) activeCodes.add(sale.codigoFardo.trim().toUpperCase());
+        if (sale.items) sale.items.forEach(i => activeCodes.add(i.codigoFardo.trim().toUpperCase()));
+      });
+
+      const stockDocs = await getDocs(collection(db, 'stock'));
+      let batch = writeBatch(db);
+      let count = 0;
+      let purgedCount = 0;
+
+      for (const d of stockDocs.docs) {
+        const item = d.data() as StockItem;
+        const code = (item.codigo || '').trim().toUpperCase();
+        
+        if (item.stockActual <= 0 && !activeCodes.has(code)) {
+          batch.delete(d.ref);
+          purgedCount++;
+          count++;
+          if (count >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+      }
+
+      if (count > 0) await batch.commit();
+      alert(`✅ PURGA EXITOSA: Se eliminaron ${purgedCount} productos obsoletos del catálogo.`);
+      playSound('success');
+    } catch (error: any) {
+      alert("Error en purga: " + error.message);
     } finally {
       setIsSyncing(false);
     }
@@ -1094,19 +1153,29 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
           const sortedItems = [...items].sort((a, b) => a.codigo.localeCompare(b.codigo));
           const [original, ...duplicates] = sortedItems;
           
+          // Sumar el stock de los duplicados al original
+          const totalStock = items.reduce((acc, i) => acc + (i.stockActual || 0), 0);
+          
+          // Actualizar el original con el nuevo stock
+          batch.update(doc(db, 'stock', original.id), { 
+            stockActual: totalStock,
+            disponible: totalStock > 0 
+          });
+          count++;
+
           for (const duplicate of duplicates) {
             batch.delete(doc(db, 'stock', duplicate.id));
             deletedCount++;
             count++;
             
-            if (count >= 450) {
+            if (count >= 400) {
               await batch.commit();
               batch = writeBatch(db);
               count = 0;
             }
           }
           
-          if (count >= 450) {
+          if (count >= 400) {
             await batch.commit();
             batch = writeBatch(db);
             count = 0;
@@ -1115,7 +1184,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
       
       if (count > 0) await batch.commit();
-      alert(`✅ LIMPIEZA POR NOMBRE EXITOSA: Se corrigieron ${totalMerged} productos con nombres idénticos. Se eliminaron ${deletedCount} registros excedentes, conservando solo el registro con el código más antiguo.`);
+      alert(`✅ UNIFICACIÓN POR NOMBRE EXITOSA: Se corrigieron ${totalMerged} productos con nombres idénticos. Se consolidó el stock en los registros originales.`);
       playSound('success');
     } catch (error: any) {
       console.error("Error en fixDuplicateStockByName:", error);
@@ -1143,13 +1212,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
       if (deleteCount > 0) await deleteBatch.commit();
 
-      // Then, add the master stock
+      // Then, add the master stock (ONLY items with stock > 0)
       let addBatch = writeBatch(db);
       let addCount = 0;
       
-      for (const item of INITIAL_MASTER_STOCK) {
+      const filteredMaster = INITIAL_MASTER_STOCK.filter(i => (i.stockActual || 0) > 0);
+      
+      for (const item of filteredMaster) {
         const newId = item.codigo.trim().toUpperCase();
-        addBatch.set(doc(db, 'stock', newId), { ...item, id: newId, disponible: item.stockActual > 0 });
+        addBatch.set(doc(db, 'stock', newId), { 
+          ...item, 
+          id: newId, 
+          disponible: true,
+          categoria: (item as any).categoria || 'FARDO'
+        });
         addCount++;
         if (addCount === 400) {
           await addBatch.commit();
@@ -1342,7 +1418,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
-      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
+      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord
     }}>

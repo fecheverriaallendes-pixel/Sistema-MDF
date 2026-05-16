@@ -22,7 +22,8 @@ import { CommissionType, Sale, CommissionAdjustment } from '../types';
 const COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.FARDO_NORMAL]: 3000,
   [CommissionType.FARDO_PROMO]: 1500,
-  [CommissionType.LOTE_SACO]: 1000,
+  [CommissionType.MEDIO_FARDO]: 1500,
+  [CommissionType.LOTE]: 1000,
 };
 
 export default function Comisiones() {

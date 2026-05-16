@@ -79,8 +79,9 @@ export default function Catalogo() {
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
+  const [categoryFilter, setCategoryFilter] = useState<'TODOS' | 'FARDO' | 'LOTE'>('TODOS');
   const [sortOrder, setSortOrder] = useState<SortOption>('alpha-asc');
-  
+
   const searchParams = new URLSearchParams(location.search);
   const [viewMode, setViewMode] = useState<'digital' | 'print'>((searchParams.get('mode') as 'digital' | 'print') || 'digital');
   const [isDownloading, setIsDownloading] = useState(false);
@@ -97,10 +98,17 @@ export default function Catalogo() {
   const sortedAndFilteredStock = useMemo(() => {
     const normalizedSearch = normalizeText(searchTerm);
     let result = stock.filter(item => {
+      // Ocultar productos con stock 0
+      if (item.stockActual <= 0) return false;
+
       const matchesSearch = normalizeText(item.tipo).includes(normalizedSearch) || 
                            normalizeText(item.codigo).includes(normalizedSearch);
       const matchesProvider = providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter;
-      return matchesSearch && matchesProvider;
+      
+      const itemCategory = item.categoria || 'FARDO';
+      const matchesCategory = categoryFilter === 'TODOS' || itemCategory === categoryFilter;
+
+      return matchesSearch && matchesProvider && matchesCategory;
     });
 
     return result.sort((a, b) => {
@@ -322,7 +330,20 @@ export default function Catalogo() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="flex bg-slate-100 p-1.5 rounded-[24px] shadow-inner">
+            {(['TODOS', 'FARDO', 'LOTE'] as const).map((cat) => (
+              <button
+                key={cat}
+                onClick={() => { setCategoryFilter(cat); playSound('click'); }}
+                className={`flex-1 py-3 rounded-[18px] font-black text-[9px] uppercase tracking-widest transition-all ${
+                  categoryFilter === cat ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                }`}
+              >
+                {cat === 'TODOS' ? 'Todos' : cat === 'FARDO' ? 'Fardos' : 'Lotes'}
+              </button>
+            ))}
+          </div>
           <input 
             type="text" 
             placeholder="Buscar producto..."

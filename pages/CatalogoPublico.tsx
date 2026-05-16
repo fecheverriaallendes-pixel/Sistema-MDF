@@ -18,7 +18,7 @@ const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 export default function CatalogoPublico() {
   const { stock } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'TODOS' | 'FARDO' | 'PIEZA'>('TODOS');
+  const [activeFilter, setActiveFilter] = useState<'TODOS' | 'FARDO' | 'LOTE'>('TODOS');
 
   // Filter only items with stock
   const availableStock = useMemo(() => {
@@ -29,7 +29,10 @@ export default function CatalogoPublico() {
     return availableStock.filter(item => {
       const matchesSearch = item.tipo.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            item.codigo.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesFilter = activeFilter === 'TODOS' || item.unidad === activeFilter;
+      
+      const itemCategory = item.categoria || 'FARDO';
+      const matchesFilter = activeFilter === 'TODOS' || itemCategory === activeFilter;
+      
       return matchesSearch && matchesFilter;
     }).sort((a, b) => a.tipo.localeCompare(b.tipo));
   }, [availableStock, searchTerm, activeFilter]);
@@ -74,7 +77,7 @@ export default function CatalogoPublico() {
           </div>
 
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {(['TODOS', 'FARDO', 'PIEZA'] as const).map((filter) => (
+            {(['TODOS', 'FARDO', 'LOTE'] as const).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setActiveFilter(filter)}
@@ -84,7 +87,7 @@ export default function CatalogoPublico() {
                     : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300'
                 }`}
               >
-                {filter === 'TODOS' ? 'Todo' : filter === 'FARDO' ? 'Fardos' : 'Unitarios'}
+                {filter === 'TODOS' ? 'Todo' : filter === 'FARDO' ? 'Fardos' : 'Lotes'}
               </button>
             ))}
           </div>
@@ -109,9 +112,10 @@ export default function CatalogoPublico() {
                       <h3 className="text-lg font-black text-slate-900 uppercase italic leading-tight">{item.tipo}</h3>
                     </div>
                     <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
-                      item.unidad === 'FARDO' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'
+                      item.categoria === 'LOTE' ? 'bg-amber-100 text-amber-700' : 
+                      item.unidad === 'FARDO' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-600'
                     }`}>
-                      {item.unidad}
+                      {item.unidad} {item.peso && item.categoria === 'LOTE' ? `(${item.peso}KG)` : ''}
                     </span>
                   </div>
 

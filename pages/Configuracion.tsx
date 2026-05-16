@@ -17,7 +17,7 @@ export default function Configuracion() {
     settings, updateSettings, playSound, syncWithCloud, pushToCloud,
     isSyncing, lastSync, staff, addStaff, removeStaff, sales, stock, purchases,
     clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier,
-    fixDuplicateStock, fixDuplicateStockByName
+    fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock
   } = useStore();
   
   const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS'>('RED');
@@ -49,10 +49,15 @@ export default function Configuracion() {
   };
 
   const handleMasterStockReset = () => {
-    if (confirm("⚠️ ADVERTENCIA CRÍTICA: Se ELIMINARÁ el inventario actual y se cargarán los 404 productos de la Base de Datos Maestra. ¿Deseas continuar?")) {
-      resetToMasterStock();
-      playSound('success');
-      alert("✅ ÉXITO: Los 404 productos han sido inyectados en el sistema.");
+    if (confirm("🚨 ADVERTENCIA MÁXIMA: Esta acción es IRREVERSIBLE. Se ELIMINARÁ todo tu inventario actual de la base de datos y se reemplazará por la lista maestra oficial (solo productos con stock inicial). ¿Estás ABSOLUTAMENTE seguro?")) {
+      const pin = prompt("Por seguridad, ingresa el PIN Maestro:");
+      if (pin === "2024") {
+        resetToMasterStock();
+        playSound('success');
+        alert("✅ ÉXITO: El inventario ha sido reiniciado a la base maestra filtrada.");
+      } else {
+        alert("PIN Incorrecto.");
+      }
     }
   };
 
@@ -400,43 +405,52 @@ export default function Configuracion() {
                    </button>
                 </div>
 
-                {/* Saneamiento de Stock */}
+                {/* Mantenimiento y Unificación */}
                 <div className="p-8 border-2 border-dashed border-emerald-100 rounded-[32px] space-y-6">
                    <div className="flex items-center gap-4">
                       <ShieldCheck className="text-emerald-500" size={24} />
-                      <h4 className="text-emerald-600 font-black text-sm uppercase">Saneamiento de Inventario</h4>
+                      <h4 className="text-emerald-600 font-black text-sm uppercase">Mantenimiento y Unificación</h4>
                    </div>
-                   <p className="text-slate-500 text-[11px] font-medium leading-relaxed italic">
-                      Detecta productos duplicados con el mismo código y elimina los excedentes, conservando únicamente el registro original.
-                   </p>
-                   <button 
-                     onClick={() => {
-                        if(confirm("¿Deseas eliminar los productos con código duplicado? Se conservará solo el registro más antiguo y NO se sumará el stock.")) {
-                            fixDuplicateStock();
-                        }
-                     }}
-                     disabled={isSyncing}
-                     className="w-full py-5 bg-emerald-50 text-emerald-600 border-2 border-emerald-200 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                   >
-                     <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /> 
-                     {isSyncing ? 'LIMPIANDO...' : 'CORREGIR CÓDIGOS DUPLICADOS'}
-                   </button>
-
-                   <div className="pt-4 border-t border-slate-100">
-                     <p className="text-slate-500 text-[11px] font-medium leading-relaxed italic mb-4">
-                        Detecta productos con el <b>mismo nombre</b> pero <b>distinto código</b> y elimina los repetidos.
-                     </p>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <button 
                        onClick={() => {
-                          if(confirm("¿Deseas eliminar productos que tengan NOMBRES idénticos? Se mantendrá solo el registro con el código más antiguo y NO se sumará el stock.")) {
-                              fixDuplicateStockByName();
-                          }
+                           if(confirm("¿UNIFICAR POR CÓDIGO? Se sumará el stock de los productos duplicados con el mismo código oficial.")) {
+                               fixDuplicateStock();
+                           }
                        }}
                        disabled={isSyncing}
-                       className="w-full py-5 bg-white text-emerald-600 border-2 border-emerald-100 rounded-[24px] font-black text-xs uppercase tracking-widest hover:border-emerald-500 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                       className="w-full py-5 bg-blue-50 text-blue-600 border-2 border-blue-100 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                     >
+                       <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} /> 
+                       {isSyncing ? 'PROCESANDO...' : '1.- UNIFICAR POR CÓDIGO'}
+                     </button>
+
+                     <button 
+                       onClick={() => {
+                           if(confirm("¿UNIFICAR POR NOMBRE? Se sumará el stock de productos con el mismo nombre exacto.")) {
+                               fixDuplicateStockByName();
+                           }
+                       }}
+                       disabled={isSyncing}
+                       className="w-full py-5 bg-amber-50 text-amber-600 border-2 border-amber-100 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-amber-600 hover:text-white transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                      >
                        <Layers size={18} className={isSyncing ? 'animate-spin' : ''} /> 
-                       {isSyncing ? 'PROCESANDO...' : 'FUSIONAR POR NOMBRE IDÉNTICO'}
+                       {isSyncing ? 'PROCESANDO...' : '2.- UNIFICAR POR NOMBRE'}
+                     </button>
+                   </div>
+
+                   <div className="pt-4 border-t border-slate-100 space-y-4">
+                     <p className="text-slate-500 text-[11px] font-medium leading-relaxed italic">
+                        <b>Limpieza Agresiva:</b> Elimina productos con stock 0 que nunca han tenido ventas para mantener el catálogo limpio.
+                     </p>
+                     <button 
+                       onClick={() => purgeUnusedStock()}
+                       disabled={isSyncing}
+                       className="w-full py-5 bg-red-50 text-red-600 border-2 border-red-100 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-red-100 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                     >
+                       <Trash2 size={18} /> 
+                       {isSyncing ? 'PURGANDO...' : '3.- PURGA STOCK'}
                      </button>
                    </div>
                 </div>

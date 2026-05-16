@@ -48,7 +48,8 @@ export interface SaleItem {
 export enum CommissionType {
   FARDO_NORMAL = 'Fardo Normal ($3.000)',
   FARDO_PROMO = 'Fardo Promoción ($1.500)',
-  LOTE_SACO = 'Lote/Saco ($1.000)'
+  MEDIO_FARDO = 'Medio Fardo ($1.500)',
+  LOTE = 'Lote ($1.000)'
 }
 
 export enum StaffRole {
@@ -102,7 +103,9 @@ export interface StockItem {
   precioSugerido: number;
   stockActual: number; 
   disponible: boolean;
-  unidad: 'FARDO' | 'PIEZA';
+  unidad: 'FARDO' | 'PIEZA' | 'MEDIO FARDO' | 'LOTE';
+  categoria: 'FARDO' | 'LOTE';
+  peso?: number; // Para lotes (10 o 20 kgs)
   promocion?: boolean;
 }
 

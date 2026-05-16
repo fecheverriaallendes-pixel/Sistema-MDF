@@ -1,6 +1,6 @@
 
 import { db } from './firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, doc } from 'firebase/firestore';
 
 const rawData = `Abrigo Corto Mujer CANADA		0	$120.000	FARDO
 Abrigo Lana Hombre Corto IM		4	$90.000	FARDO
@@ -491,9 +491,10 @@ async function importStock() {
     const precioCosto = parseInt(priceStr.replace('$', '').replace('.', '').trim());
     const name = filteredParts.slice(0, filteredParts.length - 3).join(' ');
 
+    const finalCodigo = `MDF-${counter.toString().padStart(3, '0')}`;
     try {
-        await addDoc(stockCol, {
-            codigo: `MDF-${counter.toString().padStart(3, '0')}`,
+        await setDoc(doc(stockCol, finalCodigo), {
+            codigo: finalCodigo,
             tipo: name,
             stockActual: isNaN(stockActual) ? 0 : stockActual,
             precioCosto: isNaN(precioCosto) ? 0 : precioCosto,
@@ -501,9 +502,10 @@ async function importStock() {
             precioSugerido: isNaN(precioCosto) ? 0 : (precioCosto * 2),
             proveedor: 'Importación Inicial', 
             disponible: (isNaN(stockActual) ? 0 : stockActual) > 0,
-            promocion: false
+            promocion: false,
+            id: finalCodigo
         });
-        console.log(`Imported ${name} as MDF-${counter.toString().padStart(3, '0')}`);
+        console.log(`Imported ${name} as ${finalCodigo}`);
         counter++;
     } catch (e) {
         console.error(`Error importing ${name}:`, e);

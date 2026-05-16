@@ -6,17 +6,19 @@ import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 
 export default function Stock() {
-  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, clearAllStock, fixDuplicateStock, fixDuplicateStockByName, currentUser, playSound } = useStore();
+  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound } = useStore();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
+  const [categoryFilter, setCategoryFilter] = useState<'TODOS' | 'FARDO' | 'LOTE'>('TODOS');
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('action') === 'add') {
+    const action = params.get('action');
+    if (action === 'add') {
       setIsAdding(true);
     }
   }, [location]);
@@ -28,7 +30,9 @@ export default function Stock() {
     precioCosto: 0, 
     precioSugerido: 0, 
     stockActual: 1,
-    unidad: 'FARDO' as 'FARDO' | 'PIEZA'
+    unidad: 'FARDO' as 'FARDO' | 'PIEZA' | 'MEDIO FARDO' | 'LOTE',
+    categoria: 'FARDO' as 'FARDO' | 'LOTE',
+    peso: 0
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,9 +53,11 @@ export default function Stock() {
       const matchesSearch = normalizeText(item.codigo).includes(normalizedSearch) || 
                            normalizeText(item.tipo).includes(normalizedSearch);
       const matchesProvider = providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter;
-      return matchesSearch && matchesProvider;
+      const itemCategory = item.categoria || 'FARDO';
+      const matchesCategory = categoryFilter === 'TODOS' || itemCategory === categoryFilter;
+      return matchesSearch && matchesProvider && matchesCategory;
     });
-  }, [stock, searchTerm, providerFilter]);
+  }, [stock, searchTerm, providerFilter, categoryFilter]);
 
   const downloadFormat = () => {
     const csvContent = "codigo,tipo,proveedor,precioCosto,precioSugerido,stockActual,unidad\nF-101,Polerones Premium,Bale Center,100000,150000,10,FARDO\nU-102,Jeans Unitario,USA Direct,8000,15000,50,PIEZA";
@@ -155,36 +161,6 @@ export default function Stock() {
         {canModify && (
           <div className="flex flex-wrap gap-4">
             <button 
-              onClick={() => {
-                if(confirm("¿Deseas UNIFICAR todos los productos que tengan el mismo código? Se sumará el stock de los duplicados y se conservará un solo registro único.")) {
-                    fixDuplicateStock();
-                }
-              }}
-              className="flex items-center gap-2 px-6 py-4 bg-blue-50 text-blue-600 border-2 border-blue-100 rounded-[24px] font-black text-xs uppercase hover:bg-blue-100 transition-all shadow-sm"
-            >
-              <Layers size={18} /> Unificar por Código
-            </button>
-            <button 
-              onClick={() => {
-                if(confirm("¿Deseas UNIFICAR productos con el MISMO NOMBRE? Esta opción es más agresiva y unirá fardos que se llamen igual aunque tengan códigos distintos. ¿Continuar?")) {
-                    fixDuplicateStockByName();
-                }
-              }}
-              className="flex items-center gap-2 px-6 py-4 bg-amber-50 text-amber-600 border-2 border-amber-100 rounded-[24px] font-black text-xs uppercase hover:bg-amber-100 transition-all shadow-sm"
-            >
-              <Boxes size={18} /> Unificar por Nombre
-            </button>
-            <button 
-              onClick={() => {
-                if(confirm("¿Estás SEGURO de querer eliminar TODO el inventario? Esto es irreversible.")) {
-                    clearAllStock();
-                }
-              }}
-              className="flex items-center gap-2 px-6 py-4 bg-red-50 text-red-600 border-2 border-red-100 rounded-[24px] font-black text-xs uppercase hover:bg-red-100 transition-all shadow-sm"
-            >
-              <Trash2 size={18} /> Purgar Stock
-            </button>
-            <button 
               onClick={downloadFormat}
               className="flex items-center gap-2 px-8 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-sm"
             >
@@ -207,29 +183,45 @@ export default function Stock() {
         )}
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative group flex-1">
-          <Search className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={24} />
-          <input 
-            type="text" 
-            placeholder="Buscar por código o producto..."
-            className="w-full pl-20 pr-10 py-6 rounded-[32px] border-2 border-slate-100 focus:border-blue-400 outline-none transition-all shadow-sm text-xl font-bold"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="flex flex-col md:flex-row gap-6 items-center">
+        <div className="flex bg-slate-100 p-2 rounded-[32px] w-full md:w-auto shadow-sm">
+          {(['TODOS', 'FARDO', 'LOTE'] as const).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => { setCategoryFilter(cat); playSound('transition'); }}
+              className={`px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest transition-all ${
+                categoryFilter === cat ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {cat === 'TODOS' ? 'Todos' : cat === 'FARDO' ? 'Fardos' : 'Lotes'}
+            </button>
+          ))}
         </div>
-        
-        <div className="relative min-w-[280px]">
-          <Filter className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <select 
-            className="w-full pl-16 pr-8 py-6 rounded-[32px] border-2 border-slate-100 bg-white font-black text-sm uppercase tracking-widest outline-none focus:border-blue-400 appearance-none shadow-sm cursor-pointer"
-            value={providerFilter}
-            onChange={(e) => { setProviderFilter(e.target.value); playSound('click'); }}
-          >
-            {uniqueProviders.map(p => (
-              <option key={`${p}-option`} value={p}>{p === 'TODOS' ? 'Filtrar: TODOS LOS PROVEEDORES' : `Proveedor: ${p}`}</option>
-            ))}
-          </select>
+
+        <div className="flex flex-col md:flex-row gap-4 flex-1 w-full">
+          <div className="relative group flex-1">
+            <Search className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={24} />
+            <input 
+              type="text" 
+              placeholder="Buscar por código o producto..."
+              className="w-full pl-20 pr-10 py-6 rounded-[32px] border-2 border-slate-100 focus:border-blue-400 outline-none transition-all shadow-sm text-xl font-bold"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
+          <div className="relative min-w-[280px]">
+            <Filter className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <select 
+              className="w-full pl-16 pr-8 py-6 rounded-[32px] border-2 border-slate-100 bg-white font-black text-sm uppercase tracking-widest outline-none focus:border-blue-400 appearance-none shadow-sm cursor-pointer"
+              value={providerFilter}
+              onChange={(e) => { setProviderFilter(e.target.value); playSound('click'); }}
+            >
+              {uniqueProviders.map(p => (
+                <option key={`${p}-option`} value={p}>{p === 'TODOS' ? 'Filtrar: TODOS LOS PROVEEDORES' : `Proveedor: ${p}`}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -238,22 +230,33 @@ export default function Stock() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cat.</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Unidad</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Código</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción Producto</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Precio Venta</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Cant.</th>
                 <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Promoción</th>
-                {canModify && <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Gestión</th>}
+                {canModify && <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Gestión</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredStock.map((item) => (
                 <tr key={`${item.id}-${item.codigo}`} className={`group hover:bg-slate-50 transition-colors ${item.stockActual < 3 && item.stockActual > 0 ? 'bg-red-50/30' : ''}`}>
                   <td className="px-8 py-6">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.unidad === 'FARDO' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {item.unidad === 'FARDO' ? <Layers size={12} /> : <Square size={12} />} {item.unidad}
+                    <span className={`p-2 rounded-xl flex items-center justify-center w-10 h-10 ${item.categoria === 'LOTE' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'}`} title={item.categoria || 'FARDO'}>
+                      {item.categoria === 'LOTE' ? <Boxes size={18} /> : <Layers size={18} />}
                     </span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${item.unidad === 'FARDO' ? 'bg-indigo-100 text-indigo-700' : item.unidad === 'LOTE' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                        {item.unidad}
+                      </span>
+                      {item.peso && item.categoria === 'LOTE' && (
+                        <span className="text-[10px] font-black text-amber-600 mt-1 ml-1">{item.peso} KG</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-8 py-6 font-mono font-black text-slate-400 uppercase text-xs tracking-widest">{item.codigo}</td>
                   <td className="px-8 py-6">
@@ -273,7 +276,9 @@ export default function Stock() {
                   <td className="px-8 py-6 text-center">
                     <div className={`inline-flex flex-col items-center justify-center w-14 h-14 rounded-2xl ${item.stockActual > 3 ? 'bg-emerald-50 text-emerald-600' : item.stockActual > 0 ? 'bg-amber-50 text-amber-600 animate-pulse border border-amber-200' : 'bg-red-50 text-red-600'}`}>
                       <span className="text-xl font-black leading-none">{item.stockActual}</span>
-                      <span className="text-[8px] font-black uppercase mt-1">{item.unidad === 'FARDO' ? 'Uds' : 'Piezas'}</span>
+                      <span className="text-[8px] font-black uppercase mt-1">
+                        {item.unidad === 'FARDO' ? 'Uds' : item.unidad === 'LOTE' ? 'Lotes' : 'Kgs'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-8 py-6 text-center">
@@ -307,35 +312,76 @@ export default function Stock() {
               </div>
               <button onClick={() => setIsAdding(false)} className="p-4 hover:bg-white/10 rounded-full transition-colors"><X size={36} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-12 space-y-8">
-              <div className="space-y-4">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Tipo de Ingreso</label>
-                <div className="flex bg-slate-100 p-2 rounded-[28px] shadow-inner">
-                  <button 
-                    type="button"
-                    onClick={() => setNewBale({...newBale, unidad: 'FARDO'})}
-                    className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${newBale.unidad === 'FARDO' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900'}`}
+            <form onSubmit={handleSubmit} className="p-12 space-y-8 overflow-y-auto max-h-[70vh]">
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Categoría de Producto</label>
+                  <div className="flex bg-slate-100 p-2 rounded-[28px] shadow-inner">
+                    <button 
+                      type="button"
+                      onClick={() => setNewBale({...newBale, categoria: 'FARDO', unidad: 'FARDO'})}
+                      className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${newBale.categoria === 'FARDO' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900'}`}
+                    >
+                      <Layers size={20} /> Fardo
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setNewBale({...newBale, categoria: 'LOTE', unidad: 'LOTE'})}
+                      className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${newBale.categoria === 'LOTE' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900'}`}
+                    >
+                      <Boxes size={20} /> Lote
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Tipo de Unidad</label>
+                  <select 
+                    className="w-full px-7 py-5 bg-slate-100 rounded-[28px] font-black text-xs uppercase tracking-widest outline-none border-2 border-transparent"
+                    value={newBale.unidad}
+                    onChange={(e) => setNewBale({...newBale, unidad: e.target.value as any})}
                   >
-                    <Layers size={20} /> Es un Fardo
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setNewBale({...newBale, unidad: 'PIEZA'})}
-                    className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${newBale.unidad === 'PIEZA' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-500 hover:text-slate-900'}`}
-                  >
-                    <Square size={20} /> Es una Pieza
-                  </button>
+                    <option value="FARDO">FARDO</option>
+                    <option value="MEDIO FARDO">MEDIO FARDO</option>
+                    <option value="LOTE">LOTE</option>
+                    <option value="PIEZA">PIEZA</option>
+                  </select>
                 </div>
               </div>
+
+              {newBale.categoria === 'LOTE' && (
+                <div className="space-y-4 animate-in slide-in-from-top-4 duration-300">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Peso del Lote (Kgs)</label>
+                  <div className="flex gap-4">
+                    {[10, 20].map(w => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() => setNewBale({...newBale, peso: w})}
+                        className={`flex-1 py-5 rounded-[24px] font-black text-xl transition-all ${newBale.peso === w ? 'bg-amber-500 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400'}`}
+                      >
+                        {w} KG
+                      </button>
+                    ))}
+                    <input 
+                      type="number" 
+                      placeholder="Otro..." 
+                      className="flex-1 px-8 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-amber-500 outline-none font-black text-xl"
+                      value={newBale.peso || ''}
+                      onChange={(e) => setNewBale({...newBale, peso: Number(e.target.value)})}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Código Identificador (Opcional)</label>
-                  <input className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-black text-xl uppercase" placeholder="MDF-XXXX (Autogenera si vacío)" value={newBale.codigo} onChange={(e) => setNewBale({...newBale, codigo: e.target.value.toUpperCase()})}/>
+                  <input className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-indigo-500 outline-none font-black text-xl uppercase" placeholder="MDF-XXXX" value={newBale.codigo} onChange={(e) => setNewBale({...newBale, codigo: e.target.value.toUpperCase()})}/>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cant. Inicial ({newBale.unidad === 'FARDO' ? 'Fardos' : 'Unidades'})</label>
-                  <input required type="number" onWheel={(e) => e.currentTarget.blur()} className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-black text-xl" value={newBale.stockActual} onChange={(e) => setNewBale({...newBale, stockActual: Number(e.target.value)})}/>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cant. Inicial ({newBale.unidad})</label>
+                  <input required type="number" onWheel={(e) => e.currentTarget.blur()} className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-indigo-500 outline-none font-black text-xl" value={newBale.stockActual} onChange={(e) => setNewBale({...newBale, stockActual: Number(e.target.value)})}/>
                 </div>
               </div>
               <div className="space-y-2">
@@ -375,26 +421,67 @@ export default function Stock() {
               </div>
               <button onClick={() => setEditingItem(null)} className="p-4 hover:bg-white/10 rounded-full transition-colors"><X size={36} /></button>
             </div>
-            <form onSubmit={handleUpdate} className="p-12 space-y-8">
-              <div className="space-y-4">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cambiar Tipo de Unidad</label>
-                <div className="flex bg-slate-100 p-2 rounded-[28px] shadow-inner">
-                  <button 
-                    type="button"
-                    onClick={() => setEditingItem({...editingItem, unidad: 'FARDO'})}
-                    className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${editingItem.unidad === 'FARDO' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-500'}`}
+            <form onSubmit={handleUpdate} className="p-12 space-y-8 overflow-y-auto max-h-[70vh]">
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Categoría de Producto</label>
+                  <div className="flex bg-slate-100 p-2 rounded-[28px] shadow-inner">
+                    <button 
+                      type="button"
+                      onClick={() => setEditingItem({...editingItem, categoria: 'FARDO'})}
+                      className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${editingItem.categoria === 'FARDO' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-500'}`}
+                    >
+                      <Layers size={20} /> Fardo
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setEditingItem({...editingItem, categoria: 'LOTE'})}
+                      className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${(editingItem.categoria || (editingItem as any).unidad === 'LOTE' ? 'LOTE' : 'FARDO') === 'LOTE' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-500'}`}
+                    >
+                      <Boxes size={20} /> Lote
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Tipo de Unidad</label>
+                  <select 
+                    className="w-full px-7 py-5 bg-slate-100 rounded-[28px] font-black text-xs uppercase tracking-widest outline-none border-2 border-transparent"
+                    value={editingItem.unidad}
+                    onChange={(e) => setEditingItem({...editingItem, unidad: e.target.value as any})}
                   >
-                    <Layers size={20} /> Fardo
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setEditingItem({...editingItem, unidad: 'PIEZA'})}
-                    className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${editingItem.unidad === 'PIEZA' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-500'}`}
-                  >
-                    <Square size={20} /> Pieza
-                  </button>
+                    <option value="FARDO">FARDO</option>
+                    <option value="MEDIO FARDO">MEDIO FARDO</option>
+                    <option value="LOTE">LOTE</option>
+                    <option value="PIEZA">PIEZA</option>
+                  </select>
                 </div>
               </div>
+
+              {editingItem.categoria === 'LOTE' && (
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Peso del Lote (Kgs)</label>
+                  <div className="flex gap-4">
+                    {[10, 20].map(w => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() => setEditingItem({...editingItem, peso: w})}
+                        className={`flex-1 py-5 rounded-[24px] font-black text-xl transition-all ${editingItem.peso === w ? 'bg-amber-500 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400'}`}
+                      >
+                        {w} KG
+                      </button>
+                    ))}
+                    <input 
+                      type="number" 
+                      placeholder="Otro..." 
+                      className="flex-1 px-8 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-amber-500 outline-none font-black text-xl"
+                      value={editingItem.peso || ''}
+                      onChange={(e) => setEditingItem({...editingItem, peso: Number(e.target.value)})}
+                    />
+                  </div>
+                </div>
+              )}
               
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
