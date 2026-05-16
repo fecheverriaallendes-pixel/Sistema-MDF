@@ -159,18 +159,19 @@ export default function Comisiones() {
       const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string, esManual: boolean = false, saleVariante?: string) => {
           let finalTipo = tipo;
           
-          // Fallback detection for older or manually entered sales
+          const uppercaseCode = (codigo || '').toUpperCase();
+          const variantUpper = (saleVariante || '').toUpperCase();
+
+          // Force correct type if detection is certain, regardless of saved tipoComision
+          if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
+             finalTipo = CommissionType.LOTE;
+          } else if (variantUpper.includes('MEDIO')) {
+             finalTipo = CommissionType.MEDIO_FARDO;
+          }
+          
+          // Fallback detection for older or manually entered sales if still null
           if (!finalTipo) {
-             const uppercaseCode = (codigo || '').toUpperCase();
-             const variantUpper = (saleVariante || '').toUpperCase();
-             
-             if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
-                finalTipo = CommissionType.LOTE;
-             } else if (variantUpper.includes('MEDIO')) {
-                finalTipo = CommissionType.MEDIO_FARDO;
-             } else {
-                finalTipo = CommissionType.FARDO_NORMAL;
-             }
+             finalTipo = CommissionType.FARDO_NORMAL;
           }
 
           const commValue = (COMMISSION_VALUES[finalTipo as string] || 0) * qty;
