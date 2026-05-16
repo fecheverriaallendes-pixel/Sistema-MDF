@@ -33,6 +33,7 @@ import {
   Cell
 } from 'recharts';
 import { useStore } from '../store/GlobalContext';
+import { Sale } from '../types';
 
 const StatCard = ({ title, value, icon: Icon, color, subtitle, trend }: any) => (
   <div className="bg-white p-7 rounded-[40px] border border-slate-100 shadow-[0_15px_40px_rgba(0,0,0,0.03)] relative overflow-hidden group hover:shadow-xl transition-all duration-500">

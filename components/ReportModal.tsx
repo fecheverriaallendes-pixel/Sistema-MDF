@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Printer } from 'lucide-react';
-import { Sale } from '../types';
+import { Sale, CommissionType } from '../types';
 
 interface ReportProps {
   isOpen: boolean;
@@ -14,11 +14,6 @@ export const ReportModal = ({ isOpen, onClose, title, sales, stats }: ReportProp
   if (!isOpen) return null;
 
   const totalVentas = sales.reduce((acc, s) => acc + (s.total || 0), 0);
-  const conteoVariantes = sales.reduce((acc: any, s) => {
-    const v = s.variante || 'Normal';
-    acc[v] = (acc[v] || 0) + s.cantidad;
-    return acc;
-  }, {});
 
   const vendedores: Record<string, { fardos: number; lotes: number; cantNormal: number; cantPromo: number; ventas: number }> = {};
   
@@ -26,15 +21,40 @@ export const ReportModal = ({ isOpen, onClose, title, sales, stats }: ReportProp
     if (!vendedores[s.vendedor]) {
       vendedores[s.vendedor] = { fardos: 0, lotes: 0, cantNormal: 0, cantPromo: 0, ventas: 0 };
     }
-    
-    if (s.codigoFardo.includes('FARDO')) vendedores[s.vendedor].fardos += s.cantidad;
-    else vendedores[s.vendedor].lotes += s.cantidad;
-    
-    if (s.variante === 'Promocion') vendedores[s.vendedor].cantPromo += s.cantidad;
-    else vendedores[s.vendedor].cantNormal += s.cantidad;
-    
-    vendedores[s.vendedor].ventas += s.total;
+
+    const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string, totalItem: number) => {
+        // Categorización basada en tipo de comisión para total consistencia
+        const finalTipo = tipo || (codigo.startsWith('L') ? CommissionType.LOTE : CommissionType.FARDO_NORMAL);
+        
+        const isLote = finalTipo === CommissionType.LOTE;
+        const isPromo = finalTipo === CommissionType.FARDO_PROMO;
+        
+        if (isLote) {
+          vendedores[s.vendedor].lotes += qty;
+        } else {
+          vendedores[s.vendedor].fardos += qty;
+        }
+        
+        if (isPromo) {
+          vendedores[s.vendedor].cantPromo += qty;
+        } else {
+          vendedores[s.vendedor].cantNormal += qty;
+        }
+        
+        vendedores[s.vendedor].ventas += totalItem;
+    };
+
+    if (s.items && s.items.length > 0) {
+        s.items.forEach(item => {
+            processEntry(item.tipoComision, item.cantidad, item.codigoFardo, item.valorUnitario * item.cantidad);
+        });
+    } else {
+        processEntry(s.tipoComision, s.cantidad || 1, s.codigoFardo || '', s.total || 0);
+    }
   });
+
+  const totalFardos = Object.values(vendedores).reduce((acc, v) => acc + v.fardos, 0);
+  const totalLotes = Object.values(vendedores).reduce((acc, v) => acc + v.lotes, 0);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -55,8 +75,8 @@ export const ReportModal = ({ isOpen, onClose, title, sales, stats }: ReportProp
             </div>
             <div className="bg-slate-50 p-6 rounded-[24px] border border-slate-100 text-center">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Resumen Unidades</p>
-              <p className="text-xl font-black text-red-600">
-                📦 Fardos: {conteoVariantes["FARDO"] || 0} | 🏷️ Lotes: {conteoVariantes["LOTE"] || 0}
+              <p className="text-xl font-black text-slate-900 uppercase">
+                📦 Fardos: <span className="text-blue-600">{totalFardos}</span> | 🏷️ Lotes: <span className="text-amber-600">{totalLotes}</span>
               </p>
             </div>
           </div>

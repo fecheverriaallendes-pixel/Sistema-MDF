@@ -17,7 +17,7 @@ export default function Configuracion() {
     settings, updateSettings, playSound, syncWithCloud, pushToCloud,
     isSyncing, lastSync, staff, addStaff, removeStaff, sales, stock, purchases,
     clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier,
-    fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock
+    fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, deleteAllSales
   } = useStore();
   
   const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS'>('RED');

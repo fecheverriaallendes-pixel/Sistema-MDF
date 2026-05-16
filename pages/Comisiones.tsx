@@ -143,22 +143,35 @@ export default function Comisiones() {
       if (!report[vendedorName]) {
         report[vendedorName] = { total: 0, count: 0, details: [], sales: [], adjustments: [] };
       }
-      
-      // Si la venta no tiene tipoComision (datos viejos), asumimos FARDO_NORMAL o 0
-      const tipo = s.tipoComision || CommissionType.FARDO_NORMAL;
-      const commValue = COMMISSION_VALUES[tipo] || 0;
-      
-      report[vendedorName].total += commValue;
-      report[vendedorName].count += 1;
-      report[vendedorName].sales.push(s);
 
-      const existingType = report[vendedorName].details.find(d => d.type === tipo);
-      if (existingType) {
-        existingType.qty += 1;
-        existingType.subtotal += commValue;
+      // Helper function to process a single commissionable entry
+      const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string) => {
+          const finalTipo = tipo || (codigo.startsWith('L') ? CommissionType.LOTE : CommissionType.FARDO_NORMAL);
+          const commValue = (COMMISSION_VALUES[finalTipo] || 0) * qty;
+          
+          report[vendedorName].total += commValue;
+          report[vendedorName].count += qty;
+
+          const existingType = report[vendedorName].details.find(d => d.type === finalTipo);
+          if (existingType) {
+            existingType.qty += qty;
+            existingType.subtotal += commValue;
+          } else {
+            report[vendedorName].details.push({ type: finalTipo, qty: qty, subtotal: commValue });
+          }
+      };
+
+      if (s.items && s.items.length > 0) {
+          // Multi-item sale (Nota de Venta)
+          s.items.forEach(item => {
+              processEntry(item.tipoComision, item.cantidad, item.codigoFardo);
+          });
       } else {
-        report[vendedorName].details.push({ type: tipo, qty: 1, subtotal: commValue });
+          // Individual sale
+          processEntry(s.tipoComision, s.cantidad || 1, s.codigoFardo || '');
       }
+      
+      report[vendedorName].sales.push(s);
     });
 
     // Process Adjustments
@@ -367,9 +380,10 @@ export default function Comisiones() {
                             <p className="text-[9px] font-bold text-slate-400 uppercase">{s.fecha}</p>
                          </div>
                        </div>
-                       <div className="text-right">
-                         <p className="text-sm font-black text-slate-900">+ ${((s.tipoComision && COMMISSION_VALUES[s.tipoComision]) || 3000).toLocaleString()}</p>
-                       </div>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-slate-900">+ ${((COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000) * (s.cantidad || 1)).toLocaleString()}</p>
+                          {(s.cantidad || 1) > 1 && <p className="text-[9px] text-slate-400 font-bold uppercase">{s.cantidad} Unid. x ${(COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000).toLocaleString()}</p>}
+                        </div>
                      </div>
                    ))}
                  </div>
@@ -418,7 +432,10 @@ export default function Comisiones() {
                      <td className="py-2">{s.fecha}</td>
                      <td className="py-2">#{s.numeroVenta}</td>
                      <td className="py-2 font-bold uppercase">{stock.find(item => item.codigo === s.codigoFardo)?.tipo || s.codigoFardo}</td>
-                     <td className="py-2 text-right font-black">${((s.tipoComision && COMMISSION_VALUES[s.tipoComision]) || 3000).toLocaleString()}</td>
+                      <td className="py-2 text-right font-black">
+                        ${((COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000) * (s.cantidad || 1)).toLocaleString()}
+                        {(s.cantidad || 1) > 1 && <span className="block text-[8px] opacity-70">({s.cantidad} x {(COMMISSION_VALUES[s.tipoComision || CommissionType.FARDO_NORMAL] || 3000).toLocaleString()})</span>}
+                      </td>
                    </tr>
                  ))}
                  {data.adjustments.map(adj => (

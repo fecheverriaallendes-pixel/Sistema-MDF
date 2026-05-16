@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
+import { StockItem } from '../types';
 
 // Extend jsPDF interface for autotable
 declare module 'jspdf' {
@@ -48,7 +49,7 @@ const TableHeader = () => (
   </thead>
 );
 
-const ProductRow = ({ item }: { item: any }) => (
+const ProductRow: React.FC<{ item: StockItem }> = ({ item }) => (
   <tr className="border-b border-slate-100 print:border-slate-200">
     <td className="px-2 py-1.5 font-mono font-bold text-slate-400 text-[10px] uppercase">
       {item.codigo.replace('MDF-','')}
@@ -209,9 +210,9 @@ export default function Catalogo() {
               8: { cellWidth: 17, halign: 'right', fontStyle: 'bold' }
             },
             margin: { top: 40, bottom: 15, left: 8, right: 8 },
-            didDrawPage: (data: any) => {
+            didDrawPage: () => {
               // Dibujar encabezado en cada página (opcional, el rectangulo oscuro solo en la 1)
-              if (pdf.internal.getNumberOfPages() > 1) {
+              if (pdf.getNumberOfPages() > 1) {
                 pdf.setFillColor(15, 23, 42);
                 pdf.rect(0, 0, 210, 15, 'F');
                 pdf.setTextColor(255, 255, 255);
@@ -222,7 +223,7 @@ export default function Catalogo() {
               // Footer info
               pdf.setFontSize(7);
               pdf.setTextColor(148, 163, 184);
-              const pageNum = pdf.internal.getNumberOfPages();
+              const pageNum = pdf.getNumberOfPages();
               pdf.text(`Página ${pageNum}`, 14, pdf.internal.pageSize.getHeight() - 8);
               pdf.text('Precios sujetos a cambio sin previo aviso • CUADERNO MDF CHILE', 105, pdf.internal.pageSize.getHeight() - 8, { align: 'center' });
             }

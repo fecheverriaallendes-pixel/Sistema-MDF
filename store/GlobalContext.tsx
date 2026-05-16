@@ -1,20 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES } from '../types';
 import { db, storage } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const INITIAL_MASTER_STOCK: Omit<StockItem, 'id' | 'disponible'>[] = [
-  { codigo: 'MDF-001', tipo: 'Abrigo Corto Mujer CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 120000, stockActual: 0, unidad: 'FARDO' },
-  { codigo: 'MDF-002', tipo: 'Abrigo Lana Hombre Corto IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 90000, stockActual: 6, unidad: 'FARDO' },
-  { codigo: 'MDF-003', tipo: 'Abrigo Lana Mujer Corto IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 90000, stockActual: 1, unidad: 'FARDO' },
-  { codigo: 'MDF-004', tipo: 'Abrigo largo CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 130000, stockActual: 0, unidad: 'FARDO' },
-  { codigo: 'MDF-005', tipo: 'Abrigo Moderno BETA', proveedor: 'BETA', precioCosto: 0, precioSugerido: 140000, stockActual: 0, unidad: 'FARDO' },
-  { codigo: 'MDF-006', tipo: 'Abrigo mujer JK', proveedor: 'JK', precioCosto: 0, precioSugerido: 90000, stockActual: 3, unidad: 'FARDO' },
-  { codigo: 'MDF-007', tipo: 'Accesorios Navidad IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 140000, stockActual: 3, unidad: 'FARDO' },
-  { codigo: 'MDF-008', tipo: 'Artes Marciales CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 80000, stockActual: 1, unidad: 'FARDO' },
-  { codigo: 'MDF-009', tipo: 'Baby Platinium IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 180000, stockActual: 0, unidad: 'FARDO' },
-  { codigo: 'MDF-010', tipo: 'Banana Republic IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 150000, stockActual: 0, unidad: 'FARDO' },
+  { codigo: 'MDF-001', tipo: 'Abrigo Corto Mujer CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 120000, stockActual: 0, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-002', tipo: 'Abrigo Lana Hombre Corto IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 90000, stockActual: 6, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-003', tipo: 'Abrigo Lana Mujer Corto IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 90000, stockActual: 1, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-004', tipo: 'Abrigo largo CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 130000, stockActual: 0, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-005', tipo: 'Abrigo Moderno BETA', proveedor: 'BETA', precioCosto: 0, precioSugerido: 140000, stockActual: 0, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-006', tipo: 'Abrigo mujer JK', proveedor: 'JK', precioCosto: 0, precioSugerido: 90000, stockActual: 3, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-007', tipo: 'Accesorios Navidad IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 140000, stockActual: 3, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-008', tipo: 'Artes Marciales CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 80000, stockActual: 1, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-009', tipo: 'Baby Platinium IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 180000, stockActual: 0, unidad: 'FARDO', categoria: 'FARDO' },
+  { codigo: 'MDF-010', tipo: 'Banana Republic IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 150000, stockActual: 0, unidad: 'FARDO', categoria: 'FARDO' },
   { codigo: 'MDF-011', tipo: 'Blazer Invierno CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 180000, stockActual: 1, unidad: 'FARDO' },
   { codigo: 'MDF-012', tipo: 'Blazer Juvenil IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 120000, stockActual: 0, unidad: 'FARDO' },
   { codigo: 'MDF-013', tipo: 'Blazer verano', proveedor: 'General', precioCosto: 0, precioSugerido: 180000, stockActual: 0, unidad: 'FARDO' },
@@ -442,6 +442,8 @@ interface StoreContextType {
   deleteCheque: (id: string) => void;
   clearAllSales: () => void;
   clearAllStock: () => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
+  deleteAllSales: () => Promise<void>;
   addStockItem: (item: Omit<StockItem, 'id' | 'disponible'>) => void;
   updateStockItem: (id: string, updatedData: Partial<StockItem>) => void;
   togglePromocion: (id: string) => void;

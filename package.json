@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "lint": "tsc --noEmit",
     "import": "tsx import_stock_v3.ts"
   },
   "dependencies": {
