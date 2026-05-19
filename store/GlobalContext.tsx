@@ -771,7 +771,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const markAsSent = (saleId: string) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
-      setDoc(doc(db, 'sales', saleId), { ...sale, status: SaleStatus.ENVIADO, enviado: true, fechaDespacho: new Date().toISOString(), estadoDespacho: DispatchStatus.EN_RUTA });
+      const isLocal = sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO');
+      setDoc(doc(db, 'sales', saleId), { 
+        ...sale, 
+        status: SaleStatus.ENVIADO, 
+        enviado: true, 
+        fechaDespacho: new Date().toISOString(), 
+        estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA 
+      });
       playSound('success');
     }
   };

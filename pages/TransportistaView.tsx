@@ -1,17 +1,33 @@
 import React, { useState } from 'react';
-import { Truck, CheckCircle2, AlertCircle, Camera, Trash2 } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, Trash2, Search } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
-import { DispatchStatus, Sale, StaffRole } from '../types';
+import { DispatchStatus, Sale, StaffRole, DispatchType } from '../types';
 
 export default function TransportistaView() {
   const { sales, updateDispatchStatus, currentUser, deleteSale } = useStore();
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [activeTab, setActiveTab] = useState<'PENDING' | 'FINISHED'>('PENDING');
+  const [searchTerm, setSearchTerm] = useState('');
 
   if (!currentUser) return null;
 
   const isAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
-  const filteredSales = sales.filter(s => (isAdmin || s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase()) && s.enviado);
+  
+  const filteredSales = sales.filter(s => {
+    const isOwner = (isAdmin || s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase());
+    const isDispatched = s.enviado;
+    const isNotWithdrawal = s.tipoDespacho !== DispatchType.RETIRO;
+    const isImmediateOrNoJunta = (!s.juntaCompra || s.juntaCompra === 'DESPACHO INMEDIATO');
+    
+    // Applying search term if it exists
+    const searchMatch = !searchTerm || 
+      s.transportista?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.agencia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.numeroVenta.toString().includes(searchTerm) ||
+      s.cliente?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return isOwner && isDispatched && isNotWithdrawal && isImmediateOrNoJunta && searchMatch;
+  });
   
   const assignedSales = activeTab === 'PENDING' 
     ? filteredSales.filter(s => s.estadoDespacho !== DispatchStatus.ENTREGADO)
@@ -30,6 +46,18 @@ export default function TransportistaView() {
     <div className="p-4 space-y-6">
       <h1 className="text-2xl font-black text-slate-900 uppercase">Mis Despachos</h1>
       
+      {/* Search Bar - Visible for Admins/Vendedores or just useful for everyone */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input 
+          type="text"
+          placeholder="Buscar por transportista, agencia, # o cliente..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-12 pr-4 py-4 bg-white border-2 border-slate-100 rounded-3xl font-bold text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-emerald-500 outline-none transition-all"
+        />
+      </div>
+
       <div className="flex bg-slate-100 p-1 rounded-full">
          <button onClick={() => setActiveTab('PENDING')} className={`flex-1 py-3 text-xs font-black rounded-full uppercase ${activeTab === 'PENDING' ? 'bg-white shadow' : ''}`}>Pendientes</button>
          <button onClick={() => setActiveTab('FINISHED')} className={`flex-1 py-3 text-xs font-black rounded-full uppercase ${activeTab === 'FINISHED' ? 'bg-white shadow' : ''}`}>Entregados</button>

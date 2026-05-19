@@ -30,7 +30,7 @@ export default function Despachos() {
   const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'HISTORIAL'>('AGENCIA');
+  const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'RETIRO' | 'HISTORIAL'>('AGENCIA');
   const [transportistaFilter, setTransportistaFilter] = useState('');
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
 
@@ -39,28 +39,32 @@ export default function Despachos() {
   // Filter logic
   let agencySales = [];
   let homeSales = [];
+  let withdrawalSales = [];
   let historySales = [];
 
   const baseSales = searchTerm ? allSales.filter(s => 
       s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
       s.numeroVenta.toString().includes(searchTerm) ||
-      s.codigoFardo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.codigoFardo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.transportista?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
       (s.agencia?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
   ) : allSales;
 
   if (searchTerm) {
-    agencySales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA);
-    homeSales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
+    agencySales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+    homeSales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+    withdrawalSales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
     historySales = baseSales.filter(s => s.status === SaleStatus.ENVIADO);
   } else {
-    agencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA);
-    homeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO);
+    agencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+    homeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+    withdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
     historySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
   }
   
   let currentList = activeTab === 'AGENCIA' ? agencySales 
                     : activeTab === 'DOMICILIO' ? homeSales 
+                    : activeTab === 'RETIRO' ? withdrawalSales
                     : historySales;
 
   if (transportistaFilter) {
@@ -161,7 +165,7 @@ export default function Despachos() {
       </div>
 
       {/* Tabs */}
-      <div className="flex p-1.5 bg-slate-200 rounded-[24px] w-full max-w-3xl mx-auto shadow-inner">
+      <div className="flex p-1.5 bg-slate-200 rounded-[24px] w-full max-w-5xl mx-auto shadow-inner">
         <button 
           onClick={() => { setActiveTab('AGENCIA'); playSound('click'); }}
           className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'AGENCIA' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
@@ -173,6 +177,12 @@ export default function Despachos() {
           className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'DOMICILIO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
           <Home size={16} /> Despacho Domicilio <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{homeSales.length}</span>
+        </button>
+        <button 
+          onClick={() => { setActiveTab('RETIRO'); playSound('click'); }}
+          className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'RETIRO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          <Package size={16} /> Retiro Local / Junta Compra <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{withdrawalSales.length}</span>
         </button>
         <button 
           onClick={() => { setActiveTab('HISTORIAL'); playSound('click'); }}
@@ -279,7 +289,11 @@ export default function Despachos() {
                 {/* Verification Section */}
                 {verifyingSaleId === sale.id && sale.status === SaleStatus.PENDIENTE && (
                   <div className="bg-amber-50 p-4 rounded-[24px] border-2 border-amber-100 animate-in zoom-in duration-300">
-                    <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-3">Verificación de Carga</p>
+                    {sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO') ? (
+                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-3">Verificación para Retiro</p>
+                    ) : (
+                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-3">Verificación para Envío</p>
+                    )}
                     
                     <div className="flex items-center justify-center gap-4 mb-4">
                       <button 
@@ -304,7 +318,7 @@ export default function Despachos() {
 
                     {sale.itemsDespachados === sale.cantidad ? (
                       <div className="text-center text-[10px] font-black text-emerald-600 bg-emerald-100 py-2 rounded-xl mb-3 animate-pulse">
-                        ¡CARGA COMPLETA!
+                        ¡CANTIDAD VERIFICADA!
                       </div>
                     ) : (sale.itemsDespachados || 0) > sale.cantidad ? (
                       <div className="text-center text-[10px] font-black text-red-600 bg-red-100 py-2 rounded-xl mb-3">
@@ -312,7 +326,7 @@ export default function Despachos() {
                       </div>
                     ) : (
                       <div className="text-center text-[10px] font-bold text-amber-600/70 mb-3">
-                        Confirma la cantidad física
+                        Confirma los productos físicamente
                       </div>
                     )}
 
@@ -364,7 +378,7 @@ export default function Despachos() {
                       disabled={(sale.itemsDespachados || 0) !== sale.cantidad || ((sale.tipoDespacho === DispatchType.DOMICILIO || sale.tipoDespacho === DispatchType.AGENCIA) && !sale.transportista)}
                       className="w-full py-3 bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
                     >
-                      Confirmar Salida
+                      {sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO') ? 'Confirmar Retiro' : 'Confirmar Salida'}
                     </button>
                   </div>
                 )}
