@@ -154,6 +154,7 @@ export interface Sale {
   transportista?: string; // Nombre del transportista para despacho a domicilio
   timestamp?: string; // ISO date
   impresa?: boolean;
+  etiquetador?: string;
   esManual?: boolean;
 }
 

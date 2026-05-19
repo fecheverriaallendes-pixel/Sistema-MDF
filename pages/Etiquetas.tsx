@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Printer, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Printer, ArrowLeft, CheckCircle2, AlertCircle, User, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
 import { Sale, SaleType, SaleStatus, CommissionType, StaffRole } from '../types';
@@ -16,11 +16,14 @@ const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 import { Label } from '../components/Label';
 
 export default function Etiquetas() {
-  const { sales, stock, currentUser, updateSale } = useStore();
+  const { sales, stock, currentUser, updateSale, playSound } = useStore();
   const [individualSale, setIndividualSale] = useState<Sale | null>(null);
   const [showDemo, setShowDemo] = useState(false);
   const [showPrinted, setShowPrinted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showEtiquetadorModal, setShowEtiquetadorModal] = useState(false);
+  const [etiquetadorName, setEtiquetadorName] = useState('');
+  const [pendingSaleId, setPendingSaleId] = useState<string | null>(null); // 'all' for print all
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const readyToPrint = sales.filter(s => {
     if (!s) return false;
@@ -58,14 +61,45 @@ export default function Etiquetas() {
   }, []);
 
   const handlePrintAll = () => {
-    readyToPrint.forEach(s => updateSale(s.id, { impresa: true }));
+    if (!etiquetadorName) {
+      setPendingSaleId('all');
+      setShowEtiquetadorModal(true);
+      return;
+    }
+    readyToPrint.forEach(s => updateSale(s.id, { impresa: true, etiquetador: etiquetadorName }));
     setIndividualSale(null);
+    setShowEtiquetadorModal(false);
     setTimeout(() => window.print(), 50);
   };
 
   const handlePrintSingle = (sale: Sale) => {
-    updateSale(sale.id, { impresa: true });
+    if (!etiquetadorName) {
+      setPendingSaleId(sale.id);
+      setShowEtiquetadorModal(true);
+      return;
+    }
+    updateSale(sale.id, { impresa: true, etiquetador: etiquetadorName });
     setIndividualSale(sale);
+    setShowEtiquetadorModal(false);
+    setTimeout(() => window.print(), 50);
+  };
+
+  const confirmPrint = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!etiquetadorName.trim()) return;
+    
+    if (pendingSaleId === 'all') {
+      readyToPrint.forEach(s => updateSale(s.id, { impresa: true, etiquetador: etiquetadorName }));
+      setIndividualSale(null);
+    } else if (pendingSaleId) {
+      const sale = sales.find(s => s.id === pendingSaleId);
+      if (sale) {
+        updateSale(sale.id, { impresa: true, etiquetador: etiquetadorName });
+        setIndividualSale(sale);
+      }
+    }
+    
+    setShowEtiquetadorModal(false);
     setTimeout(() => window.print(), 50);
   };
 
@@ -107,7 +141,14 @@ export default function Etiquetas() {
           <div key={sale.id} className="relative group animate-in fade-in slide-in-from-bottom duration-500 w-full flex flex-col items-center">
             <div className={`relative bg-white p-2 border-2 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-2xl hover:border-emerald-400 transition-all shadow-lg scale-[0.4] origin-top -mb-[90mm] overflow-hidden`}>
               {sale.impresa && (
-                <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-black px-2 py-1 rounded-full shadow-lg z-10">IMPRESO</div>
+                <div className="absolute top-4 right-4 flex flex-col items-end gap-1 z-10">
+                  <div className="bg-emerald-500 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-lg">IMPRESO</div>
+                  {sale.etiquetador && (
+                    <div className="bg-white/90 text-slate-900 text-[8px] font-black px-2 py-1 rounded-full border border-emerald-200 shadow-sm flex items-center gap-1">
+                      <User size={8} /> {sale.etiquetador}
+                    </div>
+                  )}
+                </div>
               )}
               <Label sale={sale} stock={stock} />
               <div className="absolute inset-0 bg-slate-900/80 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center backdrop-blur-sm">
@@ -130,6 +171,52 @@ export default function Etiquetas() {
       <div className="hidden print-only">
         {individualSale ? <div className="label-container"><Label sale={individualSale} stock={stock} /></div> : readyToPrint.map((sale) => <div key={sale.id} className="label-container"><Label sale={sale} stock={stock} /></div>)}
       </div>
+
+      {/* Etiquetador Modal */}
+      {showEtiquetadorModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 no-print">
+          <div className="bg-white rounded-[32px] w-full max-w-md p-8 shadow-2xl animate-in zoom-in slide-in-from-bottom-8 duration-500">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 uppercase">¿Quién etiqueta?</h3>
+                <p className="text-slate-500 text-sm font-medium">Ingresa el nombre de la persona a cargo</p>
+              </div>
+              <button onClick={() => setShowEtiquetadorModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={24} /></button>
+            </div>
+
+            <form onSubmit={confirmPrint} className="space-y-6">
+              <div className="relative">
+                <User className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={24} />
+                <input 
+                  autoFocus
+                  type="text" 
+                  placeholder="Nombre del etiquetador..."
+                  value={etiquetadorName}
+                  onChange={(e) => setEtiquetadorName(e.target.value)}
+                  className="w-full pl-14 pr-6 py-5 bg-slate-50 border-2 border-slate-100 rounded-3xl font-black text-xl text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white outline-none transition-all shadow-inner"
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <button 
+                  type="button"
+                  onClick={() => setShowEtiquetadorModal(false)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={!etiquetadorName.trim()}
+                  className="flex-[2] py-4 bg-emerald-500 disabled:bg-slate-200 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
+                >
+                  Iniciar Impresión
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       <style>{`
         @media print {
           @page { size: 100mm 150mm portrait; margin: 0; }
