@@ -29,38 +29,45 @@ import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
 export default function Despachos() {
   const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [vendedorFilter, setVendedorFilter] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'RETIRO' | 'HISTORIAL'>('AGENCIA');
   const [transportistaFilter, setTransportistaFilter] = useState('');
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
 
   const allSales = sales;
+  const vendedores = Array.from(new Set(sales.map(s => s.vendedor).filter(Boolean)));
   
   // Filter logic
-  let agencySales = [];
-  let homeSales = [];
-  let withdrawalSales = [];
-  let historySales = [];
+  const filteredBase = allSales.filter(s => {
+    // Date filter
+    if (startDate && new Date(s.fecha) < new Date(startDate)) return false;
+    if (endDate && new Date(s.fecha) > new Date(endDate)) return false;
+    
+    // Vendedor filter
+    if (vendedorFilter && s.vendedor !== vendedorFilter) return false;
 
-  const baseSales = searchTerm ? allSales.filter(s => 
-      s.cliente.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      s.numeroVenta.toString().includes(searchTerm) ||
-      s.codigoFardo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.transportista?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
-      (s.agencia?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-  ) : allSales;
+    // Search term
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      return (
+        s.cliente.toLowerCase().includes(search) || 
+        s.numeroVenta.toString().includes(search) ||
+        s.codigoFardo?.toLowerCase().includes(search) ||
+        (s.transportista?.toLowerCase().includes(search) ?? false) ||
+        (s.agencia?.toLowerCase().includes(search) ?? false)
+      );
+    }
+    
+    return true;
+  });
 
-  if (searchTerm) {
-    agencySales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-    homeSales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-    withdrawalSales = baseSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
-    historySales = baseSales.filter(s => s.status === SaleStatus.ENVIADO);
-  } else {
-    agencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-    homeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-    withdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
-    historySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
-  }
+  const agencySales = filteredBase.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+  const homeSales = filteredBase.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+  const withdrawalSales = filteredBase.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
+  const historySales = filteredBase.filter(s => s.status === SaleStatus.ENVIADO);
   
   let currentList = activeTab === 'AGENCIA' ? agencySales 
                     : activeTab === 'DOMICILIO' ? homeSales 
@@ -192,28 +199,86 @@ export default function Despachos() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="flex gap-4 max-w-4xl mx-auto">
-        <div className="relative group flex-1">
-          <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors">
-            <Search size={24} />
-          </div>
-          <input 
-            type="text" 
-            placeholder="Buscar cliente, código, transporte o agencia..."
-            className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-200 outline-none font-bold text-base shadow-sm transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* Search and Filters */}
+      <div className="space-y-4 max-w-6xl mx-auto">
+        <div className="flex flex-col lg:flex-row gap-4 items-center">
+            <div className="relative group flex-1 w-full">
+              <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors">
+                <Search size={24} />
+              </div>
+              <input 
+                type="text" 
+                placeholder="Buscar cliente, código, transporte o agencia..."
+                className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-200 outline-none font-bold text-base shadow-sm transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              <div className="flex-1 lg:flex-none">
+                <select 
+                    className="w-full px-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 font-bold text-sm outline-none"
+                    value={transportistaFilter}
+                    onChange={(e) => setTransportistaFilter(e.target.value)}
+                >
+                    <option value="">Transporte (Todos)</option>
+                    {carriers.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 lg:flex-none">
+                <select 
+                    className="w-full px-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 font-bold text-sm outline-none"
+                    value={vendedorFilter}
+                    onChange={(e) => setVendedorFilter(e.target.value)}
+                >
+                    <option value="">Vendedor (Todos)</option>
+                    {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            </div>
         </div>
-        <select 
-            className="px-6 bg-white rounded-[24px] border-2 border-slate-100 font-bold text-sm outline-none"
-            value={transportistaFilter}
-            onChange={(e) => setTransportistaFilter(e.target.value)}
-        >
-            <option value="">Todos los transportistas</option>
-            {carriers.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+
+        {/* Date Ranges */}
+        <div className="bg-white p-3 rounded-[32px] border-2 border-slate-100 shadow-sm flex flex-wrap items-center justify-center gap-6">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Desde</span>
+            <input 
+              type="date" 
+              className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-xs outline-none focus:border-amber-500"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div className="hidden md:block text-slate-200">|</div>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hasta</span>
+            <input 
+              type="date" 
+              className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-xs outline-none focus:border-amber-500"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+          {(startDate || endDate || vendedorFilter || searchTerm || transportistaFilter) && (
+            <>
+              <div className="hidden md:block text-slate-200">|</div>
+              <button 
+                onClick={() => {
+                  setStartDate('');
+                  setEndDate('');
+                  setVendedorFilter('');
+                  setSearchTerm('');
+                  setTransportistaFilter('');
+                  playSound('click');
+                }}
+                className="px-4 py-2 text-[10px] font-black text-red-500 hover:text-red-600 uppercase tracking-widest"
+              >
+                Limpiar Filtros
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Content */}

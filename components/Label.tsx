@@ -80,10 +80,20 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
               <p className="text-[10px] font-bold leading-tight uppercase">🔄 VIDEO OBLIGATORIO PARA CAMBIOS</p>
               <p className="text-[8px] text-slate-600 mt-1 leading-snug">Grabe la apertura de su paquete de inicio a fin sin cortes ni ediciones.</p>
             </div>
-            <p className="text-[8px] text-slate-500 uppercase mt-4 text-center font-bold">Vendedor: {sale.vendedor || 'SISTEMA'}</p>
+            <div className="mt-4 text-center">
+              <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">Vendedor: {sale.vendedor || 'SISTEMA'}</p>
+              {sale.etiquetador && (
+                <p className="text-[7px] text-slate-400 uppercase font-medium mt-1 leading-none">Etiquetado por: {sale.etiquetador}</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
+      {sale.tipoVenta === 'Live TikTok' && (
+        <p className="text-[7px] font-black text-slate-200 absolute bottom-4 left-1/2 -translate-x-1/2 uppercase tracking-[0.3em] pointer-events-none">
+          TikTok Live Session
+        </p>
+      )}
     </div>
   );
 };
