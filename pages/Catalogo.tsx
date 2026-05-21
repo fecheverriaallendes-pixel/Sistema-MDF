@@ -275,7 +275,7 @@ export default function Catalogo() {
 
   const handleShareLink = () => {
     playSound('success');
-    const catalogUrl = `${window.location.origin}${window.location.pathname}#/c`;
+    const catalogUrl = `${window.location.origin}${window.location.pathname}#/catalogo-publico`;
     navigator.clipboard.writeText(catalogUrl).then(() => {
       setShowCopyFeedback(true);
       setTimeout(() => setShowCopyFeedback(false), 3000);

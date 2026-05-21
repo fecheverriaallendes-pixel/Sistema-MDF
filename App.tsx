@@ -188,7 +188,7 @@ export default function App() {
           <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/c" element={<CatalogoPublico />} />
+              <Route path="/catalogo-publico" element={<CatalogoPublico />} />
               <Route path="/dashboard" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Dashboard /></ProtectedRoute>} />
               <Route path="/catalogo" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Catalogo /></ProtectedRoute>} />
               <Route path="/registrar" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><RegistrarVenta /></ProtectedRoute>} />

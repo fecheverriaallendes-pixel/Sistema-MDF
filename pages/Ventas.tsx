@@ -281,27 +281,63 @@ export default function Ventas() {
           <div className="bg-white rounded-[56px] shadow-[0_50px_100px_rgba(0,0,0,0.5)] w-full max-w-2xl overflow-hidden animate-in zoom-in duration-300">
             <div className="p-10 bg-slate-900 text-white flex justify-between items-center relative">
               <div className="relative z-10">
-                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Completar Datos de Venta Live</p>
-                <h3 className="text-4xl font-black uppercase tracking-tighter">CLIENTE: {editingSale.cliente}</h3>
+                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mb-2">
+                  {editingSale.datosCompletos ? 'Editar Datos de Venta' : 'Completar Datos de Venta Live'}
+                </p>
+                <h3 className="text-4xl font-black uppercase tracking-tighter">
+                  {editingSale.datosCompletos ? `VENTA #${editingSale.numeroVenta}` : `CLIENTE: ${editingSale.cliente}`}
+                </h3>
               </div>
               <button onClick={() => setEditingSale(null)} className="relative z-10 p-3 hover:bg-white/10 rounded-full transition-colors">
                 <X size={36} />
               </button>
             </div>
             
-            <form onSubmit={handleSaveSale} className="p-10 space-y-8">
+            <form onSubmit={handleSaveSale} className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block flex items-center gap-2">
+                    <UserCheck size={14} className="text-indigo-500" /> Nombre del Cliente
+                  </label>
+                  <input required type="text" className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase" placeholder="NOMBRE COMPLETO" value={editingSale.cliente || ''} onChange={(e) => setEditingSale({...editingSale, cliente: e.target.value.toUpperCase()})}/>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block flex items-center gap-2">
+                    <Phone size={14} className="text-emerald-500" /> Teléfono / WhatsApp
+                  </label>
+                  <input required type="text" className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" placeholder="+56 9 ..." value={editingSale.telefono || ''} onChange={(e) => setEditingSale({...editingSale, telefono: e.target.value})}/>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block flex items-center gap-2">
                     <CreditCard size={14} className="text-blue-500" /> RUT Cliente
                   </label>
-                  <input required type="text" className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" placeholder="12.345.678-9" value={editingSale.rut || ''} onChange={(e) => setEditingSale({...editingSale, rut: e.target.value})}/>
+                  <input required type="text" className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase" placeholder="12.345.678-9" value={editingSale.rut || ''} onChange={(e) => setEditingSale({...editingSale, rut: e.target.value.toUpperCase()})}/>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block flex items-center gap-2">
+                    <Info size={14} className="text-purple-500" /> Vendedor Asignado
+                  </label>
+                  <input required type="text" className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase" placeholder="NOMBRE VENDEDOR" value={editingSale.vendedor || ''} onChange={(e) => setEditingSale({...editingSale, vendedor: e.target.value.toUpperCase()})}/>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Estado Pago Actual</label>
                   <select className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" value={editingSale.estadoPago} onChange={(e) => setEditingSale({...editingSale, estadoPago: e.target.value})}>
                     <option value="Pendiente">PENDIENTE DE PAGO</option>
                     <option value="Pagado">YA PAGADO</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Prioridad Envío</label>
+                  <select className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" value={editingSale.juntaCompra} onChange={(e) => setEditingSale({...editingSale, juntaCompra: e.target.value})}>
+                    <option value="DESPACHO INMEDIATO">DESPACHO INMEDIATO</option>
+                    <option value="JUNTA COMPRA">JUNTA COMPRA</option>
+                    <option value="RETIRO BODEGA">RETIRO BODEGA</option>
                   </select>
                 </div>
               </div>
@@ -345,7 +381,7 @@ export default function Ventas() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Tipo de Mercadería (Obligatorio)</label>
                   <select 
@@ -360,14 +396,6 @@ export default function Ventas() {
                     <option value="LOTE">LOTE</option>
                     <option value="SACO">SACO</option>
                     <option value="PACK">PACK</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Prioridad Envío</label>
-                  <select className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" value={editingSale.juntaCompra} onChange={(e) => setEditingSale({...editingSale, juntaCompra: e.target.value})}>
-                    <option value="DESPACHO INMEDIATO">DESPACHO INMEDIATO</option>
-                    <option value="JUNTA COMPRA">JUNTA COMPRA</option>
-                    <option value="RETIRO BODEGA">RETIRO BODEGA</option>
                   </select>
                 </div>
               </div>
