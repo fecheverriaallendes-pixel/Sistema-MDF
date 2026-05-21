@@ -21,7 +21,9 @@ import {
   Building2,
   ArrowRight,
   Camera,
-  Trash2
+  Trash2,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
@@ -35,6 +37,7 @@ export default function Despachos() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'RETIRO' | 'HISTORIAL'>('AGENCIA');
   const [transportistaFilter, setTransportistaFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
 
   const allSales = sales;
@@ -77,6 +80,13 @@ export default function Despachos() {
   if (transportistaFilter) {
       currentList = currentList.filter(s => s.transportista === transportistaFilter);
   }
+
+  // Sorting
+  currentList = [...currentList].sort((a, b) => {
+    const dateA = new Date(a.fecha).getTime();
+    const dateB = new Date(b.fecha).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
 
   const handleExportExcel = () => {
     import('xlsx').then(XLSX => {
@@ -259,6 +269,27 @@ export default function Despachos() {
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
             />
+          </div>
+          <div className="hidden md:block text-slate-200">|</div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Orden</span>
+            <button 
+              onClick={() => {
+                setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+                playSound('click');
+              }}
+              className="group flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl hover:border-amber-500 transition-all font-bold text-[10px] uppercase tracking-widest text-slate-600"
+            >
+              {sortOrder === 'desc' ? (
+                <>
+                  <ArrowDownWideNarrow size={14} className="text-amber-500" /> Recientes primero
+                </>
+              ) : (
+                <>
+                  <ArrowUpNarrowWide size={14} className="text-amber-500" /> Antiguos primero
+                </>
+              )}
+            </button>
           </div>
           {(startDate || endDate || vendedorFilter || searchTerm || transportistaFilter) && (
             <>
