@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Printer, ArrowLeft, CheckCircle2, AlertCircle, User, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
@@ -18,6 +18,8 @@ import { Label } from '../components/Label';
 export default function Etiquetas() {
   const { sales, stock, currentUser, updateSale, playSound } = useStore();
   const [salesToPrint, setSalesToPrint] = useState<Sale[]>([]);
+  // Use a ref to store sales currently in the queue so the print callback can access them safely
+  const printingSalesRef = useRef<Sale[]>([]);
   const [showDemo, setShowDemo] = useState(false);
   const [showPrinted, setShowPrinted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,10 +57,40 @@ export default function Etiquetas() {
   };
 
   useEffect(() => {
-    const handleAfterPrint = () => setSalesToPrint([]);
+    const handleAfterPrint = () => {
+      if (printingSalesRef.current.length > 0) {
+        printingSalesRef.current.forEach(s => {
+          updateSale(s.id, { impresa: true, etiquetador: s.etiquetador });
+        });
+        printingSalesRef.current = [];
+      }
+      setSalesToPrint([]);
+    };
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
-  }, []);
+  }, [updateSale]);
+
+  useEffect(() => {
+    if (salesToPrint.length > 0) {
+      printingSalesRef.current = salesToPrint;
+      
+      const timer = setTimeout(() => {
+        window.print();
+        
+        // Fallback for environments where afterprint might not trigger or we want immediate sync
+        const activePrintingSales = printingSalesRef.current;
+        if (activePrintingSales.length > 0) {
+          activePrintingSales.forEach(s => {
+            updateSale(s.id, { impresa: true, etiquetador: s.etiquetador });
+          });
+          printingSalesRef.current = [];
+          setSalesToPrint([]);
+        }
+      }, 250);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [salesToPrint, updateSale]);
 
   const handlePrintAll = () => {
     if (!etiquetadorName) {
@@ -68,9 +100,7 @@ export default function Etiquetas() {
     }
     const updatedSales = readyToPrint.map(s => ({ ...s, impresa: true, etiquetador: etiquetadorName }));
     setSalesToPrint(updatedSales);
-    readyToPrint.forEach(s => updateSale(s.id, { impresa: true, etiquetador: etiquetadorName }));
     setShowEtiquetadorModal(false);
-    setTimeout(() => window.print(), 100);
   };
 
   const handlePrintSingle = (sale: Sale) => {
@@ -81,9 +111,7 @@ export default function Etiquetas() {
     }
     const updated = { ...sale, impresa: true, etiquetador: etiquetadorName };
     setSalesToPrint([updated]);
-    updateSale(sale.id, { impresa: true, etiquetador: etiquetadorName });
     setShowEtiquetadorModal(false);
-    setTimeout(() => window.print(), 100);
   };
 
   const confirmPrint = (e: React.FormEvent) => {
@@ -93,18 +121,15 @@ export default function Etiquetas() {
     if (pendingSaleId === 'all') {
       const updatedSales = readyToPrint.map(s => ({ ...s, impresa: true, etiquetador: etiquetadorName }));
       setSalesToPrint(updatedSales);
-      readyToPrint.forEach(s => updateSale(s.id, { impresa: true, etiquetador: etiquetadorName }));
     } else if (pendingSaleId) {
       const sale = sales.find(s => s.id === pendingSaleId);
       if (sale) {
         const updated = { ...sale, impresa: true, etiquetador: etiquetadorName };
         setSalesToPrint([updated]);
-        updateSale(sale.id, { impresa: true, etiquetador: etiquetadorName });
       }
     }
     
     setShowEtiquetadorModal(false);
-    setTimeout(() => window.print(), 100);
   };
 
   return (
