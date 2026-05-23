@@ -17,7 +17,7 @@ import { Label } from '../components/Label';
 
 export default function Etiquetas() {
   const { sales, stock, currentUser, updateSale, playSound } = useStore();
-  const [individualSale, setIndividualSale] = useState<Sale | null>(null);
+  const [salesToPrint, setSalesToPrint] = useState<Sale[]>([]);
   const [showDemo, setShowDemo] = useState(false);
   const [showPrinted, setShowPrinted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,7 +55,7 @@ export default function Etiquetas() {
   };
 
   useEffect(() => {
-    const handleAfterPrint = () => setIndividualSale(null);
+    const handleAfterPrint = () => setSalesToPrint([]);
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, []);
@@ -66,10 +66,11 @@ export default function Etiquetas() {
       setShowEtiquetadorModal(true);
       return;
     }
+    const updatedSales = readyToPrint.map(s => ({ ...s, impresa: true, etiquetador: etiquetadorName }));
+    setSalesToPrint(updatedSales);
     readyToPrint.forEach(s => updateSale(s.id, { impresa: true, etiquetador: etiquetadorName }));
-    setIndividualSale(null);
     setShowEtiquetadorModal(false);
-    setTimeout(() => window.print(), 50);
+    setTimeout(() => window.print(), 100);
   };
 
   const handlePrintSingle = (sale: Sale) => {
@@ -78,10 +79,11 @@ export default function Etiquetas() {
       setShowEtiquetadorModal(true);
       return;
     }
+    const updated = { ...sale, impresa: true, etiquetador: etiquetadorName };
+    setSalesToPrint([updated]);
     updateSale(sale.id, { impresa: true, etiquetador: etiquetadorName });
-    setIndividualSale(sale);
     setShowEtiquetadorModal(false);
-    setTimeout(() => window.print(), 50);
+    setTimeout(() => window.print(), 100);
   };
 
   const confirmPrint = (e: React.FormEvent) => {
@@ -89,18 +91,20 @@ export default function Etiquetas() {
     if (!etiquetadorName.trim()) return;
     
     if (pendingSaleId === 'all') {
+      const updatedSales = readyToPrint.map(s => ({ ...s, impresa: true, etiquetador: etiquetadorName }));
+      setSalesToPrint(updatedSales);
       readyToPrint.forEach(s => updateSale(s.id, { impresa: true, etiquetador: etiquetadorName }));
-      setIndividualSale(null);
     } else if (pendingSaleId) {
       const sale = sales.find(s => s.id === pendingSaleId);
       if (sale) {
+        const updated = { ...sale, impresa: true, etiquetador: etiquetadorName };
+        setSalesToPrint([updated]);
         updateSale(sale.id, { impresa: true, etiquetador: etiquetadorName });
-        setIndividualSale(sale);
       }
     }
     
     setShowEtiquetadorModal(false);
-    setTimeout(() => window.print(), 50);
+    setTimeout(() => window.print(), 100);
   };
 
   return (
@@ -169,7 +173,11 @@ export default function Etiquetas() {
         )}
       </div>
       <div className="hidden print-only">
-        {individualSale ? <div className="label-container"><Label sale={individualSale} stock={stock} /></div> : readyToPrint.map((sale) => <div key={sale.id} className="label-container"><Label sale={sale} stock={stock} /></div>)}
+        {salesToPrint.map((sale) => (
+          <div key={sale.id} className="label-container">
+            <Label sale={sale} stock={stock} />
+          </div>
+        ))}
       </div>
 
       {/* Etiquetador Modal */}
