@@ -3,8 +3,15 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Cuaderno MDF - Gestión de Fardos</title>
+    
+    <!-- PWA / iOS Apple Web App Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Cuaderno MDF">
+    <meta name="theme-color" content="#aa820a">
+    <link rel="manifest" href="/manifest.json">
     
     <!-- Favicon e Iconos de Dispositivos -->
     <link rel="icon" type="image/png" href="https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png">
@@ -55,5 +62,14 @@
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 <script type="module" src="/index.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((reg) => console.log('ServiceWorker registrado:', reg.scope))
+            .catch((err) => console.error('Error ServiceWorker:', err));
+        });
+      }
+    </script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent } from '../types';
 import { db, storage } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -466,6 +466,8 @@ interface StoreContextType {
   pushToCloud: (curSales: Sale[], curStock: StockItem[], curStaff: StaffMember[], curPurchases: Purchase[]) => Promise<void>;
   isSyncing: boolean;
   lastSync: string | null;
+  stockHistory: StockHistoryEvent[];
+  addStockHistoryEvent: (event: Omit<StockHistoryEvent, 'id' | 'fecha'>) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -505,6 +507,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>([]);
+  const [stockHistory, setStockHistory] = useState<StockHistoryEvent[]>(() => {
+    try {
+      const saved = localStorage.getItem('mdf_stock_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const isSyncingRef = useRef(false);
 
@@ -587,6 +597,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubProduction: any;
     let unsubConfig: any;
     let unsubCustomers: any;
+    let unsubStockHistory: any;
 
     const initFirebase = async () => {
       try {
@@ -625,6 +636,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
           setCustomers(snapshot.docs.map(doc => doc.data() as Customer));
         });
+        unsubStockHistory = onSnapshot(collection(db, 'stock_history'), (snap) => {
+          setStockHistory(snap.docs.map(d => d.data() as StockHistoryEvent));
+        });
       } catch (error: any) {
         console.error("Error inicializando Firebase:", error.code, error.message);
       }
@@ -643,6 +657,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubProduction) unsubProduction();
       if (unsubConfig) unsubConfig();
       if (unsubCustomers) unsubCustomers();
+      if (unsubStockHistory) unsubStockHistory();
     };
   }, []);
 
@@ -654,7 +669,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     localStorage.setItem('mdf_carriers', JSON.stringify(carriers));
     localStorage.setItem('mdf_adjustments', JSON.stringify(adjustments));
     localStorage.setItem('mdf_settings', JSON.stringify(settings));
-  }, [sales, stock, staff, purchases, carriers, adjustments, settings]);
+    localStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
+  }, [sales, stock, staff, purchases, carriers, adjustments, settings, stockHistory]);
 
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: StaffRole } | null>(() => {
     const saved = sessionStorage.getItem('mdf_session');
@@ -924,6 +940,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     alert(`Proceso completado. Inventario eliminado: ${stockDocs.size}. Por favor recarga la página.`);
   };
 
+  const addStockHistoryEvent = async (event: Omit<StockHistoryEvent, 'id' | 'fecha'>) => {
+    try {
+      const newRef = doc(collection(db, 'stock_history'));
+      const newEvent: StockHistoryEvent = {
+        ...event,
+        id: newRef.id,
+        fecha: new Date().toISOString()
+      };
+      await setDoc(newRef, newEvent);
+    } catch (e) {
+      console.error("Error creating stock history log:", e);
+    }
+  };
+
   const addStockItem = async (item: Omit<StockItem, 'id' | 'disponible'>) => {
     const code = item.codigo.trim().toUpperCase();
     const name = item.tipo.trim().toUpperCase();
@@ -944,11 +974,26 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       disponible: item.stockActual > 0,
       categoria: item.categoria || 'FARDO'
     });
+
+    await addStockHistoryEvent({
+      productId: code,
+      tipo: 'INGRESO',
+      cantidad: item.stockActual,
+      balanceAntes: existingCode ? existingCode.stockActual : 0,
+      balanceDespues: item.stockActual,
+      vendedor: currentUser?.nombre || 'SISTEMA',
+      observaciones: existingCode ? `Sobreescritura del producto` : `Ingreso inicial de stock`
+    });
   };
 
   const updateStockItem = async (id: string, updatedData: Partial<StockItem>) => {
     const item = stock.find(i => i.id === id);
     if (!item) return;
+
+    let diff = 0;
+    if (updatedData.stockActual !== undefined && updatedData.stockActual !== item.stockActual) {
+      diff = updatedData.stockActual - item.stockActual;
+    }
 
     // If code is being changed, we must be careful
     if (updatedData.codigo) {
@@ -959,11 +1004,33 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         await setDoc(doc(db, 'stock', newCode), newItem);
         // Delete old doc
         await deleteDoc(doc(db, 'stock', id));
+        
+        await addStockHistoryEvent({
+          productId: newCode,
+          tipo: 'AJUSTE',
+          cantidad: diff,
+          balanceAntes: item.stockActual,
+          balanceDespues: updatedData.stockActual ?? item.stockActual,
+          vendedor: currentUser?.nombre || 'SISTEMA',
+          observaciones: `Código cambiado de ${item.codigo} a ${newCode}. ${diff !== 0 ? `Stock modificado por ${diff}` : 'Sin cambio de stock'}`
+        });
         return;
       }
     }
 
     await setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
+    
+    if (diff !== 0) {
+      await addStockHistoryEvent({
+        productId: item.codigo,
+        tipo: 'AJUSTE',
+        cantidad: diff,
+        balanceAntes: item.stockActual,
+        balanceDespues: updatedData.stockActual!,
+        vendedor: currentUser?.nombre || 'SISTEMA',
+        observaciones: `Ajuste manual de stock de ${item.stockActual} a ${updatedData.stockActual}`
+      });
+    }
   };
 
   const togglePromocion = (id: string) => {
@@ -1007,6 +1074,16 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       batch.set(doc(db, 'stock', newId), { ...i, codigo: code, id: newId, disponible: i.stockActual > 0 });
       count++;
       
+      await addStockHistoryEvent({
+        productId: code,
+        tipo: 'CARGA_MASIVA',
+        cantidad: i.stockActual,
+        balanceAntes: 0,
+        balanceDespues: i.stockActual,
+        vendedor: currentUser?.nombre || 'SISTEMA',
+        observaciones: `Carga masiva CSV`
+      });
+
       if (count === 400) {
         await batch.commit();
         batch = writeBatch(db);
@@ -1317,12 +1394,32 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
               batch.update(stockRef, {
                 stockActual: increment(item.cantidad)
               });
+              const currentStockItem = stock.find(s => s.codigo === item.codigoFardo);
+              await addStockHistoryEvent({
+                productId: item.codigoFardo,
+                tipo: 'ANULACION',
+                cantidad: item.cantidad,
+                balanceAntes: currentStockItem ? currentStockItem.stockActual : 0,
+                balanceDespues: (currentStockItem ? currentStockItem.stockActual : 0) + item.cantidad,
+                vendedor: currentUser?.nombre || 'SISTEMA',
+                observaciones: `Anulación de Nota de Venta #${saleToDelete.numeroVenta || ''}`
+              });
             }
           }
         } else if (saleToDelete.codigoFardo && !saleToDelete.esManual) {
           const stockRef = doc(db, 'stock', saleToDelete.codigoFardo);
           batch.update(stockRef, {
             stockActual: increment(saleToDelete.cantidad || 0)
+          });
+          const currentStockItem = stock.find(s => s.codigo === saleToDelete.codigoFardo);
+          await addStockHistoryEvent({
+            productId: saleToDelete.codigoFardo,
+            tipo: 'ANULACION',
+            cantidad: saleToDelete.cantidad || 0,
+            balanceAntes: currentStockItem ? currentStockItem.stockActual : 0,
+            balanceDespues: (currentStockItem ? currentStockItem.stockActual : 0) + (saleToDelete.cantidad || 0),
+            vendedor: currentUser?.nombre || 'SISTEMA',
+            observaciones: `Anulación de Venta #${saleToDelete.numeroVenta || ''}`
           });
         }
       }
@@ -1468,7 +1565,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
-      productionRecords, addProductionRecord, deleteProductionRecord
+      productionRecords, addProductionRecord, deleteProductionRecord,
+      stockHistory, addStockHistoryEvent
     }}>
       {children}
     </StoreContext.Provider>

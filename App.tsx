@@ -171,6 +171,98 @@ const ProtectedRoute = ({ children, roles, extraCheck }: React.PropsWithChildren
   return <>{children}</>;
 };
 
+const BottomNav = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
+  const location = useLocation();
+  const { currentUser, playSound } = useStore();
+  if (!currentUser) return null;
+
+  const handleNavClick = () => {
+    playSound('transition');
+  };
+
+  const isVendedorOrAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
+  const isBodegaOrDespacho = currentUser.rol === StaffRole.BODEGA || currentUser.rol === StaffRole.DESPACHO || currentUser.rol === StaffRole.ADMIN;
+  const isTransportista = currentUser.rol === StaffRole.TRANSPORTISTA;
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 text-white flex items-center justify-around h-16 px-2 lg:hidden shadow-[0_-4px_24px_rgba(0,0,0,0.3)] pb-[calc(env(safe-area-inset-bottom,0px)*0.5)] no-print">
+      <Link 
+        to="/" 
+        onClick={handleNavClick}
+        className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-slate-400 active:text-amber-500 ${location.pathname === '/' ? 'text-emerald-400' : ''}`}
+      >
+        <HomeIcon size={20} />
+        <span className="text-[9px] font-black uppercase mt-1 tracking-wider">Inicio</span>
+      </Link>
+
+      {isVendedorOrAdmin && (
+        <Link 
+          to="/registrar" 
+          onClick={handleNavClick}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-slate-400 active:text-amber-500 ${location.pathname === '/registrar' ? 'text-emerald-400' : ''}`}
+        >
+          <div className="bg-emerald-500 text-white p-2 rounded-xl -mt-6 shadow-lg shadow-emerald-500/40">
+            <PlusCircle size={20} />
+          </div>
+          <span className="text-[9px] font-black uppercase mt-1 tracking-wider">Registrar</span>
+        </Link>
+      )}
+
+      {isVendedorOrAdmin && (
+        <Link 
+          to="/ventas" 
+          onClick={handleNavClick}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-slate-400 active:text-amber-500 ${location.pathname === '/ventas' ? 'text-emerald-400' : ''}`}
+        >
+          <FileText size={20} />
+          <span className="text-[9px] font-black uppercase mt-1 tracking-wider">Ventas</span>
+        </Link>
+      )}
+
+      {isBodegaOrDespacho && !isVendedorOrAdmin && (
+        <Link 
+          to="/stock" 
+          onClick={handleNavClick}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-slate-400 active:text-amber-500 ${location.pathname === '/stock' ? 'text-emerald-400' : ''}`}
+        >
+          <Package size={20} />
+          <span className="text-[9px] font-black uppercase mt-1 tracking-wider">Stock</span>
+        </Link>
+      )}
+
+      {isBodegaOrDespacho && (
+        <Link 
+          to="/despachos" 
+          onClick={handleNavClick}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-slate-400 active:text-amber-500 ${location.pathname === '/despachos' ? 'text-emerald-400' : ''}`}
+        >
+          <Truck size={20} />
+          <span className="text-[9px] font-black uppercase mt-1 tracking-wider">Despacho</span>
+        </Link>
+      )}
+
+      {isTransportista && (
+        <Link 
+          to="/transportista" 
+          onClick={handleNavClick}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-slate-400 active:text-amber-500 ${location.pathname === '/transportista' ? 'text-emerald-400' : ''}`}
+        >
+          <Truck size={20} />
+          <span className="text-[9px] font-black uppercase mt-1 tracking-wider">Mis Rutas</span>
+        </Link>
+      )}
+
+      <button 
+        onClick={() => { playSound('click'); toggleSidebar(); }}
+        className="flex flex-col items-center justify-center flex-1 h-full py-1 text-slate-400 active:text-emerald-400"
+      >
+        <Menu size={20} />
+        <span className="text-[9px] font-black uppercase mt-1 tracking-wider">Menú</span>
+      </button>
+    </div>
+  );
+};
+
 export default function App() {
   const { currentUser } = useStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -185,7 +277,7 @@ export default function App() {
         <div className={`flex flex-col h-full overflow-hidden transition-all duration-300 ${currentUser ? 'lg:ml-64' : ''}`}>
           {currentUser && <Header toggleSidebar={toggleSidebar} />}
           
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
+          <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 lg:pb-8 scroll-smooth">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/catalogo-publico" element={<CatalogoPublico />} />
@@ -207,6 +299,8 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </main>
+          
+          {currentUser && <BottomNav toggleSidebar={toggleSidebar} />}
         </div>
       </div>
     </HashRouter>

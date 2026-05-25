@@ -1,12 +1,12 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter } from 'lucide-react';
+import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 
 export default function Stock() {
-  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound } = useStore();
+  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound, stockHistory, sales } = useStore();
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
@@ -14,6 +14,8 @@ export default function Stock() {
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<StockItem | null>(null);
+  const [historyTab, setHistoryTab] = useState<'TODOS' | 'INGRESOS' | 'SALIDAS'>('TODOS');
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -37,6 +39,84 @@ export default function Stock() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canModify = currentUser?.rol === StaffRole.ADMIN || currentUser?.rol === StaffRole.BODEGA;
+
+  // --- HISTORIAL MOVIMIENTOS DYNAMIC TIMELINE ---
+  const itemTimeline = useMemo(() => {
+    if (!selectedHistoryItem) return [];
+    const code = selectedHistoryItem.codigo.trim().toUpperCase();
+
+    // 1. Manual/system transactions in stock_history
+    const manualEvents = (stockHistory || [])
+      .filter(h => h.productId?.trim().toUpperCase() === code)
+      .map(h => ({
+        id: h.id,
+        tipo: h.tipo,
+        cantidad: h.cantidad,
+        fecha: h.fecha,
+        vendedor: h.vendedor || 'SISTEMA',
+        observaciones: h.observaciones || 'Movimiento de inventario'
+      }));
+
+    // 2. Sales events
+    const salesEvents = (sales || []).flatMap(sale => {
+      if (sale.tipoVenta === 'NOTA_VENTA') {
+        return (sale.items || [])
+          .filter(it => !it.esManual && it.codigoFardo?.trim().toUpperCase() === code)
+          .map(it => ({
+            id: `${sale.id}-${it.codigoFardo}`,
+            tipo: 'VENTA' as const,
+            cantidad: -it.cantidad,
+            fecha: sale.timestamp || new Date(sale.fecha).toISOString(),
+            vendedor: sale.vendedor || 'VENDEDOR',
+            observaciones: `Nota de Venta #${sale.numeroVenta} - Cliente: ${sale.cliente || 'Otros'}`
+          }));
+      } else if (sale.codigoFardo?.trim().toUpperCase() === code && !sale.esManual) {
+        return [{
+          id: sale.id,
+          tipo: 'VENTA' as const,
+          cantidad: -(sale.cantidad || 0),
+          fecha: sale.timestamp || new Date(sale.fecha).toISOString(),
+          vendedor: sale.vendedor || 'VENDEDOR',
+          observaciones: `Venta #${sale.numeroVenta} - Cliente: ${sale.cliente || 'Consumidor'} (${sale.tipoVenta})`
+        }];
+      }
+      return [];
+    });
+
+    // 3. Merge and sort
+    return [...manualEvents, ...salesEvents].sort((a, b) => {
+      return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
+    });
+  }, [selectedHistoryItem, stockHistory, sales]);
+
+  const filteredTimeline = useMemo(() => {
+    if (historyTab === 'INGRESOS') {
+      return itemTimeline.filter(e => e.tipo !== 'VENTA');
+    }
+    if (historyTab === 'SALIDAS') {
+      return itemTimeline.filter(e => e.tipo === 'VENTA');
+    }
+    return itemTimeline;
+  }, [itemTimeline, historyTab]);
+
+  const historyStats = useMemo(() => {
+    let inputs = 0;
+    let outputs = 0;
+
+    itemTimeline.forEach(e => {
+      if (e.tipo === 'VENTA') {
+        outputs += Math.abs(e.cantidad);
+      } else {
+        if (e.cantidad > 0) {
+          inputs += e.cantidad;
+        } else {
+          outputs += Math.abs(e.cantidad);
+        }
+      }
+    });
+
+    return { inputs, outputs };
+  }, [itemTimeline]);
 
   // Obtener lista única de proveedores para el filtro
   const uniqueProviders = useMemo(() => {
@@ -289,6 +369,15 @@ export default function Stock() {
                   {canModify && (
                     <td className="px-8 py-6 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        {currentUser?.rol === StaffRole.ADMIN && (
+                          <button 
+                            onClick={() => { setSelectedHistoryItem(item); setHistoryTab('TODOS'); playSound('click'); }} 
+                            className="p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                            title="Ver Historial de Movimientos"
+                          >
+                            <History size={16} />
+                          </button>
+                        )}
                         <button onClick={() => setEditingItem(item)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"><Edit3 size={16} /></button>
                         <button onClick={() => setDeletingId(item.id)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
                       </div>
@@ -528,6 +617,177 @@ export default function Stock() {
             <div className="flex gap-4">
               <button onClick={() => setDeletingId(null)} className="flex-1 py-5 bg-slate-100 text-slate-900 rounded-[24px] font-black uppercase text-xs tracking-widest">Abortar</button>
               <button onClick={handleDelete} className="flex-1 py-5 bg-red-600 text-white rounded-[24px] font-black shadow-2xl shadow-red-600/30 uppercase text-xs tracking-widest">Confirmar Purga</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Historial Movimientos */}
+      {selectedHistoryItem && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[48px] shadow-[0_50px_100px_rgba(0,0,0,0.5)] w-full max-w-4xl overflow-hidden animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-10 bg-slate-950 text-white flex items-center justify-between col-span-3">
+              <div>
+                <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Auditoría / Kárdex del Producto</p>
+                <h3 className="text-3xl font-black uppercase tracking-tighter italic">Historial de Movimientos</h3>
+                <p className="text-slate-400 text-xs font-bold mt-1 uppercase">
+                  {selectedHistoryItem.codigo} — {selectedHistoryItem.tipo} (P. Sugerido: ${selectedHistoryItem.precioSugerido?.toLocaleString()})
+                </p>
+              </div>
+              <button onClick={() => setSelectedHistoryItem(null)} className="p-3 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white">
+                <X size={28} />
+              </button>
+            </div>
+
+            {/* Content Area */}
+            <div className="p-10 flex-grow overflow-y-auto space-y-8 bg-slate-50/50">
+              {/* Metrics Summary Rows */}
+              <div className="grid grid-cols-3 gap-6">
+                <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
+                    <ArrowDownLeft size={24} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Ingresos</span>
+                    <h4 className="text-2xl font-black text-slate-950 mt-0.5">+{historyStats.inputs} <span className="text-xs font-normal text-slate-500">unids</span></h4>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shadow-inner">
+                    <ArrowUpRight size={24} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Salidas</span>
+                    <h4 className="text-2xl font-black text-slate-950 mt-0.5">-{historyStats.outputs} <span className="text-xs font-normal text-slate-500">unids</span></h4>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-sm flex items-center gap-4 ring-2 ring-indigo-50">
+                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                    <Package size={24} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Suelto en Bodega</span>
+                    <h4 className="text-3xl font-black text-indigo-600 mt-0.5">{selectedHistoryItem.stockActual}</h4>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs selector */}
+              <div className="flex bg-slate-100 p-1.5 rounded-2xl w-fit border border-slate-200/30">
+                {(['TODOS', 'INGRESOS', 'SALIDAS'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => { setHistoryTab(tab); playSound('click'); }}
+                    className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
+                      historyTab === tab 
+                        ? 'bg-slate-900 text-white shadow-md' 
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab === 'TODOS' ? 'Todos' : tab === 'INGRESOS' ? 'Ingresos / Ajustes' : 'Ventas (Salidas)'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Movements Timeline List */}
+              <div className="space-y-4">
+                {filteredTimeline.length === 0 ? (
+                  <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-8">
+                    <History size={48} className="mx-auto text-slate-300 mb-4 animate-spin-slow" />
+                    <h4 className="font-bold text-slate-900 text-lg uppercase">Sin datos para mostrar</h4>
+                    <p className="text-slate-500 text-xs mt-1 max-w-sm mx-auto italic">No hemos detectado movimientos que coincidan con este filtro de búsqueda de inventario.</p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm divide-y divide-slate-100">
+                    {filteredTimeline.map((item) => {
+                      const isVenta = item.tipo === 'VENTA';
+                      const isAnulacion = item.tipo === 'ANULACION';
+                      const isIngreso = item.tipo === 'INGRESO';
+                      const isAjuste = item.tipo === 'AJUSTE';
+                      const isCargaMasiva = item.tipo === 'CARGA_MASIVA';
+
+                      let badgeColor = '';
+                      let icon = null;
+                      let typeLabel = '';
+
+                      if (isVenta) {
+                        badgeColor = 'bg-rose-100 text-rose-700';
+                        icon = <ArrowUpRight size={14} />;
+                        typeLabel = 'SALIDA (VENTA)';
+                      } else if (isAnulacion) {
+                        badgeColor = 'bg-emerald-100 text-emerald-700 border border-emerald-200';
+                        icon = <ArrowDownLeft size={14} />;
+                        typeLabel = 'RETORNO (ANULACIÓN)';
+                      } else if (isIngreso) {
+                        badgeColor = 'bg-emerald-50 text-emerald-700';
+                        icon = <ArrowDownLeft size={14} />;
+                        typeLabel = 'INGRESO INICIAL';
+                      } else if (isCargaMasiva) {
+                        badgeColor = 'bg-indigo-100 text-indigo-700';
+                        icon = <Download size={14} />;
+                        typeLabel = 'CARGA MASIVA CSV';
+                      } else {
+                        badgeColor = item.cantidad >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+                        icon = <TrendingUp size={14} />;
+                        typeLabel = 'AJUSTE MANUAL';
+                      }
+
+                      const dateObj = new Date(item.fecha);
+                      const displayDate = isNaN(dateObj.getTime()) ? item.fecha : dateObj.toLocaleDateString([], {
+                        day: '2-digit', month: 'short', year: 'numeric'
+                      }) + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                      return (
+                        <div key={item.id} className="p-6 flex items-center justify-between gap-6 hover:bg-slate-50/50 transition-colors">
+                          <div className="flex items-start gap-4 flex-1">
+                            <div className={`p-3 rounded-2xl flex items-center justify-center h-11 w-11 ${
+                              isVenta ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {isVenta ? <ArrowUpRight size={18} /> : isAnulacion ? <ArrowDownLeft size={18} className="text-emerald-600" /> : <TrendingUp size={18} />}
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${badgeColor} flex items-center gap-1`}>
+                                  {icon} {typeLabel}
+                                </span>
+                              </div>
+                              <p className="text-slate-800 font-bold uppercase text-sm leading-none">{item.observaciones}</p>
+                              
+                              <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                                <span className="flex items-center gap-1"><Calendar size={12} /> {displayDate}</span>
+                                <span className="flex items-center gap-1"><User size={12} /> Responsable: {item.vendedor}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className={`font-mono text-xl font-black tracking-tight ${
+                              item.cantidad > 0 ? 'text-emerald-600' : item.cantidad < 0 ? 'text-red-500' : 'text-slate-500'
+                            }`}>
+                              {item.cantidad > 0 ? `+${item.cantidad}` : item.cantidad}
+                            </span>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">UDS</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-8 bg-slate-100 border-t border-slate-200/60 flex items-center justify-end">
+              <button 
+                onClick={() => setSelectedHistoryItem(null)} 
+                className="px-8 py-3 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md"
+              >
+                Cerrar Detalle
+              </button>
             </div>
           </div>
         </div>

@@ -193,3 +193,16 @@ export interface ProductionRecord {
   cantidad: number;
   totalPagar: number;
 }
+
+export interface StockHistoryEvent {
+  id: string;
+  productId: string;
+  tipo: 'INGRESO' | 'AJUSTE' | 'VENTA' | 'ANULACION' | 'CARGA_MASIVA';
+  cantidad: number;
+  balanceAntes?: number;
+  balanceDespues?: number;
+  fecha: string; // ISO timestamp
+  vendedor: string;
+  observaciones: string;
+}
+
