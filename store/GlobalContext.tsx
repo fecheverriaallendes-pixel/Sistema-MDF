@@ -454,6 +454,7 @@ interface StoreContextType {
   purgeUnusedStock: () => Promise<void>;
   resetToMasterStock: () => void;
   addStaff: (member: Omit<StaffMember, 'id' | 'activo'>) => void;
+  updateStaff: (id: string, updatedMember: Partial<StaffMember>) => Promise<void>;
   removeStaff: (id: string) => void;
   addPurchase: (p: Omit<Purchase, 'id' | 'saldoPendiente' | 'abonos' | 'estado'>) => void;
   removePurchase: (id: string) => void;
@@ -1347,6 +1348,63 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     setDoc(doc(db, 'staff', newId), { ...member, id: newId, activo: true });
   };
 
+  const updateStaff = async (id: string, updatedMember: Partial<StaffMember>) => {
+    try {
+      const current = staff.find(m => m.id === id);
+      if (!current) return;
+
+      const updated = { ...current, ...updatedMember };
+      await setDoc(doc(db, 'staff', id), updated);
+
+      if (updatedMember.nombre && updatedMember.nombre.trim() !== current.nombre.trim()) {
+        const oldName = current.nombre.trim();
+        const newName = updatedMember.nombre.trim();
+
+        // 1. Update sales
+        const salesToUpdate = sales.filter(s => s.vendedor === oldName);
+        if (salesToUpdate.length > 0) {
+          const batch = writeBatch(db);
+          salesToUpdate.forEach(s => {
+            batch.update(doc(db, 'sales', s.id), { vendedor: newName });
+          });
+          await batch.commit();
+        }
+
+        // 2. Update adjustments
+        const adjToUpdate = adjustments.filter(a => a.vendedor === oldName);
+        if (adjToUpdate.length > 0) {
+          const batch = writeBatch(db);
+          adjToUpdate.forEach(a => {
+            batch.update(doc(db, 'adjustments', a.id), { vendedor: newName });
+          });
+          await batch.commit();
+        }
+
+        // 3. Update stock_history
+        const histToUpdate = (stockHistory || []).filter(h => h.vendedor === oldName);
+        if (histToUpdate.length > 0) {
+          const batch = writeBatch(db);
+          histToUpdate.forEach(h => {
+            batch.update(doc(db, 'stock_history', h.id), { vendedor: newName });
+          });
+          await batch.commit();
+        }
+      }
+
+      if (currentUser && currentUser.nombre === current.nombre) {
+        const updatedUserSession = { 
+          nombre: updated.nombre, 
+          rol: updated.rol 
+        };
+        setCurrentUser(updatedUserSession);
+        sessionStorage.setItem('mdf_session', JSON.stringify(updatedUserSession));
+      }
+
+    } catch (error) {
+      console.error("Error updating staff member:", error);
+    }
+  };
+
   const removeStaff = (id: string) => {
     deleteDoc(doc(db, 'staff', id));
   };
@@ -1563,7 +1621,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
-      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
+      addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord,
       stockHistory, addStockHistoryEvent

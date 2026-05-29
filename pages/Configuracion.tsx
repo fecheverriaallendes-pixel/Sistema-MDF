@@ -7,7 +7,7 @@ import {
   Table as TableIcon, Server, HardDrive, UserPlus, Shield,
   SearchCode, Eye, UploadCloud,
   FileText, Package, Wallet, 
-  Boxes, Truck, Layers
+  Boxes, Truck, Layers, Edit3
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole } from '../types';
@@ -15,13 +15,14 @@ import { StaffRole } from '../types';
 export default function Configuracion() {
   const { 
     settings, updateSettings, playSound, syncWithCloud, pushToCloud,
-    isSyncing, lastSync, staff, addStaff, removeStaff, sales, stock, purchases,
+    isSyncing, lastSync, staff, addStaff, updateStaff, removeStaff, sales, stock, purchases,
     clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier,
     fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, deleteAllSales
   } = useStore();
   
   const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS'>('RED');
   const [apiUrl, setApiUrl] = useState(settings.cloudUrl);
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
   
   const [newStaff, setNewStaff] = useState({
     nombre: '',
@@ -66,13 +67,23 @@ export default function Configuracion() {
     alert("URL Copiada.");
   };
 
-  const handleAddStaff = (e: React.FormEvent) => {
+  const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaff.nombre || !newStaff.pin) {
       alert("Por favor completa nombre y PIN");
       return;
     }
-    addStaff(newStaff);
+    if (editingStaffId) {
+      await updateStaff(editingStaffId, {
+        nombre: newStaff.nombre.toUpperCase(),
+        rol: newStaff.rol,
+        pin: newStaff.pin
+      });
+      setEditingStaffId(null);
+      alert("✅ ÉXITO: Usuario modificado correctamente.");
+    } else {
+      addStaff(newStaff);
+    }
     setNewStaff({ nombre: '', rol: StaffRole.VENDEDOR, pin: '' });
     playSound('success');
   };
@@ -177,7 +188,7 @@ export default function Configuracion() {
             <div className="lg:col-span-1 bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl h-fit">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shadow-lg"><UserPlus size={24} /></div>
-                <h3 className="text-xl font-black uppercase tracking-tighter">Nuevo Usuario</h3>
+                <h3 className="text-xl font-black uppercase tracking-tighter">{editingStaffId ? 'Editar Usuario' : 'Nuevo Usuario'}</h3>
               </div>
               <form onSubmit={handleAddStaff} className="space-y-6">
                 <div>
@@ -200,10 +211,25 @@ export default function Configuracion() {
                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-2">PIN (4 dígitos)</label>
                   <input required type="password" maxLength={4} className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-2xl font-black outline-none" value={newStaff.pin} onChange={e => setNewStaff({...newStaff, pin: e.target.value})} />
                 </div>
-                <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-black shadow-xl">CREAR USUARIO</button>
+                <button type="submit" className={`w-full py-5 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-xl transition-all ${editingStaffId ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-slate-900 hover:bg-black'}`}>
+                  {editingStaffId ? 'GUARDAR CAMBIOS' : 'CREAR USUARIO'}
+                </button>
+                {editingStaffId && (
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setEditingStaffId(null);
+                      setNewStaff({ nombre: '', rol: StaffRole.VENDEDOR, pin: '' });
+                      playSound('click');
+                    }}
+                    className="w-full py-4 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all"
+                  >
+                    CANCELAR EDICIÓN
+                  </button>
+                )}
               </form>
             </div>
-
+ 
             <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl">
               <h3 className="text-xl font-black uppercase tracking-tighter mb-8">Personal en Sistema</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -213,10 +239,42 @@ export default function Configuracion() {
                       <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400"><Shield size={20} /></div>
                       <div>
                         <p className="font-black text-slate-900 uppercase text-xs">{member.nombre}</p>
-                        <p className="text-[9px] font-bold text-emerald-500 uppercase">{member.rol}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-[9px] font-bold text-emerald-500 uppercase">{member.rol}</p>
+                          <span className="text-[9px] text-slate-300 font-bold">•</span>
+                          <p className="text-[9px] font-black text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded-md">PIN: {member.pin}</p>
+                        </div>
                       </div>
                     </div>
-                    <button onClick={() => removeStaff(member.id)} className="p-3 text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button 
+                        onClick={() => {
+                          setEditingStaffId(member.id);
+                          setNewStaff({
+                            nombre: member.nombre,
+                            rol: member.rol,
+                            pin: member.pin
+                          });
+                          playSound('click');
+                        }}
+                        className="p-3 text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all"
+                        title="Editar Usuario"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (confirm(`¿Estás seguro de eliminar al usuario "${member.nombre}"?`)) {
+                            removeStaff(member.id);
+                            playSound('click');
+                          }
+                        }} 
+                        className="p-3 text-red-400 hover:bg-red-50 rounded-xl transition-all"
+                        title="Eliminar Usuario"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
