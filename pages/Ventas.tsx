@@ -6,6 +6,23 @@ import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 import { Label } from '../components/Label';
 import { Invoice } from '../components/Invoice';
 
+function parseLocalDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  }
+  const slashParts = dateStr.split('/');
+  if (slashParts.length === 3) {
+    if (slashParts[0].length === 4) {
+      return new Date(parseInt(slashParts[0], 10), parseInt(slashParts[1], 10) - 1, parseInt(slashParts[2], 10));
+    } else {
+      return new Date(parseInt(slashParts[2], 10), parseInt(slashParts[1], 10) - 1, parseInt(slashParts[0], 10));
+    }
+  }
+  return new Date(dateStr);
+}
+
 export default function Ventas() {
   const { sales, updateSale, playSound, deleteSale, deleteAllSales, currentUser, stock } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,7 +44,7 @@ export default function Ventas() {
     if (!(isAdmin || s.vendedor === currentUser?.nombre)) return false;
     
     // Attempt parsing; if it fails, default to today or skip
-    const d = s.fecha ? new Date(s.fecha) : new Date();
+    const d = s.fecha ? parseLocalDate(s.fecha) : new Date();
     if (isNaN(d.getTime())) return false; // Invalid date
     
     return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
@@ -49,7 +66,7 @@ export default function Ventas() {
       if (sortKey === 'numeroVenta') {
         comparison = a.numeroVenta - b.numeroVenta;
       } else {
-        comparison = new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+        comparison = parseLocalDate(a.fecha).getTime() - parseLocalDate(b.fecha).getTime();
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
@@ -196,7 +213,7 @@ export default function Ventas() {
                   <td className="px-8 py-6 font-mono font-black text-slate-900 text-lg flex items-center gap-3">
                     <div className="flex flex-col">
                       <span>#{sale.numeroVenta}</span>
-                      <span className="text-[10px] text-slate-500 font-bold">{new Date(sale.fecha).toLocaleDateString()}</span>
+                      <span className="text-[10px] text-slate-500 font-bold">{parseLocalDate(sale.fecha).toLocaleDateString()}</span>
                     </div>
                     {sale.comprobante && (
                       <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-700">

@@ -706,7 +706,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       total,
       id: Math.random().toString(36).substr(2, 9),
       numeroVenta: sales.length > 0 ? Math.max(...sales.map(s => s.numeroVenta || 0)) + 1 : 2000,
-      fecha: now.toISOString().split('T')[0],
+      fecha: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
       hora: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: SaleStatus.PENDIENTE,
       enviado: false,
@@ -1552,14 +1552,21 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const getStats = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const nowLocal = new Date();
+    const today = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
     const todaySales = sales.filter(s => {
         let saleDateISO: string;
         if (s.timestamp) {
-            saleDateISO = new Date(s.timestamp).toISOString().split('T')[0];
+            const dObj = new Date(s.timestamp);
+            saleDateISO = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
         } else {
-            const [d, m, y] = s.fecha.split('/');
-            saleDateISO = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+            const parts = s.fecha.split('/');
+            if (parts.length === 3) {
+              const [d, m, y] = parts;
+              saleDateISO = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+            } else {
+              saleDateISO = s.fecha;
+            }
         }
         return saleDateISO === today;
     });

@@ -28,6 +28,23 @@ import {
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
 
+function parseLocalDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  }
+  const slashParts = dateStr.split('/');
+  if (slashParts.length === 3) {
+    if (slashParts[0].length === 4) {
+      return new Date(parseInt(slashParts[0], 10), parseInt(slashParts[1], 10) - 1, parseInt(slashParts[2], 10));
+    } else {
+      return new Date(parseInt(slashParts[2], 10), parseInt(slashParts[1], 10) - 1, parseInt(slashParts[0], 10));
+    }
+  }
+  return new Date(dateStr);
+}
+
 export default function Despachos() {
   const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,8 +63,8 @@ export default function Despachos() {
   // Filter logic
   const filteredBase = allSales.filter(s => {
     // Date filter
-    if (startDate && new Date(s.fecha) < new Date(startDate)) return false;
-    if (endDate && new Date(s.fecha) > new Date(endDate)) return false;
+    if (startDate && parseLocalDate(s.fecha) < parseLocalDate(startDate)) return false;
+    if (endDate && parseLocalDate(s.fecha) > parseLocalDate(endDate)) return false;
     
     // Vendedor filter
     if (vendedorFilter && s.vendedor !== vendedorFilter) return false;
@@ -83,8 +100,8 @@ export default function Despachos() {
 
   // Sorting
   currentList = [...currentList].sort((a, b) => {
-    const dateA = new Date(a.fecha).getTime();
-    const dateB = new Date(b.fecha).getTime();
+    const dateA = parseLocalDate(a.fecha).getTime();
+    const dateB = parseLocalDate(b.fecha).getTime();
     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
   });
 

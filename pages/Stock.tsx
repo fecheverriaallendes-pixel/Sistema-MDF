@@ -5,6 +5,23 @@ import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, T
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 
+function parseLocalDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  }
+  const slashParts = dateStr.split('/');
+  if (slashParts.length === 3) {
+    if (slashParts[0].length === 4) {
+      return new Date(parseInt(slashParts[0], 10), parseInt(slashParts[1], 10) - 1, parseInt(slashParts[2], 10));
+    } else {
+      return new Date(parseInt(slashParts[2], 10), parseInt(slashParts[1], 10) - 1, parseInt(slashParts[0], 10));
+    }
+  }
+  return new Date(dateStr);
+}
+
 export default function Stock() {
   const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound, stockHistory, sales } = useStore();
   const location = useLocation();
@@ -66,7 +83,7 @@ export default function Stock() {
             id: `${sale.id}-${it.codigoFardo}`,
             tipo: 'VENTA' as const,
             cantidad: -it.cantidad,
-            fecha: sale.timestamp || new Date(sale.fecha).toISOString(),
+            fecha: sale.timestamp || parseLocalDate(sale.fecha).toISOString(),
             vendedor: sale.vendedor || 'VENDEDOR',
             observaciones: `Nota de Venta #${sale.numeroVenta} - Cliente: ${sale.cliente || 'Otros'}`
           }));
@@ -75,7 +92,7 @@ export default function Stock() {
           id: sale.id,
           tipo: 'VENTA' as const,
           cantidad: -(sale.cantidad || 0),
-          fecha: sale.timestamp || new Date(sale.fecha).toISOString(),
+          fecha: sale.timestamp || parseLocalDate(sale.fecha).toISOString(),
           vendedor: sale.vendedor || 'VENDEDOR',
           observaciones: `Venta #${sale.numeroVenta} - Cliente: ${sale.cliente || 'Consumidor'} (${sale.tipoVenta})`
         }];
