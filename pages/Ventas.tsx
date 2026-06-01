@@ -149,7 +149,13 @@ export default function Ventas() {
             }
             
             .label-container { width: 100mm; height: 150mm; page-break-after: always; overflow: hidden; }
-            .invoice-container { width: 100%; height: 297mm; page-break-after: always; overflow: hidden; }
+            .invoice-container { 
+              width: 100%; 
+              padding: 15mm 20mm; 
+              box-sizing: border-box; 
+              page-break-after: always; 
+              overflow: visible; 
+            }
             @page { size: auto; margin: 0; }
           }
           
