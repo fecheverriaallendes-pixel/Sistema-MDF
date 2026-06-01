@@ -131,9 +131,23 @@ export default function Ventas() {
       </div>
       <style>{`
           @media print {
-            body > * { display: none !important; }
+            body { background: white !important; }
+            .no-print { display: none !important; }
             .print-only, .print-only * { display: block !important; visibility: visible !important; }
             .print-only { position: absolute; left: 0; top: 0; width: 100%; }
+            
+            /* Reset body limits to allow printing full content without cutoff */
+            body, html {
+              height: auto !important;
+              overflow: visible !important;
+            }
+            #root, #root > div, main {
+              height: auto !important;
+              overflow: visible !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            
             .label-container { width: 100mm; height: 150mm; page-break-after: always; overflow: hidden; }
             .invoice-container { width: 100%; height: 297mm; page-break-after: always; overflow: hidden; }
             @page { size: auto; margin: 0; }
