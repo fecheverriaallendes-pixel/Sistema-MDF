@@ -70,7 +70,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
   ];
 
   const menuItems = allMenuItems.filter(item => 
-    item.roles.includes(currentUser.rol) || (item.name === 'Producción' && currentUser.nombre.toUpperCase() === 'CAMILA VIVAR')
+    item.roles.includes(currentUser.rol) || (item.name === 'Producción' && (currentUser.nombre || '').toUpperCase() === 'CAMILA VIVAR')
   );
 
   return (

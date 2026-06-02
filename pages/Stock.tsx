@@ -137,7 +137,7 @@ export default function Stock() {
 
   // Obtener lista única de proveedores para el filtro
   const uniqueProviders = useMemo(() => {
-    const providers = stock.map(item => item.proveedor.toUpperCase());
+    const providers = stock.map(item => (item.proveedor || '').trim().toUpperCase()).filter(Boolean);
     return ['TODOS', ...Array.from(new Set(providers))].sort();
   }, [stock]);
 
@@ -147,9 +147,9 @@ export default function Stock() {
   const filteredStock = useMemo(() => {
     const normalizedSearch = normalizeText(searchTerm);
     return stock.filter(item => {
-      const matchesSearch = normalizeText(item.codigo).includes(normalizedSearch) || 
-                           normalizeText(item.tipo).includes(normalizedSearch);
-      const matchesProvider = providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter;
+      const matchesSearch = normalizeText(item.codigo || '').includes(normalizedSearch) || 
+                           normalizeText(item.tipo || '').includes(normalizedSearch);
+      const matchesProvider = providerFilter === 'TODOS' || (item.proveedor || '').toUpperCase() === providerFilter;
       const itemCategory = item.categoria || 'FARDO';
       const matchesCategory = categoryFilter === 'TODOS' 
         ? true 
@@ -224,7 +224,7 @@ export default function Stock() {
         return;
     }
 
-    addStockItem({ ...newBale, codigo: finalCodigo, proveedor: newBale.proveedor.toUpperCase() });
+    addStockItem({ ...newBale, codigo: finalCodigo, proveedor: (newBale.proveedor || '').toUpperCase() });
     setNewBale({ codigo: '', tipo: '', proveedor: '', precioCosto: 0, precioSugerido: 0, stockActual: 1, unidad: 'FARDO' });
     setIsAdding(false);
     playSound('success');
@@ -234,13 +234,13 @@ export default function Stock() {
     e.preventDefault();
     if (!editingItem || !canModify) return;
     
-    const conflict = stock.find(s => s.id !== editingItem.id && s.codigo.toUpperCase() === editingItem.codigo.toUpperCase());
+    const conflict = stock.find(s => s.id !== editingItem.id && (s.codigo || '').toUpperCase() === (editingItem.codigo || '').toUpperCase());
     if (conflict) {
       alert(`ERROR: No puedes usar el código ${editingItem.codigo} porque ya pertenece a otro producto (${conflict.tipo}).`);
       return;
     }
 
-    updateStockItem(editingItem.id, { ...editingItem, proveedor: editingItem.proveedor.toUpperCase() });
+    updateStockItem(editingItem.id, { ...editingItem, proveedor: (editingItem.proveedor || '').toUpperCase() });
     setEditingItem(null);
     playSound('success');
   };

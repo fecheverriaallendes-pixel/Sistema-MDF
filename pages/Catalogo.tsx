@@ -89,12 +89,12 @@ export default function Catalogo() {
   const [showCopyFeedback, setShowCopyFeedback] = useState(false);
 
   const uniqueProviders = useMemo(() => {
-    const providers = stock.map(item => item.proveedor.toUpperCase());
+    const providers = stock.map(item => (item.proveedor || '').trim().toUpperCase()).filter(Boolean);
     return ['TODOS', ...Array.from(new Set(providers))].sort();
   }, [stock]);
 
   const normalizeText = (text: string) => 
-    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    (text || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   const sortedAndFilteredStock = useMemo(() => {
     const normalizedSearch = normalizeText(searchTerm);
@@ -102,9 +102,9 @@ export default function Catalogo() {
       // Ocultar productos con stock 0
       if (item.stockActual <= 0) return false;
 
-      const matchesSearch = normalizeText(item.tipo).includes(normalizedSearch) || 
-                           normalizeText(item.codigo).includes(normalizedSearch);
-      const matchesProvider = providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter;
+      const matchesSearch = normalizeText(item.tipo || '').includes(normalizedSearch) || 
+                           normalizeText(item.codigo || '').includes(normalizedSearch);
+      const matchesProvider = providerFilter === 'TODOS' || (item.proveedor || '').toUpperCase() === providerFilter;
       
       const itemCategory = item.categoria || 'FARDO';
       const matchesCategory = categoryFilter === 'TODOS' || itemCategory === categoryFilter;
@@ -169,15 +169,15 @@ export default function Catalogo() {
             const right = onlyWithStock[i+1];
             
             pairedRows.push([
-              left.codigo.replace('MDF-', ''),
-              left.tipo.toUpperCase().substring(0, 28),
-              left.stockActual.toString(),
-              `$ ${left.precioSugerido.toLocaleString('es-CL')}`,
+              (left.codigo || '').replace('MDF-', ''),
+              (left.tipo || '').toUpperCase().substring(0, 28),
+              (left.stockActual || 0).toString(),
+              `$ ${(left.precioSugerido || 0).toLocaleString('es-CL')}`,
               '', // Espaciador
-              right ? right.codigo.replace('MDF-', '') : '',
-              right ? right.tipo.toUpperCase().substring(0, 28) : '',
-              right ? right.stockActual.toString() : '',
-              right ? `$ ${right.precioSugerido.toLocaleString('es-CL')}` : ''
+              right ? (right.codigo || '').replace('MDF-', '') : '',
+              right ? (right.tipo || '').toUpperCase().substring(0, 28) : '',
+              right ? (right.stockActual || 0).toString() : '',
+              right ? `$ ${(right.precioSugerido || 0).toLocaleString('es-CL')}` : ''
             ]);
           }
 

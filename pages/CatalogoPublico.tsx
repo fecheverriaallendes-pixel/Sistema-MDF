@@ -27,14 +27,14 @@ export default function CatalogoPublico() {
 
   const filteredStock = useMemo(() => {
     return availableStock.filter(item => {
-      const matchesSearch = item.tipo.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           item.codigo.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (item.tipo || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (item.codigo || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const itemCategory = item.categoria || 'FARDO';
       const matchesFilter = activeFilter === 'TODOS' || itemCategory === activeFilter;
       
       return matchesSearch && matchesFilter;
-    }).sort((a, b) => a.tipo.localeCompare(b.tipo));
+    }).sort((a, b) => (a.tipo || '').localeCompare(b.tipo || ''));
   }, [availableStock, searchTerm, activeFilter]);
 
   const handleWhatsAppInquiry = (item: any) => {

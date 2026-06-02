@@ -14,7 +14,7 @@ export default function TransportistaView() {
   const isAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
   
   const filteredSales = sales.filter(s => {
-    const isOwner = (isAdmin || s.transportista?.toLowerCase() === currentUser.nombre.toLowerCase());
+    const isOwner = (isAdmin || s.transportista?.toLowerCase() === (currentUser.nombre || '').toLowerCase());
     const isDispatched = s.enviado;
     const isNotWithdrawal = s.tipoDespacho !== DispatchType.RETIRO;
     const isImmediateOrNoJunta = (!s.juntaCompra || s.juntaCompra === 'DESPACHO INMEDIATO');
