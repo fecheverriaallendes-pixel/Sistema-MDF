@@ -112,6 +112,14 @@ export default function RegistrarVenta() {
     const isQuick = mode === 'QUICK';
     const isNotaVenta = mode === 'NOTA_VENTA';
     
+    if (!isNotaVenta) {
+      const selectedStockItem = formData.codigoFardo ? stock.find(s => s.codigo === formData.codigoFardo.trim().toUpperCase()) : null;
+      if (selectedStockItem && selectedStockItem.stockActual < (formData.cantidad || 1)) {
+        const confirmForce = window.confirm(`⚠️ El fardo ${selectedStockItem.codigo} no tiene stock suficiente (Stock actual: ${selectedStockItem.stockActual}, Solicitado: ${formData.cantidad || 1}).\n\n¿Deseas registrar la venta de todas formas marcándolo como stock negativo?`);
+        if (!confirmForce) return;
+      }
+    }
+    
     const finalData = {
       ...formData,
       tipoVenta: isQuick ? SaleType.LIVE : isNotaVenta ? SaleType.NOTA_VENTA : SaleType.NORMAL,
@@ -142,6 +150,9 @@ export default function RegistrarVenta() {
     
     setTimeout(() => setSuccess(false), 2000);
   };
+
+  const selectedStockItem = formData.codigoFardo ? stock.find(s => s.codigo === formData.codigoFardo.trim().toUpperCase()) : null;
+  const selectedNewItemStock = newItem.codigoFardo ? stock.find(s => s.codigo === newItem.codigoFardo.trim().toUpperCase()) : null;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -239,31 +250,74 @@ export default function RegistrarVenta() {
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Package size={18} className="text-blue-500" /> {mode === 'NOTA_VENTA' ? 'Agregar Producto' : 'Código de Fardo'}</label>
               
               {mode === 'NOTA_VENTA' ? (
-                <div className="flex flex-wrap gap-2">
-                    <input list="stock-suggestions" type="text" className="w-[120px] px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CODIGO" value={newItem.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, true)}/>
-                    <input type="number" className="w-16 px-2 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CANT" value={newItem.cantidad} onChange={(e) => setNewItem({...newItem, cantidad: Number(e.target.value)})}/>
-                    <input type="number" className="w-24 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="VALOR" value={newItem.valorUnitario} onChange={(e) => setNewItem({...newItem, valorUnitario: Number(e.target.value)})}/>
-                    <select className="px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none text-[10px]" value={newItem.tipoComision} onChange={(e) => setNewItem({...newItem, tipoComision: e.target.value as CommissionType})}>
-                        <option value={CommissionType.FARDO_NORMAL}>FARDO</option>
-                        <option value={CommissionType.FARDO_PROMO}>PROMO</option>
-                        <option value={CommissionType.MEDIO_FARDO}>MEDIO</option>
-                        <option value={CommissionType.LOTE}>LOTE</option>
-                    </select>
-                    <button type="button" onClick={() => { 
-                        if(newItem.codigoFardo && newItem.cantidad > 0 && newItem.valorUnitario > 0) {
-                            setItems([...items, newItem]);
-                            setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
-                        }
-                    }} className="bg-amber-600 text-white rounded-2xl px-4">+</button>
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                      <input list="stock-suggestions" type="text" className="w-[120px] px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CODIGO" value={newItem.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, true)}/>
+                      <input type="number" className="w-16 px-2 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CANT" value={newItem.cantidad} onChange={(e) => setNewItem({...newItem, cantidad: Number(e.target.value)})}/>
+                      <input type="number" className="w-24 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="VALOR" value={newItem.valorUnitario} onChange={(e) => setNewItem({...newItem, valorUnitario: Number(e.target.value)})}/>
+                      <select className="px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none text-[10px]" value={newItem.tipoComision} onChange={(e) => setNewItem({...newItem, tipoComision: e.target.value as CommissionType})}>
+                          <option value={CommissionType.FARDO_NORMAL}>FARDO</option>
+                          <option value={CommissionType.FARDO_PROMO}>PROMO</option>
+                          <option value={CommissionType.MEDIO_FARDO}>MEDIO</option>
+                          <option value={CommissionType.LOTE}>LOTE</option>
+                      </select>
+                      <button type="button" onClick={() => { 
+                          if(newItem.codigoFardo && newItem.cantidad > 0 && newItem.valorUnitario > 0) {
+                              const foundStockItem = stock.find(s => s.codigo === newItem.codigoFardo.trim().toUpperCase());
+                              if (foundStockItem && foundStockItem.stockActual < newItem.cantidad) {
+                                  const confirmAdd = window.confirm(`⚠️ El fardo ${foundStockItem.codigo} no tiene stock suficiente (Stock actual: ${foundStockItem.stockActual}, Solicitado: ${newItem.cantidad}).\n\n¿Deseas agregarlo a la lista de venta igualmente?`);
+                                  if (!confirmAdd) return;
+                              }
+                              setItems([...items, newItem]);
+                              setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
+                          }
+                      }} className="bg-amber-600 text-white rounded-2xl px-4">+</button>
+                  </div>
+                  {selectedNewItemStock && (
+                    <div className="mt-3 text-[10px] font-black uppercase tracking-wider">
+                      {selectedNewItemStock.stockActual <= 0 ? (
+                        <span className="text-red-500 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg inline-block">
+                          ⚠️ ¡Agotado! (Stock: {selectedNewItemStock.stockActual} {selectedNewItemStock.unidad}s)
+                        </span>
+                      ) : selectedNewItemStock.stockActual < 3 ? (
+                        <span className="text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg inline-block">
+                          ⚠️ Stock bajo: solo quedan {selectedNewItemStock.stockActual} {selectedNewItemStock.unidad}s
+                        </span>
+                      ) : (
+                        <span className="text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg inline-block">
+                          ✅ Stock disponible: {selectedNewItemStock.stockActual} {selectedNewItemStock.unidad}s
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="flex gap-2">
-                    <input required list="stock-suggestions" type="text" className="w-full px-8 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-2xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="F-XXX" value={formData.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, false)}/>
-                    <input required type="number" className="w-32 px-4 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-xl font-black outline-none transition-all" placeholder="VALOR" value={formData.valorUnitario || ''} onChange={(e) => setFormData({...formData, valorUnitario: Number(e.target.value)})}/>
+                <div>
+                  <div className="flex gap-2">
+                      <input required list="stock-suggestions" type="text" className="w-full px-8 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-2xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="F-XXX" value={formData.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, false)}/>
+                      <input required type="number" className="w-32 px-4 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-xl font-black outline-none transition-all" placeholder="VALOR" value={formData.valorUnitario || ''} onChange={(e) => setFormData({...formData, valorUnitario: Number(e.target.value)})}/>
+                  </div>
+                  {selectedStockItem && (
+                    <div className="mt-3 text-[11px] font-black uppercase tracking-wider">
+                      {selectedStockItem.stockActual <= 0 ? (
+                        <span className="text-red-500 bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl inline-block">
+                          ⚠️ ¡Producto agotado! Stock: {selectedStockItem.stockActual} {selectedStockItem.unidad}s
+                        </span>
+                      ) : selectedStockItem.stockActual < 3 ? (
+                        <span className="text-amber-600 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-xl inline-block">
+                          ⚠️ Stock bajo: solo quedan {selectedStockItem.stockActual} {selectedStockItem.unidad}s
+                        </span>
+                      ) : (
+                        <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-xl inline-block">
+                          ✅ Stock disponible: {selectedStockItem.stockActual} {selectedStockItem.unidad}s
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               <datalist id="stock-suggestions">
-                {stock.filter(s => s.disponible).map(s => ( <option key={s.id} value={s.codigo}>{s.tipo}</option> ))}
+                {stock.filter(s => s.disponible).map(s => ( <option key={s.id} value={s.codigo}>{s.tipo} {s.proveedor ? `(${s.proveedor})` : ''}</option> ))}
               </datalist>
             </div>
             

@@ -27,7 +27,7 @@ export default function Stock() {
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
-  const [categoryFilter, setCategoryFilter] = useState<'TODOS' | 'FARDO' | 'LOTE'>('TODOS');
+  const [categoryFilter, setCategoryFilter] = useState<'TODOS' | 'FARDO' | 'LOTE' | 'NEGATIVO'>('TODOS');
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -151,7 +151,11 @@ export default function Stock() {
                            normalizeText(item.tipo).includes(normalizedSearch);
       const matchesProvider = providerFilter === 'TODOS' || item.proveedor.toUpperCase() === providerFilter;
       const itemCategory = item.categoria || 'FARDO';
-      const matchesCategory = categoryFilter === 'TODOS' || itemCategory === categoryFilter;
+      const matchesCategory = categoryFilter === 'TODOS' 
+        ? true 
+        : categoryFilter === 'NEGATIVO' 
+          ? item.stockActual < 0 
+          : itemCategory === categoryFilter;
       return matchesSearch && matchesProvider && matchesCategory;
     });
   }, [stock, searchTerm, providerFilter, categoryFilter]);
@@ -280,19 +284,46 @@ export default function Stock() {
         )}
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6 items-center">
-        <div className="flex bg-slate-100 p-2 rounded-[32px] w-full md:w-auto shadow-sm">
-          {(['TODOS', 'FARDO', 'LOTE'] as const).map((cat) => (
+      <div className="flex flex-col lg:flex-row gap-6 items-center justify-between w-full">
+        <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+          <div className="flex bg-slate-100 p-2 rounded-[32px] shadow-sm">
+            {(['TODOS', 'FARDO', 'LOTE', 'NEGATIVO'] as const).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => { setCategoryFilter(cat); playSound('transition'); }}
+                className={`px-6 md:px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest transition-all ${
+                  categoryFilter === cat ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                {cat === 'TODOS' ? 'Todos' : cat === 'FARDO' ? 'Fardos' : cat === 'LOTE' ? 'Lotes' : '⚠️ Negativos'}
+              </button>
+            ))}
+          </div>
+
+          {categoryFilter === 'NEGATIVO' && filteredStock.length > 0 && canModify && (
             <button
-              key={cat}
-              onClick={() => { setCategoryFilter(cat); playSound('transition'); }}
-              className={`px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest transition-all ${
-                categoryFilter === cat ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-900'
-              }`}
+              type="button"
+              onClick={async () => {
+                const confirmReset = window.confirm(`⚠️ ¿Estás seguro de que deseas reajustar los ${filteredStock.length} productos con stock negativo a 0?\n\nEsta acción modificará su stock actual directamente en la base de datos.`);
+                if (confirmReset) {
+                  try {
+                    for (const item of filteredStock) {
+                      await updateStockItem(item.id, { stockActual: 0 });
+                    }
+                    playSound('success');
+                    alert("✅ Corrección masiva exitosa: Todos los productos con stock negativo han sido reajustados a 0.");
+                  } catch (err) {
+                    console.error("Error updating negative stocks:", err);
+                    alert("Error al corregir algunos artículos. Revisa la consola.");
+                  }
+                }
+              }}
+              className="px-6 py-4 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-[24px] shadow-md shadow-red-600/20 flex items-center gap-2 transition-all active:scale-95 animate-pulse"
             >
-              {cat === 'TODOS' ? 'Todos' : cat === 'FARDO' ? 'Fardos' : 'Lotes'}
+              <AlertTriangle size={16} /> Corregir Negativos a 0
             </button>
-          ))}
+          )}
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 flex-1 w-full">
