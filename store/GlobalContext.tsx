@@ -471,28 +471,88 @@ interface StoreContextType {
   addStockHistoryEvent: (event: Omit<StockHistoryEvent, 'id' | 'fecha'>) => Promise<void>;
 }
 
+// Safe storage wrapper to prevent Safari private mode exception crashes
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("Storage is blocked or unavailable:", e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("Storage is blocked or unavailable:", e);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn("Storage is blocked or unavailable:", e);
+    }
+  }
+};
+
+const safeSessionStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return sessionStorage.getItem(key);
+    } catch (e) {
+      console.warn("Storage is blocked or unavailable:", e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("Storage is blocked or unavailable:", e);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      sessionStorage.removeItem(key);
+    } catch (e) {
+      console.warn("Storage is blocked or unavailable:", e);
+    }
+  }
+};
+
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('mdf_settings');
+    const saved = safeLocalStorage.getItem('mdf_settings');
     return saved ? JSON.parse(saved) : { soundEnabled: true, cloudUrl: '', lastSync: null, dbConnected: false, lastError: null };
   });
 
-  const [sales, setSales] = useState<Sale[]>(() => JSON.parse(localStorage.getItem('mdf_sales') || '[]'));
+  const [sales, setSales] = useState<Sale[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_sales');
+    return saved ? JSON.parse(saved) : [];
+  });
   
   const [stock, setStock] = useState<StockItem[]>(() => {
-    const saved = localStorage.getItem('mdf_stock');
+    const saved = safeLocalStorage.getItem('mdf_stock');
     if (saved) return JSON.parse(saved);
     return [];
   });
 
-  const [staff, setStaff] = useState<StaffMember[]>(() => JSON.parse(localStorage.getItem('mdf_staff') || '[]'));
-  const [purchases, setPurchases] = useState<Purchase[]>(() => JSON.parse(localStorage.getItem('mdf_purchases') || '[]'));
+  const [staff, setStaff] = useState<StaffMember[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_staff');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [purchases, setPurchases] = useState<Purchase[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_purchases');
+    return saved ? JSON.parse(saved) : [];
+  });
   
   const [carriers, setCarriers] = useState<string[]>(() => {
-    const saved = localStorage.getItem('mdf_carriers');
+    const saved = safeLocalStorage.getItem('mdf_carriers');
     return saved ? JSON.parse(saved) : [
       'Isaias Peralta',
       'Anthony Mendez',
@@ -503,18 +563,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     ];
   });
   
-  const [adjustments, setAdjustments] = useState<CommissionAdjustment[]>(() => JSON.parse(localStorage.getItem('mdf_adjustments') || '[]'));
-  const [coupons, setCoupons] = useState<Coupon[]>(() => JSON.parse(localStorage.getItem('mdf_coupons') || '[]'));
+  const [adjustments, setAdjustments] = useState<CommissionAdjustment[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_adjustments');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [coupons, setCoupons] = useState<Coupon[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_coupons');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>([]);
   const [stockHistory, setStockHistory] = useState<StockHistoryEvent[]>(() => {
-    try {
-      const saved = localStorage.getItem('mdf_stock_history');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    const saved = safeLocalStorage.getItem('mdf_stock_history');
+    return saved ? JSON.parse(saved) : [];
   });
 
   const isSyncingRef = useRef(false);
@@ -532,7 +594,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const updateSettings = (newSettings: any) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
-    localStorage.setItem('mdf_settings', JSON.stringify(updated));
+    safeLocalStorage.setItem('mdf_settings', JSON.stringify(updated));
   };
 
   const playSound = useCallback((type: 'click' | 'success' | 'transition') => {
@@ -663,32 +725,32 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('mdf_sales', JSON.stringify(sales));
-    localStorage.setItem('mdf_stock', JSON.stringify(stock));
-    localStorage.setItem('mdf_staff', JSON.stringify(staff));
-    localStorage.setItem('mdf_purchases', JSON.stringify(purchases));
-    localStorage.setItem('mdf_carriers', JSON.stringify(carriers));
-    localStorage.setItem('mdf_adjustments', JSON.stringify(adjustments));
-    localStorage.setItem('mdf_settings', JSON.stringify(settings));
-    localStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
+    safeLocalStorage.setItem('mdf_sales', JSON.stringify(sales));
+    safeLocalStorage.setItem('mdf_stock', JSON.stringify(stock));
+    safeLocalStorage.setItem('mdf_staff', JSON.stringify(staff));
+    safeLocalStorage.setItem('mdf_purchases', JSON.stringify(purchases));
+    safeLocalStorage.setItem('mdf_carriers', JSON.stringify(carriers));
+    safeLocalStorage.setItem('mdf_adjustments', JSON.stringify(adjustments));
+    safeLocalStorage.setItem('mdf_settings', JSON.stringify(settings));
+    safeLocalStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
   }, [sales, stock, staff, purchases, carriers, adjustments, settings, stockHistory]);
 
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: StaffRole } | null>(() => {
-    const saved = sessionStorage.getItem('mdf_session');
+    const saved = safeSessionStorage.getItem('mdf_session');
     return saved ? JSON.parse(saved) : null;
   });
 
   const login = (nombre: string, rol: StaffRole) => {
     const user = { nombre, rol };
     setCurrentUser(user);
-    sessionStorage.setItem('mdf_session', JSON.stringify(user));
+    safeSessionStorage.setItem('mdf_session', JSON.stringify(user));
     playSound('success');
     syncWithCloud();
   };
 
   const logout = () => {
     setCurrentUser(null);
-    sessionStorage.removeItem('mdf_session');
+    safeSessionStorage.removeItem('mdf_session');
     playSound('click');
   };
 
@@ -1397,7 +1459,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
           rol: updated.rol 
         };
         setCurrentUser(updatedUserSession);
-        sessionStorage.setItem('mdf_session', JSON.stringify(updatedUserSession));
+        safeSessionStorage.setItem('mdf_session', JSON.stringify(updatedUserSession));
       }
 
     } catch (error) {

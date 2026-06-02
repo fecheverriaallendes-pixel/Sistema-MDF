@@ -288,7 +288,7 @@ export default function App() {
               <Route path="/stock" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.BODEGA]}><Stock /></ProtectedRoute>} />
               <Route path="/transportista" element={<ProtectedRoute roles={[StaffRole.TRANSPORTISTA, StaffRole.ADMIN]}><TransportistaView /></ProtectedRoute>} />
               <Route path="/despachos" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Despachos /></ProtectedRoute>} />
-              <Route path="/produccion" element={<ProtectedRoute roles={[StaffRole.ADMIN]} extraCheck={(u) => u.nombre.toUpperCase() === 'CAMILA VIVAR'}><Produccion /></ProtectedRoute>} />
+              <Route path="/produccion" element={<ProtectedRoute roles={[StaffRole.ADMIN]} extraCheck={(u) => (u?.nombre || '').toUpperCase() === 'CAMILA VIVAR'}><Produccion /></ProtectedRoute>} />
               <Route path="/crm" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><CRM /></ProtectedRoute>} />
               <Route path="/post-venta" element={<ProtectedRoute roles={[StaffRole.POST_VENTA, StaffRole.ADMIN]}><PostVenta /></ProtectedRoute>} />
               <Route path="/etiquetas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Etiquetas /></ProtectedRoute>} />

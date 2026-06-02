@@ -113,13 +113,15 @@ export default function Catalogo() {
     });
 
     return result.sort((a, b) => {
+      const tipoA = a.tipo || '';
+      const tipoB = b.tipo || '';
       switch (sortOrder) {
-        case 'alpha-asc': return a.tipo.localeCompare(b.tipo);
-        case 'alpha-desc': return b.tipo.localeCompare(a.tipo);
-        case 'price-asc': return a.precioSugerido - b.precioSugerido;
-        case 'price-desc': return b.precioSugerido - a.precioSugerido;
-        case 'stock-asc': return a.stockActual - b.stockActual;
-        case 'stock-desc': return b.stockActual - a.stockActual;
+        case 'alpha-asc': return tipoA.localeCompare(tipoB);
+        case 'alpha-desc': return tipoB.localeCompare(tipoA);
+        case 'price-asc': return (a.precioSugerido || 0) - (b.precioSugerido || 0);
+        case 'price-desc': return (b.precioSugerido || 0) - (a.precioSugerido || 0);
+        case 'stock-asc': return (a.stockActual || 0) - (b.stockActual || 0);
+        case 'stock-desc': return (b.stockActual || 0) - (a.stockActual || 0);
         default: return 0;
       }
     });
