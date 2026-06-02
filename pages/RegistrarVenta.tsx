@@ -317,7 +317,7 @@ export default function RegistrarVenta() {
                 </div>
               )}
               <datalist id="stock-suggestions">
-                {stock.filter(s => s.disponible).map(s => ( <option key={s.id} value={s.codigo}>{s.tipo} {s.proveedor ? `(${s.proveedor})` : ''}</option> ))}
+                {stock.filter(s => s.disponible).map(s => ( <option key={s.id} value={s.codigo}>{s.tipo}{s.proveedor ? ` (${s.proveedor})` : ''} [Stock: {s.stockActual}]</option> ))}
               </datalist>
             </div>
             
