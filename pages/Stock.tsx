@@ -410,7 +410,12 @@ export default function Stock() {
                     </div>
                   </td>
                   <td className="px-8 py-6 text-center">
-                    <button onClick={() => togglePromocion(item.id)} className={`p-3 rounded-xl transition-all ${item.promocion ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                    <button 
+                      onClick={() => canModify && togglePromocion(item.id)} 
+                      disabled={!canModify}
+                      className={`p-3 rounded-xl transition-all ${item.promocion ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'} ${!canModify ? 'opacity-70 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                      title={!canModify ? "No tienes permisos para modificar promociones" : "Alternar Promoción"}
+                    >
                         <Tag size={20} />
                     </button>
                   </td>
