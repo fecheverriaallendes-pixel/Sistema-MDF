@@ -92,6 +92,48 @@ export default function Dashboard() {
     });
   }, [sales]);
 
+  const pendingBySeller = useMemo(() => {
+    const summary: Record<string, {
+      vendedor: string;
+      incompletas: number;
+      sinEtiquetar: number;
+      sinPagar: number;
+      totalPendientes: number;
+    }> = {};
+
+    sales.forEach(s => {
+      if (!s) return;
+      const seller = s.vendedor || 'SISTEMA';
+      
+      const isIncompleta = !s.datosCompletos;
+      const isSinEtiquetar = s.datosCompletos && !s.impresa;
+      const isSinPagar = s.estadoPago !== 'Pagado';
+
+      if (isIncompleta || isSinEtiquetar || isSinPagar) {
+        if (!summary[seller]) {
+          summary[seller] = {
+            vendedor: seller,
+            incompletas: 0,
+            sinEtiquetar: 0,
+            sinPagar: 0,
+            totalPendientes: 0
+          };
+        }
+        
+        if (isIncompleta) summary[seller].incompletas++;
+        if (isSinEtiquetar) summary[seller].sinEtiquetar++;
+        if (isSinPagar) summary[seller].sinPagar++;
+        
+        summary[seller].totalPendientes = 
+          summary[seller].incompletas + 
+          summary[seller].sinEtiquetar + 
+          summary[seller].sinPagar;
+      }
+    });
+
+    return Object.values(summary).sort((a, b) => b.totalPendientes - a.totalPendientes);
+  }, [sales]);
+
   return (
     <div className="space-y-10 animate-in fade-in duration-700 max-w-[1600px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
@@ -251,6 +293,76 @@ export default function Dashboard() {
             Ver Detalle Completo <ArrowRight size={14} />
           </Link>
         </div>
+      </div>
+
+      {/* Control de Pendientes por Vendedor */}
+      <div id="pending-sales-by-seller" className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl overflow-hidden relative">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2 font-sans">
+              <AlertCircle className="text-rose-500 animate-pulse" size={24} /> Pendientes por Vendedor
+            </h3>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">
+              Ventas con datos incompletos, fardos de fardos sin etiquetar o pagos pendientes de confirmar
+            </p>
+          </div>
+          <span className="px-4 py-2 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 self-start md:self-auto font-sans">
+            {pendingBySeller.reduce((acc, curr) => acc + curr.totalPendientes, 0)} Alertas Totales
+          </span>
+        </div>
+
+        {pendingBySeller.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">Vendedor</th>
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center font-sans">Datos Incompletos</th>
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center font-sans">Sin Etiquetar/Imprimir</th>
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center font-sans">Pendiente de Pago</th>
+                  <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right font-sans">Total Pendientes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 font-sans">
+                {pendingBySeller.map((item) => (
+                  <tr key={item.vendedor} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-5">
+                      <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{item.vendedor}</p>
+                    </td>
+                    <td className="py-5 text-center">
+                      <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-black ${item.incompletas > 0 ? 'bg-amber-100 text-amber-700 font-mono' : 'bg-slate-100 text-slate-400 font-mono'}`}>
+                        {item.incompletas}
+                      </span>
+                    </td>
+                    <td className="py-5 text-center">
+                      <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-black ${item.sinEtiquetar > 0 ? 'bg-blue-100 text-blue-700 font-mono' : 'bg-slate-100 text-slate-400 font-mono'}`}>
+                        {item.sinEtiquetar}
+                      </span>
+                    </td>
+                    <td className="py-5 text-center">
+                      <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-black ${item.sinPagar > 0 ? 'bg-rose-100 text-rose-700 font-mono' : 'bg-slate-100 text-slate-400 font-mono'}`}>
+                        {item.sinPagar}
+                      </span>
+                    </td>
+                    <td className="py-5 text-right font-black text-slate-900 text-sm">
+                      <span className="inline-flex items-center justify-center px-4 py-2 bg-slate-900 text-white rounded-2xl text-[11px] font-black tracking-tight shadow-sm font-mono">
+                        {item.totalPendientes} u.
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 text-center bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-100 font-sans">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-4">
+              <TrendingUp size={28} />
+            </div>
+            <h4 className="text-base font-black text-slate-800 uppercase tracking-tight">¡Felicitaciones! Todo al día</h4>
+            <p className="text-slate-400 text-xs mt-2 max-w-md font-medium">No hay ventas con datos incompletos, etiquetas pendientes o pagos sin registrar en el sistema.</p>
+          </div>
+        )}
       </div>
 
       <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-[56px] p-12 text-white flex flex-col md:flex-row items-center justify-between gap-12 relative overflow-hidden shadow-2xl">
