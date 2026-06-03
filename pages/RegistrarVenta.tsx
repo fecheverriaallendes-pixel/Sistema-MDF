@@ -112,11 +112,35 @@ export default function RegistrarVenta() {
     const isQuick = mode === 'QUICK';
     const isNotaVenta = mode === 'NOTA_VENTA';
     
-    if (!isNotaVenta) {
+    if (isNotaVenta) {
+      if (items.length === 0) {
+        alert("⚠️ Por favor agrega al menos un producto a la lista antes de registrar la nota de venta.");
+        return;
+      }
+      for (const item of items) {
+        const foundStockItem = stock.find(s => s.codigo === item.codigoFardo.trim().toUpperCase());
+        if (foundStockItem) {
+          if (foundStockItem.stockActual <= 0) {
+            alert(`⚠️ Error: El fardo ${foundStockItem.codigo} está agotado (Stock actual: ${foundStockItem.stockActual}). No se puede registrar la venta.`);
+            return;
+          }
+          if (foundStockItem.stockActual < item.cantidad) {
+            alert(`⚠️ Error: El fardo ${foundStockItem.codigo} no tiene stock suficiente (Stock actual: ${foundStockItem.stockActual}, Solicitado: ${item.cantidad}). No se puede registrar la venta.`);
+            return;
+          }
+        }
+      }
+    } else {
       const selectedStockItem = formData.codigoFardo ? stock.find(s => s.codigo === formData.codigoFardo.trim().toUpperCase()) : null;
-      if (selectedStockItem && selectedStockItem.stockActual < (formData.cantidad || 1)) {
-        const confirmForce = window.confirm(`⚠️ El fardo ${selectedStockItem.codigo} no tiene stock suficiente (Stock actual: ${selectedStockItem.stockActual}, Solicitado: ${formData.cantidad || 1}).\n\n¿Deseas registrar la venta de todas formas marcándolo como stock negativo?`);
-        if (!confirmForce) return;
+      if (selectedStockItem) {
+        if (selectedStockItem.stockActual <= 0) {
+          alert(`⚠️ Error: El fardo ${selectedStockItem.codigo} está agotado (Stock actual: ${selectedStockItem.stockActual}). No se puede registrar la venta.`);
+          return;
+        }
+        if (selectedStockItem.stockActual < (formData.cantidad || 1)) {
+          alert(`⚠️ Error: El fardo ${selectedStockItem.codigo} no tiene stock suficiente (Stock actual: ${selectedStockItem.stockActual}, Solicitado: ${formData.cantidad || 1}). No se puede registrar la venta.`);
+          return;
+        }
       }
     }
     
@@ -264,9 +288,15 @@ export default function RegistrarVenta() {
                       <button type="button" onClick={() => { 
                           if(newItem.codigoFardo && newItem.cantidad > 0 && newItem.valorUnitario > 0) {
                               const foundStockItem = stock.find(s => s.codigo === newItem.codigoFardo.trim().toUpperCase());
-                              if (foundStockItem && foundStockItem.stockActual < newItem.cantidad) {
-                                  const confirmAdd = window.confirm(`⚠️ El fardo ${foundStockItem.codigo} no tiene stock suficiente (Stock actual: ${foundStockItem.stockActual}, Solicitado: ${newItem.cantidad}).\n\n¿Deseas agregarlo a la lista de venta igualmente?`);
-                                  if (!confirmAdd) return;
+                              if (foundStockItem) {
+                                  if (foundStockItem.stockActual <= 0) {
+                                      alert(`⚠️ Error: El fardo ${foundStockItem.codigo} está agotado (Stock actual: ${foundStockItem.stockActual}). No se puede agregar.`);
+                                      return;
+                                  }
+                                  if (foundStockItem.stockActual < newItem.cantidad) {
+                                      alert(`⚠️ Error: El fardo ${foundStockItem.codigo} no tiene stock suficiente (Stock actual: ${foundStockItem.stockActual}, Solicitado: ${newItem.cantidad}). No se puede agregar.`);
+                                      return;
+                                  }
                               }
                               setItems([...items, newItem]);
                               setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
