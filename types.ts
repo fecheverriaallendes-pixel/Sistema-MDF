@@ -175,6 +175,8 @@ export interface Coupon {
   createdAt: string;
   customerName?: string;
   saleId?: string;
+  authorizedBy?: string;
+  authorizedAt?: string;
 }
 
 export interface Cheque {

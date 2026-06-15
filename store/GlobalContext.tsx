@@ -433,8 +433,8 @@ interface StoreContextType {
   removeCarrier: (name: string) => void;
   coupons: Coupon[];
   addCoupon: (coupon: Omit<Coupon, 'id' | 'createdAt'>) => void;
-  redeemCoupon: (id: string) => void;
-  redeemCouponByCode: (code: string) => void;
+  redeemCoupon: (id: string, authorizedBy?: string) => void;
+  redeemCouponByCode: (code: string, authorizedBy?: string) => void;
   deleteCoupon: (id: string) => void;
   cheques: Cheque[];
   addCheque: (cheque: Omit<Cheque, 'id' | 'pagado'>) => void;
@@ -932,21 +932,38 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     await deleteDoc(doc(db, 'cheques', id));
   };
   
-  const redeemCoupon = (id: string) => {
+  const redeemCoupon = (id: string, authorizedBy?: string) => {
     const coupon = coupons.find(c => c.id === id);
     if (coupon) {
-      setDoc(doc(db, 'coupons', id), { ...coupon, used: true });
+      const isExpired = new Date(coupon.validUntil) < new Date();
+      if (isExpired && !authorizedBy) {
+        throw new Error("El cupón ha expirado y se requiere la autorización de un administrador.");
+      }
+      setDoc(doc(db, 'coupons', id), { 
+        ...coupon, 
+        used: true,
+        authorizedBy: authorizedBy || null,
+        authorizedAt: authorizedBy ? new Date().toISOString() : null
+      });
     } else {
       throw new Error("Cupón no encontrado");
     }
   };
 
-  const redeemCouponByCode = (code: string) => {
+  const redeemCouponByCode = (code: string, authorizedBy?: string) => {
       const coupon = coupons.find(c => c.code === code);
       if (!coupon) throw new Error("Cupón no encontrado");
       if (coupon.used) throw new Error("Cupón ya utilizado");
-      if (new Date(coupon.validUntil) < new Date()) throw new Error("Cupón expiró");
-      setDoc(doc(db, 'coupons', coupon.id), { ...coupon, used: true });
+      const isExpired = new Date(coupon.validUntil) < new Date();
+      if (isExpired && !authorizedBy) {
+        throw new Error("El cupón ha expirado y se requiere la autorización de un administrador.");
+      }
+      setDoc(doc(db, 'coupons', coupon.id), { 
+        ...coupon, 
+        used: true,
+        authorizedBy: authorizedBy || null,
+        authorizedAt: authorizedBy ? new Date().toISOString() : null
+      });
   }
 
   const deleteCoupon = (id: string) => {
