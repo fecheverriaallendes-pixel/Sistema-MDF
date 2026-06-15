@@ -26,7 +26,11 @@ import {
   FileCode2,
   HelpCircle,
   Coins,
-  Wallet
+  Wallet,
+  Flame,
+  Copy,
+  Check,
+  Tag
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole } from '../types';
@@ -34,12 +38,13 @@ import { StaffRole } from '../types';
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 export default function Home() {
-  const { staff, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing } = useStore();
+  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing } = useStore();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ user: '', pin: '' });
   const [error, setError] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{status: 'idle' | 'success' | 'error', msg: string}>({status: 'idle', msg: ''});
+  const [copiedStockId, setCopiedStockId] = useState<string | null>(null);
   
   // Estado para vincular URL desde el inicio
   const [setupUrl, setSetupUrl] = useState('');
@@ -303,9 +308,131 @@ export default function Home() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase italic mt-1 tracking-widest">Formato Impreso (Líneas)</p>
                 </div>
                 <ChevronRight size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
-              </button>
+            </button>
            </div>
         </div>
+      )}
+
+      {/* SECCIÓN DE PRODUCTOS EN PROMOCIÓN PARA VENDEDORES */}
+      {canSeeCatalogue && (
+         <div className="w-full max-w-6xl mb-12 animate-in slide-in-from-top duration-700 delay-100">
+            <div className="flex items-center justify-between mb-6">
+               <div className="flex items-center gap-4">
+                  <div className="p-2.5 bg-rose-50 text-rose-500 rounded-2xl animate-pulse">
+                     <Flame size={24} />
+                  </div>
+                  <div>
+                     <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">🔥 Productos en Promoción 🔥</h2>
+                     <p className="text-xs text-rose-500 font-extrabold uppercase mt-0.5 tracking-wider">¡Comisión de venta especial de $1.500!</p>
+                  </div>
+               </div>
+               
+               <span className="hidden sm:inline-flex px-3.5 py-1.5 bg-rose-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-md">
+                  Campañas Activas
+               </span>
+            </div>
+
+            {(() => {
+               const promoItems = (stock || []).filter(item => item.promocion && item.stockActual > 0);
+               if (promoItems.length === 0) {
+                  return (
+                     <div className="bg-white p-10 rounded-[36px] border border-slate-100 shadow-xl text-center space-y-3 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-2 h-full bg-rose-500"></div>
+                        <div className="w-14 h-14 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto">
+                           <Tag size={24} />
+                        </div>
+                        <p className="font-extrabold text-slate-800 text-base uppercase tracking-tight">Sin Ofertas Activas</p>
+                        <p className="text-slate-400 text-xs font-medium max-w-md mx-auto leading-relaxed">No hay fardos etiquetados en promoción actualmente. Los administradores pueden marcar promociones directamente en la pestaña de <b className="text-slate-600">Bodega y Stock</b>.</p>
+                     </div>
+                  );
+               }
+
+               return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {promoItems.map((item) => {
+                        const lowStock = item.stockActual <= 3;
+                        const outOfStock = item.stockActual === 0;
+                        const promoMessage = `🔥 ¡SUPER PROMOCIÓN! Fardo de "${item.tipo.toUpperCase()}" (${item.unidad}) código: *${item.codigo}* por sólo *$${item.precioSugerido?.toLocaleString('es-CL')}* CLP. ¡Aprovecha ya antes que se agote! 🚚💨 Quedan pocas unidades en nuestra bodega central. Contáctanos de inmediato.`;
+
+                        const handleCopyMessage = () => {
+                           navigator.clipboard.writeText(promoMessage);
+                           setCopiedStockId(item.id);
+                           playSound('success');
+                           setTimeout(() => setCopiedStockId(null), 2500);
+                        };
+
+                        return (
+                           <div key={item.id} className="relative bg-white rounded-[32px] border border-slate-100 shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 flex flex-col justify-between p-6">
+                              {/* Left Indicator bar */}
+                              <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>
+                              
+                              {/* Header Card */}
+                              <div className="space-y-3">
+                                 <div className="flex justify-between items-start gap-2">
+                                    <span className="inline-flex px-2 px-3.5 py-1 bg-slate-900 text-rose-450 text-[9px] font-black tracking-widest uppercase rounded-full border border-slate-800">
+                                       PROMO
+                                    </span>
+                                    <span className={`text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full ${
+                                       outOfStock 
+                                          ? 'bg-red-50 text-red-500' 
+                                          : lowStock 
+                                             ? 'bg-amber-50 text-amber-600 animate-pulse' 
+                                             : 'bg-emerald-50 text-emerald-600'
+                                    }`}>
+                                       {outOfStock ? 'Sin Stock' : `${item.stockActual} disponibles`}
+                                    </span>
+                                 </div>
+
+                                 <div className="space-y-0.5">
+                                    <h4 className="font-mono text-[10px] font-bold text-slate-400 tracking-wider">CÓDIGO: {item.codigo}</h4>
+                                    <h3 className="font-black text-slate-800 text-lg uppercase tracking-tight leading-tight line-clamp-2">
+                                       {item.tipo}
+                                    </h3>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">{item.categoria || 'FARDO'} • {item.unidad}</p>
+                                 </div>
+                              </div>
+
+                              {/* Price Container and Action buttons */}
+                              <div className="mt-6 space-y-4">
+                                 <div className="flex items-baseline justify-between border-t border-slate-100 pt-4">
+                                    <div>
+                                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Precio Oferta</span>
+                                       <p className="text-2xl font-black text-slate-900 tracking-tight font-sans">
+                                          ${item.precioSugerido?.toLocaleString('es-CL')}
+                                       </p>
+                                    </div>
+                                    <div className="text-right">
+                                       <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Tu Comisión</span>
+                                       <p className="text-sm font-extrabold text-rose-600 font-mono">+$1.500</p>
+                                    </div>
+                                 </div>
+
+                                 <button 
+                                    onClick={handleCopyMessage}
+                                    className={`w-full py-3 px-4 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                                       copiedStockId === item.id 
+                                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/10' 
+                                          : 'bg-rose-50 hover:bg-rose-100 text-rose-600 active:scale-95'
+                                    }`}
+                                 >
+                                    {copiedStockId === item.id ? (
+                                       <>
+                                          <Check size={14} /> ¡Mensaje Copiado!
+                                       </>
+                                    ) : (
+                                       <>
+                                          <Copy size={14} /> Mensaje WhatsApp
+                                       </>
+                                    )}
+                                 </button>
+                              </div>
+                           </div>
+                        );
+                     })}
+                  </div>
+               );
+            })()}
+         </div>
       )}
 
       <div className="w-full max-w-6xl animate-in fade-in slide-in-from-bottom duration-1000">
