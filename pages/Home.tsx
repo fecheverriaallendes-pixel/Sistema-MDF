@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Zap, 
@@ -30,21 +30,146 @@ import {
   Flame,
   Copy,
   Check,
-  Tag
+  Tag,
+  Calendar,
+  TrendingUp
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
-import { StaffRole } from '../types';
+import { StaffRole, CommissionType } from '../types';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 export default function Home() {
-  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing } = useStore();
+  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing, sales, adjustments } = useStore();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ user: '', pin: '' });
   const [error, setError] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{status: 'idle' | 'success' | 'error', msg: string}>({status: 'idle', msg: ''});
   const [copiedStockId, setCopiedStockId] = useState<string | null>(null);
+  const [compWeekOffset, setCompWeekOffset] = useState<0 | -1>(0);
+
+  // Generamos rango semanal idéntico a Comisiones.tsx
+  const userWeekRange = useMemo(() => {
+    try {
+      const now = new Date();
+      const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+      
+      const start = new Date(now);
+      start.setDate(now.getDate() - currentDay + 1 + (compWeekOffset * 7));
+      start.setHours(0, 0, 0, 0);
+      
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      
+      return { start, end };
+    } catch (e) {
+      return { start: new Date(), end: new Date() };
+    }
+  }, [compWeekOffset]);
+
+  // Filtrado de ventas del usuario logueado en la semana seleccionada
+  const userCommissions = useMemo(() => {
+    if (!currentUser || !currentUser.nombre) return { total: 0, fardosNormales: 0, promos: 0, totalAjustes: 0 };
+    
+    const userSales = (sales || []).filter(s => {
+      if (!s || !s.fecha || typeof s.fecha !== 'string') return false;
+      if (s.vendedor !== currentUser.nombre) return false;
+
+      try {
+        let saleDate: Date;
+        if (s.fecha.includes('/')) {
+            const parts = s.fecha.split('/');
+            if (parts.length !== 3) return false;
+            const [d, m, y] = parts;
+            saleDate = new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0);
+        } else {
+            const parts = s.fecha.split('-');
+            if (parts.length !== 3) return false;
+            const [y, m, d] = parts;
+            saleDate = new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0);
+        }
+        
+        if (isNaN(saleDate.getTime())) return false;
+        return saleDate >= userWeekRange.start && saleDate <= userWeekRange.end;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    let totalVal = 0;
+    let fardosNormales = 0;
+    let promos = 0;
+
+    const COMMISSION_VALUES: Record<string, number> = {
+      [CommissionType.FARDO_NORMAL]: 3000,
+      [CommissionType.FARDO_PROMO]: 1500,
+      [CommissionType.MEDIO_FARDO]: 1500,
+      [CommissionType.LOTE]: 1000,
+    };
+
+    userSales.forEach(s => {
+      const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string, saleVariante?: string) => {
+          let finalTipo = tipo;
+          const uppercaseCode = (codigo || '').toUpperCase();
+          const variantUpper = (saleVariante || '').toUpperCase();
+
+          if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
+             finalTipo = CommissionType.LOTE;
+          } else if (variantUpper.includes('MEDIO')) {
+             finalTipo = CommissionType.MEDIO_FARDO;
+          }
+          
+          if (!finalTipo) {
+             finalTipo = CommissionType.FARDO_NORMAL;
+          }
+
+          const commValue = (COMMISSION_VALUES[finalTipo as string] || 0) * qty;
+          totalVal += commValue;
+
+          if (finalTipo === CommissionType.FARDO_NORMAL) {
+            fardosNormales += qty;
+          } else {
+            promos += qty;
+          }
+      };
+
+      if (s.items && s.items.length > 0) {
+          s.items.forEach(item => {
+              processEntry(item.tipoComision, item.cantidad, item.codigoFardo, s.variante);
+          });
+      } else {
+          processEntry(s.tipoComision, s.cantidad || 1, s.codigoFardo || '', s.variante);
+      }
+    });
+
+    // Sumar/restar ajustes del usuario para esa misma semana
+    let totalAjustes = 0;
+    const userAdjustments = (adjustments || []).filter(a => {
+      if (a.vendedor !== currentUser.nombre) return false;
+      try {
+        const parts = a.fecha.split('/');
+        if (parts.length !== 3) return false;
+        const [d, m, y] = parts;
+        const adjDate = new Date(Number(y), Number(m) - 1, Number(d));
+        return adjDate >= userWeekRange.start && adjDate <= userWeekRange.end;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    userAdjustments.forEach(a => {
+      totalAjustes += a.monto;
+    });
+
+    return {
+      total: totalVal + totalAjustes,
+      fardosNormales,
+      promos,
+      totalAjustes
+    };
+  }, [sales, adjustments, currentUser, userWeekRange]);
   
   // Estado para vincular URL desde el inicio
   const [setupUrl, setSetupUrl] = useState('');
@@ -277,6 +402,105 @@ export default function Home() {
           </span>
         </div>
       </div>
+
+      {/* SECCIÓN RESUMEN DE COMISIONES PERSONAL */}
+      {canSeeCatalogue && (
+        <div className="w-full max-w-6xl mb-12 animate-in slide-in-from-top duration-700">
+           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                 <div className="p-2 bg-amber-500 text-white rounded-2xl">
+                    <Wallet size={22} />
+                 </div>
+                 <div>
+                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Mi Resumen de Comisiones</h2>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tus estadísticas de venta personalizadas de la semana</p>
+                 </div>
+              </div>
+
+              {/* Selector de periodo */}
+              <div className="flex bg-slate-100 p-1 rounded-2xl self-start sm:self-auto border border-slate-200">
+                 <button
+                    onClick={() => { setCompWeekOffset(0); playSound('click'); }}
+                    className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${compWeekOffset === 0 ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                 >
+                    Esta Semana
+                 </button>
+                 <button
+                    onClick={() => { setCompWeekOffset(-1); playSound('click'); }}
+                    className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${compWeekOffset === -1 ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                 >
+                    Semana Pasada
+                 </button>
+              </div>
+           </div>
+
+           {/* Bento Grid layout */}
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Card 1: Total a pago */}
+              <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-[32px] p-6 shadow-xl overflow-hidden flex flex-col justify-between min-h-[140px]">
+                 <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl"></div>
+                 <div>
+                    <span className="text-[9px] font-black text-amber-400 uppercase tracking-[0.22em]">Total a Liquidar</span>
+                    <h3 className="text-4xl font-black tracking-tight mt-1">
+                       ${userCommissions.total.toLocaleString('es-CL')}
+                    </h3>
+                 </div>
+                 <div className="flex items-center gap-1.5 text-slate-400 font-bold italic text-[9px] border-t border-white/5 pt-3 mt-4">
+                    <Calendar size={12} />
+                    Rango: {userWeekRange.start.toLocaleDateString()} al {userWeekRange.end.toLocaleDateString()}
+                 </div>
+              </div>
+
+              {/* Card 2: Fardos Normales */}
+              <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl"></div>
+                 <div>
+                    <div className="flex items-center justify-between">
+                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Fardos Normales</span>
+                       <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-extrabold uppercase">+$3.000 c/u</span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mt-2">
+                       <h4 className="text-4xl font-black text-slate-800 tracking-tight">
+                          {userCommissions.fardosNormales}
+                       </h4>
+                       <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Vendidos</span>
+                    </div>
+                 </div>
+                 <div className="text-[9px] text-emerald-600 font-black uppercase tracking-wider pt-3 border-t border-slate-50 mt-4 flex items-center justify-between font-bold">
+                    <span>Subtotal:</span>
+                    <span className="font-mono text-xs">${(userCommissions.fardosNormales * 3000).toLocaleString('es-CL')}</span>
+                 </div>
+              </div>
+
+              {/* Card 3: Promociones / Ajustes */}
+              <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-20 h-20 bg-rose-500/5 rounded-full blur-xl"></div>
+                 <div>
+                    <div className="flex items-center justify-between">
+                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Promos y Ofertas</span>
+                       <span className="px-2.5 py-0.5 bg-rose-50 text-rose-500 rounded-full text-[9px] font-extrabold uppercase">Varía</span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mt-2">
+                       <h4 className="text-4xl font-black text-slate-800 tracking-tight">
+                          {userCommissions.promos}
+                       </h4>
+                       <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Vendidos</span>
+                    </div>
+                 </div>
+                 <div className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider pt-3 border-t border-slate-50 mt-4">
+                    {userCommissions.totalAjustes !== 0 ? (
+                       <span className="flex items-center justify-between text-rose-500 font-bold">
+                          <span>Ajustes:</span>
+                          <span className="font-mono text-xs">{userCommissions.totalAjustes > 0 ? '+' : ''}${userCommissions.totalAjustes.toLocaleString('es-CL')}</span>
+                       </span>
+                    ) : (
+                       <span className="text-slate-400 italic font-medium">Bono Especial Promocional</span>
+                    )}
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* SECCIÓN CATÁLOGO RÁPIDO PARA VENDEDORES */}
       {canSeeCatalogue && (
