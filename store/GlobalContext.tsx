@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent } from '../types';
-import { db, storage } from '../firebase';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment } from '../types';
+import { db, storage, auth } from '../firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -423,6 +424,13 @@ interface StoreContextType {
   purchases: Purchase[];
   carriers: string[];
   adjustments: CommissionAdjustment[];
+  incidents: Incident[];
+  addIncident: (incidentData: Omit<Incident, 'id' | 'codigoCaso' | 'createdAt' | 'updatedAt' | 'history' | 'comments' | 'attachments'>) => Promise<Incident>;
+  updateIncident: (id: string, updatedFields: Partial<Incident>) => Promise<void>;
+  addIncidentHistoryEvent: (id: string, description: string) => Promise<void>;
+  addIncidentComment: (id: string, commentText: string) => Promise<void>;
+  addIncidentAttachment: (id: string, attachment: { name: string; url: string; type: string }) => Promise<void>;
+  deleteIncident: (id: string) => Promise<void>;
   addSale: (saleData: Partial<Sale>) => Promise<Sale>;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
   markAsSent: (saleId: string) => void;
@@ -571,6 +579,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const saved = safeLocalStorage.getItem('mdf_coupons');
     return saved ? JSON.parse(saved) : [];
   });
+  const [incidents, setIncidents] = useState<Incident[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_incidents');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>([]);
@@ -656,6 +668,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubPurchases: any;
     let unsubAdjustments: any;
     let unsubCoupons: any;
+    let unsubIncidents: any;
     let unsubCheques: any;
     let unsubProduction: any;
     let unsubConfig: any;
@@ -663,6 +676,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubStockHistory: any;
 
     const initFirebase = async () => {
+      try {
+        await signInAnonymously(auth);
+      } catch (error: any) {
+        console.warn("Advertencia al iniciar sesión anónima en Firebase (se continuará sin auth):", error.code, error.message);
+      }
+
       try {
         unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
           const salesData = snap.docs.map(d => d.data() as Sale);
@@ -684,6 +703,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubCoupons = onSnapshot(collection(db, 'coupons'), (snap) => {
           setCoupons(snap.docs.map(d => d.data() as Coupon));
         });
+        unsubIncidents = onSnapshot(collection(db, 'incidents'), (snap) => {
+          setIncidents(snap.docs.map(d => ({ ...d.data(), id: d.id } as Incident)));
+        });
         unsubCheques = onSnapshot(collection(db, 'cheques'), (snap) => {
           setCheques(snap.docs.map(d => ({ ...d.data(), id: d.id } as Cheque)));
         });
@@ -703,7 +725,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
           setStockHistory(snap.docs.map(d => d.data() as StockHistoryEvent));
         });
       } catch (error: any) {
-        console.error("Error inicializando Firebase:", error.code, error.message);
+        console.error("Error al suscribirse a colecciones de Firebase:", error.code, error.message);
       }
     };
 
@@ -716,6 +738,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubPurchases) unsubPurchases();
       if (unsubAdjustments) unsubAdjustments();
       if (unsubCoupons) unsubCoupons();
+      if (unsubIncidents) unsubIncidents();
       if (unsubCheques) unsubCheques();
       if (unsubProduction) unsubProduction();
       if (unsubConfig) unsubConfig();
@@ -733,7 +756,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_adjustments', JSON.stringify(adjustments));
     safeLocalStorage.setItem('mdf_settings', JSON.stringify(settings));
     safeLocalStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
-  }, [sales, stock, staff, purchases, carriers, adjustments, settings, stockHistory]);
+    safeLocalStorage.setItem('mdf_incidents', JSON.stringify(incidents));
+  }, [sales, stock, staff, purchases, carriers, adjustments, settings, stockHistory, incidents]);
 
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: StaffRole } | null>(() => {
     const saved = safeSessionStorage.getItem('mdf_session');
@@ -1506,6 +1530,186 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     deleteDoc(doc(db, 'customers', id));
   };
 
+  const generateIncidentCode = (currentIncidents: Incident[]): string => {
+    if (currentIncidents.length === 0) return 'PV-000001';
+    const codes = currentIncidents
+      .map(i => {
+        const match = i.codigoCaso?.match(/PV-(\d+)/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(Boolean);
+    const maxCode = codes.length > 0 ? Math.max(...codes) : 0;
+    const nextNum = maxCode + 1;
+    return `PV-${String(nextNum).padStart(6, '0')}`;
+  };
+
+  const addIncident = async (incidentData: Omit<Incident, 'id' | 'codigoCaso' | 'createdAt' | 'updatedAt' | 'history' | 'comments' | 'attachments'>) => {
+    const now = new Date();
+    const nextCode = generateIncidentCode(incidents);
+    const newIncident: Incident = {
+      ...incidentData,
+      id: Math.random().toString(36).substr(2, 9),
+      codigoCaso: nextCode,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      history: [
+        {
+          timestamp: now.toISOString(),
+          user: currentUser?.nombre || 'SISTEMA',
+          description: 'Caso creado en el sistema.'
+        }
+      ],
+      comments: [],
+      attachments: []
+    };
+    try {
+      await setDoc(doc(db, 'incidents', newIncident.id), newIncident);
+      playSound('success');
+      return newIncident;
+    } catch (error) {
+      console.error("Error adding incident:", error);
+      throw error;
+    }
+  };
+
+  const updateIncident = async (id: string, updatedFields: Partial<Incident>) => {
+    const now = new Date();
+    const current = incidents.find(i => i.id === id);
+    if (!current) return;
+
+    const historyEntries = [...(current.history || [])];
+    if (updatedFields.estado && updatedFields.estado !== current.estado) {
+      historyEntries.push({
+        timestamp: now.toISOString(),
+        user: currentUser?.nombre || 'SISTEMA',
+        description: `Estado cambiado de "${current.estado}" a "${updatedFields.estado}".`
+      });
+    }
+    if (updatedFields.responsable && updatedFields.responsable !== current.responsable) {
+      historyEntries.push({
+        timestamp: now.toISOString(),
+        user: currentUser?.nombre || 'SISTEMA',
+        description: `Responsable cambiado de "${current.responsable || 'Sin asignar'}" a "${updatedFields.responsable}".`
+      });
+    }
+    if (updatedFields.couponCode && updatedFields.couponCode !== current.couponCode) {
+      historyEntries.push({
+        timestamp: now.toISOString(),
+        user: currentUser?.nombre || 'SISTEMA',
+        description: `Cupón de compensación asociado: "${updatedFields.couponCode}" por valor $${updatedFields.couponValue?.toLocaleString('es-CL')}.`
+      });
+    }
+
+    const updatedIncident: Incident = {
+      ...current,
+      ...updatedFields,
+      history: historyEntries,
+      updatedAt: now.toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'incidents', id), updatedIncident);
+      playSound('click');
+    } catch (error) {
+      console.error("Error updating incident:", error);
+    }
+  };
+
+  const addIncidentHistoryEvent = async (id: string, description: string) => {
+    const now = new Date();
+    const current = incidents.find(i => i.id === id);
+    if (!current) return;
+
+    const updatedIncident: Incident = {
+      ...current,
+      history: [
+        ...(current.history || []),
+        {
+          timestamp: now.toISOString(),
+          user: currentUser?.nombre || 'SISTEMA',
+          description
+        }
+      ],
+      updatedAt: now.toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'incidents', id), updatedIncident);
+    } catch (error) {
+      console.error("Error adding incident history:", error);
+    }
+  };
+
+  const addIncidentComment = async (id: string, commentText: string) => {
+    const now = new Date();
+    const current = incidents.find(i => i.id === id);
+    if (!current) return;
+
+    const newComment = {
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: now.toISOString(),
+      user: currentUser?.nombre || 'SISTEMA',
+      text: commentText
+    };
+
+    const updatedIncident: Incident = {
+      ...current,
+      comments: [...(current.comments || []), newComment],
+      history: [
+        ...(current.history || []),
+        {
+          timestamp: now.toISOString(),
+          user: currentUser?.nombre || 'SISTEMA',
+          description: `Comentario interno agregado por ${currentUser?.nombre || 'SISTEMA'}.`
+        }
+      ],
+      updatedAt: now.toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'incidents', id), updatedIncident);
+      playSound('click');
+    } catch (error) {
+      console.error("Error adding incident comment:", error);
+    }
+  };
+
+  const addIncidentAttachment = async (id: string, attachment: { name: string; url: string; type: string }) => {
+    const now = new Date();
+    const current = incidents.find(i => i.id === id);
+    if (!current) return;
+
+    const updatedIncident: Incident = {
+      ...current,
+      attachments: [...(current.attachments || []), attachment],
+      history: [
+        ...(current.history || []),
+        {
+          timestamp: now.toISOString(),
+          user: currentUser?.nombre || 'SISTEMA',
+          description: `Archivo adjunto agregado: "${attachment.name}".`
+        }
+      ],
+      updatedAt: now.toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'incidents', id), updatedIncident);
+      playSound('click');
+    } catch (error) {
+      console.error("Error adding incident attachment:", error);
+    }
+  };
+
+  const deleteIncident = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'incidents', id));
+      playSound('click');
+    } catch (error) {
+      console.error("Error deleting incident:", error);
+    }
+  };
+
   const deleteSale = async (saleId: string) => {
     console.log("DEBUG: Intentando eliminar venta:", saleId, "Usuario actual:", currentUser?.nombre, "Rol:", currentUser?.rol);
     if (!currentUser) {
@@ -1707,6 +1911,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
+      incidents, addIncident, updateIncident, addIncidentHistoryEvent, addIncidentComment, addIncidentAttachment, deleteIncident,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord,

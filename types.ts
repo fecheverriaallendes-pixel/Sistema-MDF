@@ -208,3 +208,71 @@ export interface StockHistoryEvent {
   observaciones: string;
 }
 
+export enum IncidentStatus {
+  NUEVO = 'Nuevo',
+  EN_REVISION = 'En revisión',
+  ESPERANDO_CLIENTE = 'Esperando respuesta del cliente',
+  ESPERANDO_APROBACION = 'Esperando aprobación',
+  RESUELTO = 'Resuelto',
+  CERRADO = 'Cerrado',
+  ESCALADO = 'Escalado'
+}
+
+export enum IncidentPriority {
+  BAJA = 'Baja',
+  MEDIA = 'Media',
+  ALTA = 'Alta',
+  CRITICA = 'Crítica'
+}
+
+export interface IncidentHistoryEvent {
+  timestamp: string; // ISO timestamp
+  user: string;
+  description: string;
+}
+
+export interface IncidentComment {
+  id: string;
+  timestamp: string; // ISO timestamp
+  user: string;
+  text: string;
+}
+
+export interface IncidentAttachment {
+  name: string;
+  url: string;
+  type: string;
+}
+
+export interface Incident {
+  id: string;
+  codigoCaso: string; // PV-000001, PV-000002...
+  numeroVenta?: string; // e.g. "V-12051"
+  saleId?: string; // Firestore sale document ID
+  cliente: string;
+  telefono: string;
+  canal: 'WhatsApp' | 'Instagram' | 'Llamada' | 'Otro' | string;
+  motivo: string;
+  prioridad: IncidentPriority;
+  estado: IncidentStatus;
+  responsable: string; // Carla, Andrea, etc.
+  observaciones?: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+  
+  // Associated Coupon (for compensations)
+  couponId?: string;
+  couponCode?: string;
+  couponValue?: number;
+  
+  // List of history / timeline events
+  history: IncidentHistoryEvent[];
+  
+  // Internal comments (executive notes)
+  comments: IncidentComment[];
+  
+  // Attachments
+  attachments: IncidentAttachment[];
+}
+
+

@@ -24,6 +24,24 @@
         "stockActual": { "type": "number" }
       },
       "required": ["codigo", "stockActual"]
+    },
+    "Incident": {
+      "title": "Incident",
+      "description": "Definition of a post-venta incident or case",
+      "type": "object",
+      "properties": {
+        "codigoCaso": { "type": "string" },
+        "cliente": { "type": "string" },
+        "telefono": { "type": "string" },
+        "canal": { "type": "string" },
+        "motivo": { "type": "string" },
+        "prioridad": { "type": "string" },
+        "estado": { "type": "string" },
+        "responsable": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["codigoCaso", "cliente", "telefono", "canal", "motivo", "prioridad", "estado", "responsable", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -34,6 +52,10 @@
     "/stock/{itemId}": {
       "schema": { "$ref": "StockItem" },
       "description": "Stock collection"
+    },
+    "/incidents/{incidentId}": {
+      "schema": { "$ref": "Incident" },
+      "description": "Post-venta incidents collection"
     }
   }
 }
