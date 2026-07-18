@@ -40,7 +40,7 @@ import { StaffRole, CommissionType } from '../types';
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 export default function Home() {
-  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing, sales, adjustments } = useStore();
+  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing, sales, adjustments, commissionValues } = useStore();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ user: '', pin: '' });
@@ -102,7 +102,7 @@ export default function Home() {
     let fardosNormales = 0;
     let promos = 0;
 
-    const COMMISSION_VALUES: Record<string, number> = {
+    const effectiveCommissionValues = commissionValues || {
       [CommissionType.FARDO_NORMAL]: 3000,
       [CommissionType.FARDO_PROMO]: 1500,
       [CommissionType.MEDIO_FARDO]: 1500,
@@ -125,7 +125,7 @@ export default function Home() {
              finalTipo = CommissionType.FARDO_NORMAL;
           }
 
-          const commValue = (COMMISSION_VALUES[finalTipo as string] || 0) * qty;
+          const commValue = (effectiveCommissionValues[finalTipo as string] || 0) * qty;
           totalVal += commValue;
 
           if (finalTipo === CommissionType.FARDO_NORMAL) {

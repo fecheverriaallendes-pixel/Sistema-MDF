@@ -5,6 +5,20 @@ import { signInAnonymously } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+const cleanUndefined = (obj: any): any => {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(cleanUndefined);
+  const newObj: any = {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (val !== undefined) {
+      newObj[key] = cleanUndefined(val);
+    }
+  }
+  return newObj;
+};
+
 const INITIAL_MASTER_STOCK: Omit<StockItem, 'id' | 'disponible'>[] = [
   { codigo: 'MDF-001', tipo: 'Abrigo Corto Mujer CANADA', proveedor: 'CANADA', precioCosto: 0, precioSugerido: 120000, stockActual: 0, unidad: 'FARDO', categoria: 'FARDO' },
   { codigo: 'MDF-002', tipo: 'Abrigo Lana Hombre Corto IM', proveedor: 'IM', precioCosto: 0, precioSugerido: 90000, stockActual: 6, unidad: 'FARDO', categoria: 'FARDO' },
@@ -471,6 +485,9 @@ interface StoreContextType {
   getStats: () => any;
   productionRecords: ProductionRecord[];
   addProductionRecord: (cantidad: number) => void;
+  commissionValues: Record<string, number>;
+  pagoReenfardado: number;
+  updateAppValues: (newComisiones: Record<string, number>, newPagoReenfardado: number) => Promise<void>;
   syncWithCloud: (silent?: boolean) => Promise<boolean>;
   pushToCloud: (curSales: Sale[], curStock: StockItem[], curStaff: StaffMember[], curPurchases: Purchase[]) => Promise<void>;
   isSyncing: boolean;
@@ -530,10 +547,26 @@ const safeSessionStorage = {
   }
 };
 
+const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
+  'Fardo Normal ($3.000)': 3000,
+  'Fardo Promoción ($1.500)': 1500,
+  'Medio Fardo ($1.500)': 1500,
+  'Lote ($1.000)': 1000
+};
+const DEFAULT_PAGO_REENFARDADO = 4000;
+
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [commissionValues, setCommissionValues] = useState<Record<string, number>>(() => {
+    const saved = safeLocalStorage.getItem('mdf_commission_values');
+    return saved ? JSON.parse(saved) : DEFAULT_COMMISSION_VALUES;
+  });
+  const [pagoReenfardado, setPagoReenfardado] = useState<number>(() => {
+    const saved = safeLocalStorage.getItem('mdf_pago_reenfardado');
+    return saved ? Number(saved) : DEFAULT_PAGO_REENFARDADO;
+  });
   const [settings, setSettings] = useState(() => {
     const saved = safeLocalStorage.getItem('mdf_settings');
     return saved ? JSON.parse(saved) : { soundEnabled: true, cloudUrl: '', lastSync: null, dbConnected: false, lastError: null };
@@ -672,6 +705,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubCheques: any;
     let unsubProduction: any;
     let unsubConfig: any;
+    let unsubAppValues: any;
     let unsubCustomers: any;
     let unsubStockHistory: any;
 
@@ -718,6 +752,13 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
             if (data.list) setCarriers(data.list);
           }
         });
+        unsubAppValues = onSnapshot(doc(db, 'config', 'app_values'), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.comisiones) setCommissionValues(data.comisiones);
+            if (typeof data.pagoReenfardado === 'number') setPagoReenfardado(data.pagoReenfardado);
+          }
+        });
         unsubCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
           setCustomers(snapshot.docs.map(doc => doc.data() as Customer));
         });
@@ -742,6 +783,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubCheques) unsubCheques();
       if (unsubProduction) unsubProduction();
       if (unsubConfig) unsubConfig();
+      if (unsubAppValues) unsubAppValues();
       if (unsubCustomers) unsubCustomers();
       if (unsubStockHistory) unsubStockHistory();
     };
@@ -758,6 +800,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
     safeLocalStorage.setItem('mdf_incidents', JSON.stringify(incidents));
   }, [sales, stock, staff, purchases, carriers, adjustments, settings, stockHistory, incidents]);
+
+  useEffect(() => {
+    safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
+    safeLocalStorage.setItem('mdf_pago_reenfardado', String(pagoReenfardado));
+  }, [commissionValues, pagoReenfardado]);
 
   const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: StaffRole } | null>(() => {
     const saved = safeSessionStorage.getItem('mdf_session');
@@ -845,7 +892,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       id: Math.random().toString(36).substr(2, 9),
       fecha: new Date().toISOString(),
       cantidad,
-      totalPagar: cantidad * 4000
+      totalPagar: cantidad * pagoReenfardado
     };
     await setDoc(doc(db, 'produccion', record.id), record);
     playSound('success');
@@ -858,6 +905,21 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
     deleteDoc(doc(db, 'produccion', id));
     playSound('click');
+  };
+
+  const updateAppValues = async (newComisiones: Record<string, number>, newPagoReenfardado: number) => {
+    try {
+      await setDoc(doc(db, 'config', 'app_values'), {
+        comisiones: newComisiones,
+        pagoReenfardado: newPagoReenfardado
+      });
+      setCommissionValues(newComisiones);
+      setPagoReenfardado(newPagoReenfardado);
+      playSound('success');
+    } catch (error) {
+      console.error("Error al actualizar valores de comisiones/pago:", error);
+      alert("Error al actualizar la configuración en Firebase.");
+    }
   };
 
   const updateSale = (id: string, updatedData: Partial<Sale>) => {
@@ -1563,7 +1625,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       attachments: []
     };
     try {
-      await setDoc(doc(db, 'incidents', newIncident.id), newIncident);
+      await setDoc(doc(db, 'incidents', newIncident.id), cleanUndefined(newIncident));
       playSound('success');
       return newIncident;
     } catch (error) {
@@ -1608,7 +1670,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     };
 
     try {
-      await setDoc(doc(db, 'incidents', id), updatedIncident);
+      await setDoc(doc(db, 'incidents', id), cleanUndefined(updatedIncident));
       playSound('click');
     } catch (error) {
       console.error("Error updating incident:", error);
@@ -1634,7 +1696,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     };
 
     try {
-      await setDoc(doc(db, 'incidents', id), updatedIncident);
+      await setDoc(doc(db, 'incidents', id), cleanUndefined(updatedIncident));
     } catch (error) {
       console.error("Error adding incident history:", error);
     }
@@ -1667,7 +1729,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     };
 
     try {
-      await setDoc(doc(db, 'incidents', id), updatedIncident);
+      await setDoc(doc(db, 'incidents', id), cleanUndefined(updatedIncident));
       playSound('click');
     } catch (error) {
       console.error("Error adding incident comment:", error);
@@ -1694,7 +1756,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     };
 
     try {
-      await setDoc(doc(db, 'incidents', id), updatedIncident);
+      await setDoc(doc(db, 'incidents', id), cleanUndefined(updatedIncident));
       playSound('click');
     } catch (error) {
       console.error("Error adding incident attachment:", error);
@@ -1915,6 +1977,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord,
+      commissionValues, pagoReenfardado, updateAppValues,
       stockHistory, addStockHistoryEvent
     }}>
       {children}

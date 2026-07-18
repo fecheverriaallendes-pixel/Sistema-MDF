@@ -19,7 +19,7 @@ import {
 import { useStore } from '../store/GlobalContext';
 import { CommissionType, Sale, CommissionAdjustment } from '../types';
 
-const COMMISSION_VALUES: Record<string, number> = {
+const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.FARDO_NORMAL]: 3000,
   [CommissionType.FARDO_PROMO]: 1500,
   [CommissionType.MEDIO_FARDO]: 1500,
@@ -27,7 +27,8 @@ const COMMISSION_VALUES: Record<string, number> = {
 };
 
 export default function Comisiones() {
-  const { sales, staff, adjustments, addAdjustment, removeAdjustment, playSound, stock } = useStore();
+  const { sales, staff, adjustments, addAdjustment, removeAdjustment, playSound, stock, commissionValues } = useStore();
+  const effectiveCommissionValues = commissionValues || DEFAULT_COMMISSION_VALUES;
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
   const [newAdjustment, setNewAdjustment] = useState({
@@ -174,7 +175,7 @@ export default function Comisiones() {
              finalTipo = CommissionType.FARDO_NORMAL;
           }
 
-          const commValue = (COMMISSION_VALUES[finalTipo as string] || 0) * qty;
+          const commValue = (effectiveCommissionValues[finalTipo as string] || 0) * qty;
           
           report[vendedorName].total += commValue;
           report[vendedorName].count += qty;

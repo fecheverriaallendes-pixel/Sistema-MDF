@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Database, RefreshCw, Settings, ShieldAlert, AlertTriangle, 
   Zap, Activity, CheckCircle2, ShieldCheck, ZapOff, Ghost,
@@ -17,12 +17,30 @@ export default function Configuracion() {
     settings, updateSettings, playSound, syncWithCloud, pushToCloud,
     isSyncing, lastSync, staff, addStaff, updateStaff, removeStaff, sales, stock, purchases,
     clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier,
-    fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, deleteAllSales
+    fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, deleteAllSales,
+    commissionValues, pagoReenfardado, updateAppValues, currentUser
   } = useStore();
   
-  const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS'>('RED');
+  const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS' | 'VALORES'>('RED');
   const [apiUrl, setApiUrl] = useState(settings.cloudUrl);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+
+  const [formComisiones, setFormComisiones] = useState<Record<string, number>>({});
+  const [formReenfardado, setFormReenfardado] = useState<number>(0);
+
+  useEffect(() => {
+    if (commissionValues) {
+      setFormComisiones(commissionValues);
+    } else {
+      setFormComisiones({
+        'Fardo Normal ($3.000)': 3000,
+        'Fardo Promoción ($1.500)': 1500,
+        'Medio Fardo ($1.500)': 1500,
+        'Lote ($1.000)': 1000
+      });
+    }
+    setFormReenfardado(pagoReenfardado || 4000);
+  }, [commissionValues, pagoReenfardado]);
   
   const [newStaff, setNewStaff] = useState({
     nombre: '',
@@ -114,6 +132,7 @@ export default function Configuracion() {
             { id: 'RED', label: 'Red', icon: Globe },
             { id: 'STAFF', label: 'Personal', icon: Users },
             { id: 'DB', label: 'Rescate DB', icon: Server },
+            { id: 'VALORES', label: 'Valores y Comisiones', icon: Wallet },
             { id: 'CARRIERS', label: 'Transportistas', icon: Truck },
             { id: 'SISTEMA', label: 'Sistema', icon: Activity }
           ].map(tab => (
@@ -513,6 +532,92 @@ export default function Configuracion() {
                    </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* PESTAÑA VALORES / COMISIONES */}
+        {activeTab === 'VALORES' && (
+          <div className="max-w-4xl mx-auto w-full space-y-8 animate-in zoom-in duration-500">
+            <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl">
+              <div className="flex items-center gap-4 mb-10">
+                <div className="w-16 h-16 bg-amber-500 text-white rounded-[24px] flex items-center justify-center shadow-xl">
+                  <Wallet size={32} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Configuración de Valores</h3>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Modificar Comisiones y Pagos por Producción</p>
+                </div>
+              </div>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                await updateAppValues(formComisiones, formReenfardado);
+                alert("✅ Valores actualizados correctamente.");
+              }} className="space-y-8">
+                {/* Comisiones */}
+                <div className="p-8 bg-slate-50 rounded-[32px] border border-slate-100 space-y-6">
+                  <h4 className="text-slate-800 font-black text-sm uppercase flex items-center gap-2">
+                    <Edit3 size={18} className="text-amber-500" /> Comisiones por Tipo de Fardo
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {Object.keys(formComisiones).map((key) => (
+                      <div key={key} className="space-y-2">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-tight block">
+                          {key}
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                          <input
+                            type="number"
+                            value={formComisiones[key] ?? ''}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 0;
+                              setFormComisiones({ ...formComisiones, [key]: val });
+                            }}
+                            className="w-full pl-8 pr-4 py-4 bg-white border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-amber-500 transition-all text-slate-800"
+                            placeholder="0"
+                            required
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Producción por Reenfardado */}
+                <div className="p-8 bg-slate-50 rounded-[32px] border border-slate-100 space-y-6">
+                  <h4 className="text-slate-800 font-black text-sm uppercase flex items-center gap-2">
+                    <Boxes size={18} className="text-amber-500" /> Pago de Producción (Reenfardado)
+                  </h4>
+                  <div className="space-y-2 max-w-md">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-tight block">
+                      Monto a pagar por cada fardo reenfardado
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                      <input
+                        type="number"
+                        value={formReenfardado ?? ''}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setFormReenfardado(val);
+                        }}
+                        className="w-full pl-8 pr-4 py-4 bg-white border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-amber-500 transition-all text-slate-800"
+                        placeholder="4000"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-5 bg-amber-500 text-white rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-amber-600 active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-lg shadow-amber-500/20"
+                >
+                  <UploadCloud size={18} /> Guardar Valores Configurados
+                </button>
+              </form>
             </div>
           </div>
         )}

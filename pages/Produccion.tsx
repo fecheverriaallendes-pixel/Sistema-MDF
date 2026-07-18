@@ -4,7 +4,7 @@ import { StaffRole } from '../types';
 import { Factory, TrendingUp, Calendar, AlertCircle, Trash2 } from 'lucide-react';
 
 export default function Produccion() {
-  const { productionRecords, addProductionRecord, deleteProductionRecord, currentUser } = useStore();
+  const { productionRecords, addProductionRecord, deleteProductionRecord, currentUser, pagoReenfardado } = useStore();
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const [cantidad, setCantidad] = useState('');
 
@@ -35,7 +35,7 @@ export default function Produccion() {
   });
 
   const totalFardos = weeklyRecords.reduce((acc, r) => acc + r.cantidad, 0);
-  const totalPagar = totalFardos * 4000;
+  const totalPagar = totalFardos * (pagoReenfardado || 4000);
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
