@@ -204,13 +204,6 @@ export default function Dashboard() {
           trend="+12%"
         />
         <StatCard 
-          title="Utilidad Neta Est." 
-          value={`$${stats.utilidadTotal.toLocaleString()}`} 
-          icon={DollarSign} 
-          color="blue" 
-          subtitle="Margen después de costos"
-        />
-        <StatCard 
           title="Valor Bodega" 
           value={`$${stats.valorInventarioVenta.toLocaleString()}`} 
           icon={Package} 

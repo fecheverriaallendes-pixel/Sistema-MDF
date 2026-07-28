@@ -1890,6 +1890,7 @@ export default function PostVenta() {
                   <option value="Demora de despacho">Demora de despacho</option>
                   <option value="Prenda dañada">Prenda dañada</option>
                   <option value="Error de cobro">Error de cobro</option>
+                  <option value="Error de etiquetado">Error de etiquetado</option>
                   <option value="Otro">Otro</option>
                 </select>
               </div>
