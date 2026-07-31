@@ -12,6 +12,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
+import { smartSearchMatch } from '../utils/search';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
@@ -27,8 +28,7 @@ export default function CatalogoPublico() {
 
   const filteredStock = useMemo(() => {
     return availableStock.filter(item => {
-      const matchesSearch = (item.tipo || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           (item.codigo || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = smartSearchMatch(item, searchTerm);
       
       const itemCategory = item.categoria || 'FARDO';
       const matchesFilter = activeFilter === 'TODOS' || itemCategory === activeFilter;

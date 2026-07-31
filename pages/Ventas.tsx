@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
+import { smartTextMatch } from '../utils/search';
 import { Label } from '../components/Label';
 import { Invoice } from '../components/Invoice';
 
@@ -51,15 +52,11 @@ export default function Ventas() {
   });
   const currentSales = activeTab === 'PENDING' ? pendingLiveSales : readySales;
 
-  const normalizeText = (text: string) => 
-    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-
   const filteredSales = currentSales
     .filter(s => {
-      const normalizedSearch = normalizeText(searchTerm);
-      return normalizeText(s.cliente).includes(normalizedSearch) || 
-             (s.codigoFardo && normalizeText(s.codigoFardo).includes(normalizedSearch)) ||
-             s.numeroVenta.toString().includes(searchTerm);
+      const itemsText = (s.items || []).map(i => `${i.codigoFardo}`).join(' ');
+      const combined = `${s.cliente} ${s.codigoFardo || ''} ${s.numeroVenta} ${s.rut || ''} ${s.vendedor || ''} ${itemsText}`;
+      return smartTextMatch(combined, searchTerm);
     })
     .sort((a, b) => {
       let comparison = 0;

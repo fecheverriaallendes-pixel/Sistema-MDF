@@ -24,6 +24,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
 import { StockItem } from '../types';
+import { smartSearchMatch } from '../utils/search';
 
 // Extend jsPDF interface for autotable
 declare module 'jspdf' {
@@ -93,17 +94,12 @@ export default function Catalogo() {
     return ['TODOS', ...Array.from(new Set(providers))].sort();
   }, [stock]);
 
-  const normalizeText = (text: string) => 
-    (text || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-
   const sortedAndFilteredStock = useMemo(() => {
-    const normalizedSearch = normalizeText(searchTerm);
     let result = stock.filter(item => {
       // Ocultar productos con stock 0
       if (item.stockActual <= 0) return false;
 
-      const matchesSearch = normalizeText(item.tipo || '').includes(normalizedSearch) || 
-                           normalizeText(item.codigo || '').includes(normalizedSearch);
+      const matchesSearch = smartSearchMatch(item, searchTerm);
       const matchesProvider = providerFilter === 'TODOS' || (item.proveedor || '').toUpperCase() === providerFilter;
       
       const itemCategory = item.categoria || 'FARDO';

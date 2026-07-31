@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
+import { smartSearchMatch } from '../utils/search';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -141,14 +142,9 @@ export default function Stock() {
     return ['TODOS', ...Array.from(new Set(providers))].sort();
   }, [stock]);
 
-  const normalizeText = (text: string) => 
-    text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-
   const filteredStock = useMemo(() => {
-    const normalizedSearch = normalizeText(searchTerm);
     return stock.filter(item => {
-      const matchesSearch = normalizeText(item.codigo || '').includes(normalizedSearch) || 
-                           normalizeText(item.tipo || '').includes(normalizedSearch);
+      const matchesSearch = smartSearchMatch(item, searchTerm);
       const matchesProvider = providerFilter === 'TODOS' || (item.proveedor || '').toUpperCase() === providerFilter;
       const itemCategory = item.categoria || 'FARDO';
       const matchesCategory = categoryFilter === 'TODOS' 
