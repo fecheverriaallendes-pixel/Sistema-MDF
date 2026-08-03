@@ -1,10 +1,48 @@
 import React from 'react';
-import { Sale } from '../types';
+import { Sale, DispatchType } from '../types';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
+export const getAgenciaODestino = (sale: Sale): string => {
+  const agencia = (sale.agencia || '').trim().toUpperCase();
+  const junta = (sale.juntaCompra || '').trim().toUpperCase();
+  const tipoDespachoRaw = (sale.tipoDespacho || '').toString().trim().toUpperCase();
+
+  // 1. If agencia is explicitly set and not 'DOMICILIO'
+  if (agencia && agencia !== 'DOMICILIO') {
+    return agencia;
+  }
+
+  // 2. Check if juntaCompra specifies RETIRO BODEGA or RETIRO LOCAL
+  if (junta === 'RETIRO LOCAL' || junta === 'RETIRO BODEGA' || junta.includes('RETIRO')) {
+    return junta;
+  }
+
+  // 3. Check if tipoDespacho is RETIRO or contains RETIRO
+  if (sale.tipoDespacho === DispatchType.RETIRO || tipoDespachoRaw.includes('RETIRO')) {
+    if (agencia.includes('LOCAL') || tipoDespachoRaw.includes('LOCAL')) return 'RETIRO LOCAL';
+    if (agencia.includes('BODEGA') || tipoDespachoRaw.includes('BODEGA')) return 'RETIRO BODEGA';
+    return 'RETIRO EN BODEGA';
+  }
+
+  // 4. If agencia exists
+  if (agencia) {
+    return agencia;
+  }
+
+  // 5. If tipoDespacho is AGENCIA
+  if (sale.tipoDespacho === DispatchType.AGENCIA || tipoDespachoRaw === 'AGENCIA') {
+    return 'AGENCIA';
+  }
+
+  // 6. Default fallback for domicilio
+  return 'DOMICILIO';
+};
+
 export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: {codigoFardo: string, cantidad: number} }) => {
   const displayItem = item || { codigoFardo: sale.codigoFardo || 'N/A', cantidad: sale.cantidad || 1 };
+  const destinoText = getAgenciaODestino(sale);
+  const isRetiro = destinoText.includes('RETIRO');
   
   return (
     <div className="w-[100mm] h-[150mm] box-border bg-white border-3 border-black p-3.5 flex flex-col items-stretch overflow-hidden print:m-0 print:w-[100mm] print:h-[150mm] select-none">
@@ -44,7 +82,7 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
                 sale.direccion.length > 50 ? 'text-[13px]' : 
                 'text-[15px]'
               }`}>
-                {sale.direccion || 'SIN DIRECCIÓN REGISTRADA'}
+                {sale.direccion || (isRetiro ? `SUCURSAL / ${destinoText}` : 'SIN DIRECCIÓN REGISTRADA')}
               </p>
             </div>
           </div>
@@ -54,7 +92,13 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
             <div className="flex justify-between items-start gap-2 mb-1.5">
               <div className="flex-1">
                 <p className="text-[9px] font-black uppercase text-slate-500 mb-0.5">Agencia / Destino</p>
-                <p className="text-[14px] font-black uppercase leading-tight bg-slate-100 px-1.5 py-0.5 rounded border border-slate-350 inline-block">{sale.agencia || 'DOMICILIO'}</p>
+                <p className={`text-[14px] font-black uppercase leading-tight px-1.5 py-0.5 rounded border inline-block ${
+                  isRetiro 
+                    ? 'bg-slate-900 text-white border-black font-black' 
+                    : 'bg-slate-100 text-black border-slate-350'
+                }`}>
+                  {destinoText}
+                </p>
               </div>
               {(() => {
                 const stockItem = stock.find(i => i.codigo === displayItem.codigoFardo);

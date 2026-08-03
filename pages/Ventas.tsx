@@ -372,6 +372,7 @@ export default function Ventas() {
                     <option value="DESPACHO INMEDIATO">DESPACHO INMEDIATO</option>
                     <option value="JUNTA COMPRA">JUNTA COMPRA</option>
                     <option value="RETIRO BODEGA">RETIRO BODEGA</option>
+                    <option value="RETIRO LOCAL">RETIRO LOCAL</option>
                   </select>
                 </div>
               </div>
@@ -390,21 +391,21 @@ export default function Ventas() {
                 <div className="flex bg-slate-50 p-1.5 rounded-[24px] border-2 border-slate-100">
                   <button 
                     type="button"
-                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.AGENCIA})}
+                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.AGENCIA, agencia: ''})}
                     className={`flex-1 py-3 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${editingSale.tipoDespacho === DispatchType.AGENCIA ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:bg-slate-200'}`}
                   >
                     <Building2 size={16} /> Agencia
                   </button>
                   <button 
                     type="button"
-                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.DOMICILIO})}
+                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.DOMICILIO, agencia: ''})}
                     className={`flex-1 py-3 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${editingSale.tipoDespacho === DispatchType.DOMICILIO ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:bg-slate-200'}`}
                   >
                     <Home size={16} /> Domicilio
                   </button>
                   <button 
                     type="button"
-                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.RETIRO})}
+                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.RETIRO, agencia: editingSale.agencia && editingSale.agencia.includes('RETIRO') ? editingSale.agencia : 'RETIRO BODEGA'})}
                     className={`flex-1 py-3 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${editingSale.tipoDespacho === DispatchType.RETIRO ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:bg-slate-200'}`}
                   >
                     <Package size={16} /> Retiro
@@ -412,6 +413,37 @@ export default function Ventas() {
                 </div>
                 {editingSale.tipoDespacho === DispatchType.AGENCIA && (
                   <input required type="text" className="w-full mt-4 px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={editingSale.agencia || ''} onChange={(e) => setEditingSale({...editingSale, agencia: e.target.value.toUpperCase()})}/>
+                )}
+                {editingSale.tipoDespacho === DispatchType.RETIRO && (
+                  <div className="space-y-2 mt-4 animate-in fade-in duration-300">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      Lugar de Retiro
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingSale({...editingSale, agencia: 'RETIRO LOCAL'})}
+                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
+                          editingSale.agencia === 'RETIRO LOCAL'
+                            ? 'bg-slate-900 text-white shadow-md'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        Retiro Local
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSale({...editingSale, agencia: 'RETIRO BODEGA'})}
+                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
+                          editingSale.agencia === 'RETIRO BODEGA' || !editingSale.agencia
+                            ? 'bg-slate-900 text-white shadow-md'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        Retiro Bodega
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 

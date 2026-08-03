@@ -116,6 +116,7 @@ export interface StockItem {
   categoria?: 'FARDO' | 'LOTE' | string;
   peso?: number; // Para lotes (10 o 20 kgs)
   promocion?: boolean;
+  observaciones?: string;
 }
 
 export interface Sale {
