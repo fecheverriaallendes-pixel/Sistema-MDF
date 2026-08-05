@@ -9,10 +9,13 @@ import {
   Filter,
   MessageCircle,
   Hash,
-  AlertCircle
+  AlertCircle,
+  ShieldAlert,
+  ChevronRight
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { smartSearchMatch } from '../utils/search';
+import { PoliticasModal, PoliticasSectionInline } from '../components/PoliticasModal';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
@@ -20,6 +23,7 @@ export default function CatalogoPublico() {
   const { stock } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'TODOS' | 'FARDO' | 'LOTE'>('TODOS');
+  const [isPoliticasOpen, setIsPoliticasOpen] = useState(false);
 
   // Filter only items with stock
   const availableStock = useMemo(() => {
@@ -44,10 +48,9 @@ export default function CatalogoPublico() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-100">
-      {/* Header */}
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-100">      {/* Header */}
       <header className="bg-white border-b border-slate-100 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={LOGO_URL} alt="Logo" className="w-10 h-10" />
             <div>
@@ -55,16 +58,25 @@ export default function CatalogoPublico() {
               <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1">Stock en Tiempo Real</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full animate-pulse">
-            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">En Vivo</span>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsPoliticasOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-full text-[9px] font-black uppercase tracking-wider transition-all shadow-sm"
+            >
+              <ShieldAlert size={12} className="text-emerald-400" />
+              <span>Políticas</span>
+            </button>
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full animate-pulse">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+              <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">En Vivo</span>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Hero & Search */}
-      <div className="bg-white px-6 pb-8 pt-4 border-b border-slate-100">
-        <div className="max-w-xl mx-auto space-y-6">
+      <div className="bg-white px-6 pb-6 pt-4 border-b border-slate-100 space-y-4">
+        <div className="max-w-xl mx-auto space-y-4">
           <div className="relative group">
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={20} />
             <input 
@@ -75,6 +87,23 @@ export default function CatalogoPublico() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+
+          {/* Policy quick banner */}
+          <button 
+            onClick={() => setIsPoliticasOpen(true)}
+            className="w-full p-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl flex items-center justify-between text-left hover:brightness-110 transition-all shadow-sm group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                <ShieldAlert size={16} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-200">Garantías y Devoluciones</p>
+                <p className="text-[11px] font-extrabold text-emerald-400 leading-tight">Ver Políticas de la Empresa respecto a la Mercadería</p>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+          </button>
 
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {(['TODOS', 'FARDO', 'LOTE'] as const).map((filter) => (
@@ -95,7 +124,7 @@ export default function CatalogoPublico() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 w-full max-w-xl mx-auto px-4 py-6 space-y-4">
+      <main className="flex-1 w-full max-w-xl mx-auto px-4 py-6 space-y-8">
         {filteredStock.length > 0 ? (
           <div className="grid grid-cols-1 gap-4">
             {filteredStock.map((item) => (
@@ -151,16 +180,28 @@ export default function CatalogoPublico() {
             <p className="text-slate-500 text-sm font-medium">Intenta buscando con otros términos o filtros.</p>
           </div>
         )}
+
+        {/* Inline Policies Section */}
+        <PoliticasSectionInline />
       </main>
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-100 py-10 px-6 text-center">
         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-4">CUADERNO MDF • CHILE</p>
-        <div className="flex items-center justify-center gap-4 text-slate-400">
+        <div className="flex items-center justify-center gap-4 text-slate-400 mb-2">
           <AlertCircle size={16} />
           <p className="text-[9px] font-bold uppercase italic">Los precios y stock pueden variar sin previo aviso</p>
         </div>
+        <button 
+          onClick={() => setIsPoliticasOpen(true)}
+          className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-wider"
+        >
+          Ver Políticas de Cambios y Devoluciones
+        </button>
       </footer>
+
+      {/* Policies Modal */}
+      <PoliticasModal isOpen={isPoliticasOpen} onClose={() => setIsPoliticasOpen(false)} />
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }

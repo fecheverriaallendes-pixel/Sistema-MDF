@@ -19,12 +19,14 @@ import {
   Filter,
   FileDown,
   MessageCircle,
-  Share2
+  Share2,
+  ShieldAlert
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
 import { StockItem } from '../types';
 import { smartSearchMatch } from '../utils/search';
+import { PoliticasModal } from '../components/PoliticasModal';
 
 // Extend jsPDF interface for autotable
 declare module 'jspdf' {
@@ -88,6 +90,7 @@ export default function Catalogo() {
   const [viewMode, setViewMode] = useState<'digital' | 'print'>((searchParams.get('mode') as 'digital' | 'print') || 'digital');
   const [isDownloading, setIsDownloading] = useState(false);
   const [showCopyFeedback, setShowCopyFeedback] = useState(false);
+  const [showPoliticas, setShowPoliticas] = useState(false);
 
   const uniqueProviders = useMemo(() => {
     const providers = stock.map(item => (item.proveedor || '').trim().toUpperCase()).filter(Boolean);
@@ -326,6 +329,13 @@ export default function Catalogo() {
               <Share2 size={18} />
               {showCopyFeedback ? '¡Link Copiado!' : 'Compartir Link'}
             </button>
+            <button 
+              onClick={() => setShowPoliticas(true)}
+              className="flex items-center gap-2 px-6 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-[24px] font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95"
+            >
+              <ShieldAlert size={18} className="text-emerald-400" />
+              Políticas
+            </button>
           </div>
         </div>
 
@@ -447,6 +457,8 @@ export default function Catalogo() {
            </p>
         </div>
       </div>
+
+      <PoliticasModal isOpen={showPoliticas} onClose={() => setShowPoliticas(false)} />
 
       <style>{`
         @media print {
