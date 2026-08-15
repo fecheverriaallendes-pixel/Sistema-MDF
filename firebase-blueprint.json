@@ -42,6 +42,18 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["codigoCaso", "cliente", "telefono", "canal", "motivo", "prioridad", "estado", "responsable", "createdAt", "updatedAt"]
+    },
+    "UsaPurchase": {
+      "title": "UsaPurchase",
+      "description": "Direct USA container imports and supplier statement in USD with CLP reference notes",
+      "type": "object",
+      "properties": {
+        "proveedor": { "type": "string" },
+        "montoTotalUsd": { "type": "number" },
+        "saldoPendienteUsd": { "type": "number" },
+        "estado": { "type": "string" }
+      },
+      "required": ["proveedor", "montoTotalUsd", "saldoPendienteUsd", "estado"]
     }
   },
   "firestore": {
@@ -56,6 +68,13 @@
     "/incidents/{incidentId}": {
       "schema": { "$ref": "Incident" },
       "description": "Post-venta incidents collection"
+    },
+    "/purchases/{purchaseId}": {
+      "description": "Domestic purchases in CLP"
+    },
+    "/usa_purchases/{purchaseId}": {
+      "schema": { "$ref": "UsaPurchase" },
+      "description": "USA container purchases and statement in USD"
     }
   }
 }

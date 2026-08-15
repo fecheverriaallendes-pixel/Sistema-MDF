@@ -93,6 +93,44 @@ export interface Purchase {
   saldoPendiente: number;
   abonos: Abono[];
   estado: 'PAGADO' | 'PENDIENTE';
+  notas?: string;
+}
+
+export interface UsaAbono {
+  id: string;
+  fecha: string; // Fecha del abono / transferencia
+  montoUsd: number; // Monto en Dólares (USD $)
+  tipoCambio?: number; // Tipo de cambio CLP/USD (ej: 945)
+  montoClp?: number; // Monto equivalente o pagado en CLP ($)
+  metodo: string; // Transferencia SWIFT / Wire, Tarjeta USD, Remesa, Efectivo USD, etc.
+  referencia?: string; // N° SWIFT, N° operación, comprobante
+  observacion: string; // Observaciones / notas
+  notaClp?: string; // Nota específica sobre conversión en pesos chilenos
+  createdAt?: string;
+}
+
+export type UsaContainerStatus = 'PENDIENTE' | 'EN_TRANSITO' | 'EN_ADUANA' | 'RECIBIDO' | 'PAGADO';
+
+export interface UsaPurchase {
+  id: string;
+  proveedor: string; // Nombre del proveedor o exportador en USA
+  numeroContenedor?: string; // Ej: MSKU-9182312, CONT-2025-01
+  facturaInvoice?: string; // Factura Comercial / Bill of Lading (B/L)
+  fecha: string; // Fecha de compra / embarque
+  fechaLlegadaEstimada?: string; // Fecha estimada de llegada a Chile (ETA)
+  descripcion: string; // Descripción del contenido (ej: Contenedor 40ft Polerones y Chaquetas)
+  montoTotalUsd: number; // Monto total acordado en USD ($)
+  tipoCambioRef?: number; // Tipo de cambio de referencia (ej: 945 CLP)
+  montoTotalClpRef?: number; // Valor de referencia en Pesos Chilenos
+  saldoPendienteUsd: number; // Saldo pendiente en USD ($)
+  abonos: UsaAbono[];
+  estado: UsaContainerStatus;
+  puertoOrigen?: string; // Ej: Houston, Miami, Los Angeles
+  puertoDestino?: string; // Ej: San Antonio, Valparaíso, Iquique
+  notasClp?: string; // Notas detalladas en Pesos Chilenos y Dólares
+  observaciones?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface StaffMember {

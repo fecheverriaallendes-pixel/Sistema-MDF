@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus } from '../types';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
@@ -478,10 +478,19 @@ interface StoreContextType {
   addStaff: (member: Omit<StaffMember, 'id' | 'activo'>) => void;
   updateStaff: (id: string, updatedMember: Partial<StaffMember>) => Promise<void>;
   removeStaff: (id: string) => void;
-  addPurchase: (p: Omit<Purchase, 'id' | 'saldoPendiente' | 'abonos' | 'estado'>) => void;
+  addPurchase: (p: Omit<Purchase, 'id' | 'saldoPendiente' | 'abonos' | 'estado'> & { estado?: 'PAGADO' | 'PENDIENTE'; notas?: string }) => void;
+  updatePurchase: (id: string, updatedData: Partial<Purchase>) => Promise<void>;
   removePurchase: (id: string) => void;
-  addAbono: (purchaseId: string, monto: number, metodo: string, observacion: string) => void;
+  addAbono: (purchaseId: string, monto: number, metodo: string, observacion: string, fecha?: string) => void;
+  updateAbono: (purchaseId: string, abonoId: string, updatedData: Partial<Abono>) => Promise<void>;
   removeAbono: (purchaseId: string, abonoId: string) => void;
+  usaPurchases: UsaPurchase[];
+  addUsaPurchase: (p: Omit<UsaPurchase, 'id' | 'saldoPendienteUsd' | 'abonos'>) => Promise<void>;
+  updateUsaPurchase: (id: string, updatedData: Partial<UsaPurchase>) => Promise<void>;
+  removeUsaPurchase: (id: string) => Promise<void>;
+  addUsaAbono: (purchaseId: string, abono: Omit<UsaAbono, 'id'>) => Promise<void>;
+  updateUsaAbono: (purchaseId: string, abonoId: string, updatedData: Partial<UsaAbono>) => Promise<void>;
+  removeUsaAbono: (purchaseId: string, abonoId: string) => Promise<void>;
   getStats: () => any;
   productionRecords: ProductionRecord[];
   addProductionRecord: (cantidad: number) => void;
@@ -591,6 +600,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const saved = safeLocalStorage.getItem('mdf_purchases');
     return saved ? JSON.parse(saved) : [];
   });
+  const [usaPurchases, setUsaPurchases] = useState<UsaPurchase[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_usa_purchases');
+    return saved ? JSON.parse(saved) : [];
+  });
   
   const [carriers, setCarriers] = useState<string[]>(() => {
     const saved = safeLocalStorage.getItem('mdf_carriers');
@@ -627,12 +640,32 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const isSyncingRef = useRef(false);
 
   const calculatePurchaseState = (purchase: Purchase) => {
-    const totalAbonado = purchase.abonos.reduce((acc, a) => acc + a.monto, 0);
-    const saldoPendiente = Math.max(0, purchase.montoTotal - totalAbonado);
+    const totalAbonado = (purchase.abonos || []).reduce((acc, a) => acc + (Number(a.monto) || 0), 0);
+    const saldoPendiente = Math.max(0, (Number(purchase.montoTotal) || 0) - totalAbonado);
     return {
       ...purchase,
       saldoPendiente,
       estado: saldoPendiente <= 0 ? 'PAGADO' : 'PENDIENTE' as 'PAGADO' | 'PENDIENTE'
+    };
+  };
+
+  const calculateUsaPurchaseState = (purchase: UsaPurchase): UsaPurchase => {
+    const totalAbonadoUsd = (purchase.abonos || []).reduce((acc, a) => acc + (Number(a.montoUsd) || 0), 0);
+    const saldoPendienteUsd = Math.max(0, (Number(purchase.montoTotalUsd) || 0) - totalAbonadoUsd);
+    let estado = purchase.estado || 'PENDIENTE';
+    if (saldoPendienteUsd <= 0.001) {
+      if (estado === 'PENDIENTE') estado = 'PAGADO';
+    } else {
+      if (estado === 'PAGADO') estado = 'PENDIENTE';
+    }
+    const tipoCambio = purchase.tipoCambioRef || 0;
+    const montoTotalClpRef = purchase.montoTotalClpRef || (tipoCambio > 0 ? Math.round(purchase.montoTotalUsd * tipoCambio) : undefined);
+
+    return {
+      ...purchase,
+      saldoPendienteUsd: Number(saldoPendienteUsd.toFixed(2)),
+      montoTotalClpRef,
+      estado
     };
   };
 
@@ -699,6 +732,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubStock: any;
     let unsubStaff: any;
     let unsubPurchases: any;
+    let unsubUsaPurchases: any;
     let unsubAdjustments: any;
     let unsubCoupons: any;
     let unsubIncidents: any;
@@ -730,6 +764,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         });
         unsubPurchases = onSnapshot(collection(db, 'purchases'), (snap) => {
           setPurchases(snap.docs.map(d => d.data() as Purchase));
+        });
+        unsubUsaPurchases = onSnapshot(collection(db, 'usa_purchases'), (snap) => {
+          setUsaPurchases(snap.docs.map(d => ({ ...d.data(), id: d.id } as UsaPurchase)));
         });
         unsubAdjustments = onSnapshot(collection(db, 'adjustments'), (snap) => {
           setAdjustments(snap.docs.map(d => d.data() as CommissionAdjustment));
@@ -777,6 +814,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubStock) unsubStock();
       if (unsubStaff) unsubStaff();
       if (unsubPurchases) unsubPurchases();
+      if (unsubUsaPurchases) unsubUsaPurchases();
       if (unsubAdjustments) unsubAdjustments();
       if (unsubCoupons) unsubCoupons();
       if (unsubIncidents) unsubIncidents();
@@ -794,12 +832,13 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_stock', JSON.stringify(stock));
     safeLocalStorage.setItem('mdf_staff', JSON.stringify(staff));
     safeLocalStorage.setItem('mdf_purchases', JSON.stringify(purchases));
+    safeLocalStorage.setItem('mdf_usa_purchases', JSON.stringify(usaPurchases));
     safeLocalStorage.setItem('mdf_carriers', JSON.stringify(carriers));
     safeLocalStorage.setItem('mdf_adjustments', JSON.stringify(adjustments));
     safeLocalStorage.setItem('mdf_settings', JSON.stringify(settings));
     safeLocalStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
     safeLocalStorage.setItem('mdf_incidents', JSON.stringify(incidents));
-  }, [sales, stock, staff, purchases, carriers, adjustments, settings, stockHistory, incidents]);
+  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents]);
 
   useEffect(() => {
     safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
@@ -1859,40 +1898,151 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('success');
   };
 
-  const addPurchase = (p: Omit<Purchase, 'id' | 'saldoPendiente' | 'abonos' | 'estado'>) => {
+  const addPurchase = (p: Omit<Purchase, 'id' | 'saldoPendiente' | 'abonos' | 'estado'> & { estado?: 'PAGADO' | 'PENDIENTE'; notas?: string }) => {
     const newId = Math.random().toString(36).substr(2, 9);
-    setDoc(doc(db, 'purchases', newId), {
+    setDoc(doc(db, 'purchases', newId), cleanUndefined({
       ...p,
       id: newId,
       saldoPendiente: p.montoTotal,
       abonos: [],
-      estado: 'PENDIENTE'
-    });
+      estado: p.estado || 'PENDIENTE',
+      notas: p.notas || ''
+    }));
+    playSound('success');
+  };
+
+  const updatePurchase = async (id: string, updatedData: Partial<Purchase>) => {
+    const p = purchases.find(item => item.id === id);
+    if (p) {
+      const merged = { ...p, ...updatedData };
+      const calculated = calculatePurchaseState(merged);
+      await setDoc(doc(db, 'purchases', id), cleanUndefined(calculated));
+      playSound('click');
+    }
   };
 
   const removePurchase = (id: string) => {
     deleteDoc(doc(db, 'purchases', id));
+    playSound('click');
   };
 
-  const addAbono = (purchaseId: string, monto: number, metodo: string, observacion: string) => {
+  const addAbono = (purchaseId: string, monto: number, metodo: string, observacion: string, fecha?: string) => {
     const p = purchases.find(p => p.id === purchaseId);
     if (p) {
       const newAbono: Abono = {
         id: Math.random().toString(36).substr(2, 9),
-        fecha: new Date().toLocaleDateString(),
-        monto, metodo, observacion
+        fecha: fecha || new Date().toLocaleDateString(),
+        monto: Number(monto) || 0,
+        metodo,
+        observacion
       };
-      const tempPurchase = { ...p, abonos: [...p.abonos, newAbono] };
-      setDoc(doc(db, 'purchases', purchaseId), calculatePurchaseState(tempPurchase));
+      const tempPurchase = { ...p, abonos: [...(p.abonos || []), newAbono] };
+      setDoc(doc(db, 'purchases', purchaseId), cleanUndefined(calculatePurchaseState(tempPurchase)));
+      playSound('success');
+    }
+  };
+
+  const updateAbono = async (purchaseId: string, abonoId: string, updatedData: Partial<Abono>) => {
+    const p = purchases.find(item => item.id === purchaseId);
+    if (p) {
+      const updatedAbonos = (p.abonos || []).map(a => a.id === abonoId ? { ...a, ...updatedData } : a);
+      const tempPurchase = { ...p, abonos: updatedAbonos };
+      await setDoc(doc(db, 'purchases', purchaseId), cleanUndefined(calculatePurchaseState(tempPurchase)));
+      playSound('click');
     }
   };
 
   const removeAbono = (purchaseId: string, abonoId: string) => {
     const p = purchases.find(p => p.id === purchaseId);
     if (p) {
-      const filteredAbonos = p.abonos.filter(a => a.id !== abonoId);
+      const filteredAbonos = (p.abonos || []).filter(a => a.id !== abonoId);
       const tempPurchase = { ...p, abonos: filteredAbonos };
-      setDoc(doc(db, 'purchases', purchaseId), calculatePurchaseState(tempPurchase));
+      setDoc(doc(db, 'purchases', purchaseId), cleanUndefined(calculatePurchaseState(tempPurchase)));
+      playSound('click');
+    }
+  };
+
+  const addUsaPurchase = async (p: Omit<UsaPurchase, 'id' | 'saldoPendienteUsd' | 'abonos'>) => {
+    const newId = Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const newUsaPurchase: UsaPurchase = calculateUsaPurchaseState({
+      ...p,
+      id: newId,
+      abonos: [],
+      saldoPendienteUsd: Number(p.montoTotalUsd) || 0,
+      estado: p.estado || 'PENDIENTE',
+      createdAt: now,
+      updatedAt: now
+    });
+    await setDoc(doc(db, 'usa_purchases', newId), cleanUndefined(newUsaPurchase));
+    playSound('success');
+  };
+
+  const updateUsaPurchase = async (id: string, updatedData: Partial<UsaPurchase>) => {
+    const current = usaPurchases.find(p => p.id === id);
+    if (!current) return;
+    const now = new Date().toISOString();
+    const merged = { ...current, ...updatedData, updatedAt: now };
+    const calculated = calculateUsaPurchaseState(merged);
+    await setDoc(doc(db, 'usa_purchases', id), cleanUndefined(calculated));
+    playSound('click');
+  };
+
+  const removeUsaPurchase = async (id: string) => {
+    await deleteDoc(doc(db, 'usa_purchases', id));
+    playSound('click');
+  };
+
+  const addUsaAbono = async (purchaseId: string, abonoData: Omit<UsaAbono, 'id'>) => {
+    const p = usaPurchases.find(item => item.id === purchaseId);
+    if (p) {
+      const now = new Date().toISOString();
+      const newAbono: UsaAbono = {
+        ...abonoData,
+        id: Math.random().toString(36).substr(2, 9),
+        fecha: abonoData.fecha || new Date().toISOString().split('T')[0],
+        createdAt: now
+      };
+      const tempPurchase = {
+        ...p,
+        abonos: [...(p.abonos || []), newAbono],
+        updatedAt: now
+      };
+      const calculated = calculateUsaPurchaseState(tempPurchase);
+      await setDoc(doc(db, 'usa_purchases', purchaseId), cleanUndefined(calculated));
+      playSound('success');
+    }
+  };
+
+  const updateUsaAbono = async (purchaseId: string, abonoId: string, updatedData: Partial<UsaAbono>) => {
+    const p = usaPurchases.find(item => item.id === purchaseId);
+    if (p) {
+      const now = new Date().toISOString();
+      const updatedAbonos = (p.abonos || []).map(a => a.id === abonoId ? { ...a, ...updatedData } : a);
+      const tempPurchase = {
+        ...p,
+        abonos: updatedAbonos,
+        updatedAt: now
+      };
+      const calculated = calculateUsaPurchaseState(tempPurchase);
+      await setDoc(doc(db, 'usa_purchases', purchaseId), cleanUndefined(calculated));
+      playSound('click');
+    }
+  };
+
+  const removeUsaAbono = async (purchaseId: string, abonoId: string) => {
+    const p = usaPurchases.find(item => item.id === purchaseId);
+    if (p) {
+      const now = new Date().toISOString();
+      const filteredAbonos = (p.abonos || []).filter(a => a.id !== abonoId);
+      const tempPurchase = {
+        ...p,
+        abonos: filteredAbonos,
+        updatedAt: now
+      };
+      const calculated = calculateUsaPurchaseState(tempPurchase);
+      await setDoc(doc(db, 'usa_purchases', purchaseId), cleanUndefined(calculated));
+      playSound('click');
     }
   };
 
@@ -1975,7 +2125,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       incidents, addIncident, updateIncident, addIncidentHistoryEvent, addIncidentComment, addIncidentAttachment, deleteIncident,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
-      addPurchase, removePurchase, addAbono, removeAbono, getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
+      addPurchase, updatePurchase, removePurchase, addAbono, updateAbono, removeAbono,
+      usaPurchases, addUsaPurchase, updateUsaPurchase, removeUsaPurchase, addUsaAbono, updateUsaAbono, removeUsaAbono,
+      getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord,
       commissionValues, pagoReenfardado, updateAppValues,
       stockHistory, addStockHistoryEvent
