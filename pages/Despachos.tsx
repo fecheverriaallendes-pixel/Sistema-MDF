@@ -23,13 +23,20 @@ import {
   Camera,
   Trash2,
   ArrowDownWideNarrow,
-  ArrowUpNarrowWide
+  ArrowUpNarrowWide,
+  Clock,
+  Filter,
+  CheckCircle
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
 
-function parseLocalDate(dateStr: string): Date {
+function parseLocalDate(dateStr?: string | null): Date {
   if (!dateStr) return new Date();
+  if (dateStr.includes('T')) {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+  }
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
@@ -42,7 +49,62 @@ function parseLocalDate(dateStr: string): Date {
       return new Date(parseInt(slashParts[2], 10), parseInt(slashParts[1], 10) - 1, parseInt(slashParts[0], 10));
     }
   }
-  return new Date(dateStr);
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
+function getStartOfDay(dateStr: string): Date {
+  const d = parseLocalDate(dateStr);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getEndOfDay(dateStr: string): Date {
+  const d = parseLocalDate(dateStr);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function getDispatchDate(sale: Sale): Date {
+  if (sale.fechaDespacho) return parseLocalDate(sale.fechaDespacho);
+  if (sale.conductorFecha) return parseLocalDate(sale.conductorFecha);
+  return parseLocalDate(sale.fecha);
+}
+
+function getSaleDate(sale: Sale): Date {
+  if (sale.timestamp) return parseLocalDate(sale.timestamp);
+  return parseLocalDate(sale.fecha);
+}
+
+function formatDisplayDate(dateStr?: string | null): string {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = parseLocalDate(dateStr);
+    return d.toLocaleDateString('es-CL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatDisplayDateTime(dateStr?: string | null): string {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = parseLocalDate(dateStr);
+    return `${d.toLocaleDateString('es-CL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })} ${d.toLocaleTimeString('es-CL', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
+  } catch {
+    return dateStr;
+  }
 }
 
 export default function Despachos() {
@@ -53,6 +115,7 @@ export default function Despachos() {
   const [vendedorFilter, setVendedorFilter] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'RETIRO' | 'HISTORIAL'>('AGENCIA');
+  const [dateFilterType, setDateFilterType] = useState<'despacho' | 'venta'>('despacho');
   const [transportistaFilter, setTransportistaFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
@@ -60,80 +123,150 @@ export default function Despachos() {
   const allSales = sales;
   const vendedores = Array.from(new Set(sales.map(s => s.vendedor).filter(Boolean)));
   
-  // Filter logic
-  const filteredBase = allSales.filter(s => {
-    // Date filter
-    if (startDate && parseLocalDate(s.fecha) < parseLocalDate(startDate)) return false;
-    if (endDate && parseLocalDate(s.fecha) > parseLocalDate(endDate)) return false;
-    
+  // Categorize sales into tabs
+  const allAgencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+  const allHomeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
+  const allWithdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
+  const allHistorySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
+
+  const activeTabList = activeTab === 'AGENCIA' ? allAgencySales 
+                      : activeTab === 'DOMICILIO' ? allHomeSales 
+                      : activeTab === 'RETIRO' ? allWithdrawalSales
+                      : allHistorySales;
+
+  // Filter the current list
+  const filteredList = activeTabList.filter(s => {
+    // Determine the date to compare against
+    const targetDate = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
+      ? getDispatchDate(s)
+      : getSaleDate(s);
+
+    // Date range filter
+    if (startDate) {
+      const start = getStartOfDay(startDate);
+      if (targetDate < start) return false;
+    }
+    if (endDate) {
+      const end = getEndOfDay(endDate);
+      if (targetDate > end) return false;
+    }
+
+    // Transportista filter
+    if (transportistaFilter && s.transportista !== transportistaFilter) {
+      return false;
+    }
+
     // Vendedor filter
-    if (vendedorFilter && s.vendedor !== vendedorFilter) return false;
+    if (vendedorFilter && s.vendedor !== vendedorFilter) {
+      return false;
+    }
 
     // Search term
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
+      const productObj = stock.find(item => item.codigo === s.codigoFardo);
+      const productTypeName = productObj?.tipo?.toLowerCase() || '';
+      const itemsMatch = s.items?.some(it => {
+        const itStock = stock.find(item => item.codigo === it.codigoFardo);
+        return it.codigoFardo.toLowerCase().includes(search) || (itStock?.tipo?.toLowerCase() || '').includes(search);
+      }) ?? false;
+
       return (
         s.cliente.toLowerCase().includes(search) || 
         s.numeroVenta.toString().includes(search) ||
-        s.codigoFardo?.toLowerCase().includes(search) ||
+        (s.codigoFardo?.toLowerCase().includes(search) ?? false) ||
+        productTypeName.includes(search) ||
+        itemsMatch ||
         (s.transportista?.toLowerCase().includes(search) ?? false) ||
-        (s.agencia?.toLowerCase().includes(search) ?? false)
+        (s.agencia?.toLowerCase().includes(search) ?? false) ||
+        (s.direccion?.toLowerCase().includes(search) ?? false) ||
+        (s.telefono?.toLowerCase().includes(search) ?? false) ||
+        (s.rut?.toLowerCase().includes(search) ?? false)
       );
     }
-    
+
     return true;
   });
 
-  const agencySales = filteredBase.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-  const homeSales = filteredBase.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-  const withdrawalSales = filteredBase.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
-  const historySales = filteredBase.filter(s => s.status === SaleStatus.ENVIADO);
-  
-  let currentList = activeTab === 'AGENCIA' ? agencySales 
-                    : activeTab === 'DOMICILIO' ? homeSales 
-                    : activeTab === 'RETIRO' ? withdrawalSales
-                    : historySales;
-
-  if (transportistaFilter) {
-      currentList = currentList.filter(s => s.transportista === transportistaFilter);
-  }
-
   // Sorting
-  currentList = [...currentList].sort((a, b) => {
-    const dateA = parseLocalDate(a.fecha).getTime();
-    const dateB = parseLocalDate(b.fecha).getTime();
-    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  const currentList = [...filteredList].sort((a, b) => {
+    const timeA = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
+      ? getDispatchDate(a).getTime()
+      : getSaleDate(a).getTime();
+    const timeB = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
+      ? getDispatchDate(b).getTime()
+      : getSaleDate(b).getTime();
+    return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
   });
+
+  const setDatePreset = (preset: 'today' | 'yesterday' | 'week' | 'month' | 'clear') => {
+    playSound('click');
+    const now = new Date();
+    const formatDateInput = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    if (preset === 'today') {
+      const str = formatDateInput(now);
+      setStartDate(str);
+      setEndDate(str);
+    } else if (preset === 'yesterday') {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const str = formatDateInput(yesterday);
+      setStartDate(str);
+      setEndDate(str);
+    } else if (preset === 'week') {
+      const pastWeek = new Date(now);
+      pastWeek.setDate(now.getDate() - 6);
+      setStartDate(formatDateInput(pastWeek));
+      setEndDate(formatDateInput(now));
+    } else if (preset === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStartDate(formatDateInput(firstDay));
+      setEndDate(formatDateInput(now));
+    } else if (preset === 'clear') {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
 
   const handleExportExcel = () => {
     import('xlsx').then(XLSX => {
       const data = currentList.map(s => ({
         "N_Venta": s.numeroVenta,
+        "Fecha_Venta": s.fecha,
+        "Fecha_Despacho": s.fechaDespacho ? new Date(s.fechaDespacho).toLocaleString('es-CL') : (s.conductorFecha || 'N/A'),
         "Cliente": s.cliente,
         "RUT": s.rut || 'N/A',
-        "Direccion": s.direccion,
+        "Direccion": s.direccion || 'RETIRO EN TIENDA',
         "Telefono": s.telefono,
-        "Producto": s.codigoFardo,
-        "Cant": s.cantidad,
-        "Tipo": s.tipoDespacho || 'N/A',
+        "Producto": s.codigoFardo || (s.items?.map(i => `${i.cantidad}x ${i.codigoFardo}`).join(', ') || 'N/A'),
+        "Cant": s.cantidad || s.items?.reduce((acc, i) => acc + i.cantidad, 0) || 1,
+        "Tipo_Despacho": s.tipoDespacho || 'N/A',
+        "Transportista": s.transportista || 'N/A',
+        "Agencia": s.agencia || 'N/A',
+        "Estado_Despacho": s.estadoDespacho || s.status,
         "Status": s.status
       }));
 
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Despachos");
-      XLSX.writeFile(wb, `Planilla_Despacho_${activeTab}_${new Date().toLocaleDateString()}.xlsx`);
+      XLSX.writeFile(wb, `Planilla_Despacho_${activeTab}_${new Date().toLocaleDateString('es-CL').replace(/\//g, '-')}.xlsx`);
       playSound('success');
     });
   };
 
   const handleIncrementItem = (sale: Sale) => {
     const current = sale.itemsDespachados || 0;
-    if (current < sale.cantidad) {
+    if (current < (sale.cantidad || 1)) {
       updateDispatchItems(sale.id, current + 1);
       playSound('click');
     } else {
-      // Prevent over-scanning
       playSound('click'); 
     }
   };
@@ -147,8 +280,9 @@ export default function Despachos() {
   };
 
   const handleConfirmDispatch = (sale: Sale) => {
-    if ((sale.itemsDespachados || 0) !== sale.cantidad) {
-      alert(`Error: La cantidad verificada (${sale.itemsDespachados || 0}) no coincide con la venta (${sale.cantidad}).`);
+    const requiredQty = sale.cantidad || 1;
+    if ((sale.itemsDespachados || 0) !== requiredQty) {
+      alert(`Error: La cantidad verificada (${sale.itemsDespachados || 0}) no coincide con la venta (${requiredQty}).`);
       return;
     }
     if ((sale.tipoDespacho === DispatchType.DOMICILIO || sale.tipoDespacho === DispatchType.AGENCIA) && !sale.transportista) {
@@ -170,7 +304,7 @@ export default function Despachos() {
             </div>
             <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase">Centro Logístico</h2>
           </div>
-          <p className="text-slate-500 italic ml-16 font-medium">Gestión de envíos, verificación de carga y rutas.</p>
+          <p className="text-slate-500 italic ml-16 font-medium">Gestión de envíos, verificación de carga, transportistas y tracking de historial.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
@@ -178,19 +312,21 @@ export default function Despachos() {
             onClick={handleExportExcel}
             className="flex items-center gap-3 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
           >
-            <FileSpreadsheet size={18} /> Exportar Lista
+            <FileSpreadsheet size={18} /> Exportar Lista ({currentList.length})
           </button>
           
           <div className="flex bg-slate-200 p-1 rounded-[20px] shadow-inner">
             <button 
               onClick={() => { setViewMode('grid'); playSound('click'); }}
               className={`p-3 rounded-[16px] transition-all ${viewMode === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+              title="Vista en Cuadrícula"
             >
               <LayoutGrid size={20} />
             </button>
             <button 
               onClick={() => { setViewMode('list'); playSound('click'); }}
               className={`p-3 rounded-[16px] transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+              title="Vista en Tabla"
             >
               <List size={20} />
             </button>
@@ -204,25 +340,25 @@ export default function Despachos() {
           onClick={() => { setActiveTab('AGENCIA'); playSound('click'); }}
           className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'AGENCIA' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <Building2 size={16} /> Envíos Agencia <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{agencySales.length}</span>
+          <Building2 size={16} /> Envíos Agencia <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allAgencySales.length}</span>
         </button>
         <button 
           onClick={() => { setActiveTab('DOMICILIO'); playSound('click'); }}
           className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'DOMICILIO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <Home size={16} /> Despacho Domicilio <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{homeSales.length}</span>
+          <Home size={16} /> Despacho Domicilio <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allHomeSales.length}</span>
         </button>
         <button 
           onClick={() => { setActiveTab('RETIRO'); playSound('click'); }}
           className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'RETIRO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <Package size={16} /> Retiro Local / Junta Compra <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{withdrawalSales.length}</span>
+          <Package size={16} /> Retiro Local <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allWithdrawalSales.length}</span>
         </button>
         <button 
           onClick={() => { setActiveTab('HISTORIAL'); playSound('click'); }}
-          className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'HISTORIAL' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'HISTORIAL' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <CheckCircle2 size={16} /> Historial
+          <CheckCircle2 size={16} /> Historial Despachados <span className={`${activeTab === 'HISTORIAL' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded-full text-[10px]`}>{allHistorySales.length}</span>
         </button>
       </div>
 
@@ -235,96 +371,207 @@ export default function Despachos() {
               </div>
               <input 
                 type="text" 
-                placeholder="Buscar cliente, código, transporte o agencia..."
-                className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-200 outline-none font-bold text-base shadow-sm transition-all"
+                placeholder="Buscar cliente, N° venta, código producto, transportista, agencia, dirección..."
+                className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-400 outline-none font-bold text-base shadow-sm transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-              <div className="flex-1 lg:flex-none">
+              <div className="flex-1 lg:flex-none min-w-[200px]">
                 <select 
-                    className="w-full px-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 font-bold text-sm outline-none"
+                    className={`w-full px-5 py-4 rounded-[24px] border-2 font-bold text-sm outline-none transition-all ${transportistaFilter ? 'bg-blue-50 border-blue-300 text-blue-900' : 'bg-white border-slate-100 text-slate-700'}`}
                     value={transportistaFilter}
                     onChange={(e) => setTransportistaFilter(e.target.value)}
                 >
-                    <option value="">Transporte (Todos)</option>
+                    <option value="">🚚 Transportista (Todos)</option>
                     {carriers.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="flex-1 lg:flex-none">
+              <div className="flex-1 lg:flex-none min-w-[180px]">
                 <select 
-                    className="w-full px-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 font-bold text-sm outline-none"
+                    className={`w-full px-5 py-4 rounded-[24px] border-2 font-bold text-sm outline-none transition-all ${vendedorFilter ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-white border-slate-100 text-slate-700'}`}
                     value={vendedorFilter}
                     onChange={(e) => setVendedorFilter(e.target.value)}
                 >
-                    <option value="">Vendedor (Todos)</option>
+                    <option value="">👤 Vendedor (Todos)</option>
                     {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
             </div>
         </div>
 
-        {/* Date Ranges */}
-        <div className="bg-white p-3 rounded-[32px] border-2 border-slate-100 shadow-sm flex flex-wrap items-center justify-center gap-6">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Desde</span>
-            <input 
-              type="date" 
-              className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-xs outline-none focus:border-amber-500"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <div className="hidden md:block text-slate-200">|</div>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hasta</span>
-            <input 
-              type="date" 
-              className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl font-bold text-xs outline-none focus:border-amber-500"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
-          <div className="hidden md:block text-slate-200">|</div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Orden</span>
-            <button 
-              onClick={() => {
-                setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
-                playSound('click');
-              }}
-              className="group flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl hover:border-amber-500 transition-all font-bold text-[10px] uppercase tracking-widest text-slate-600"
-            >
-              {sortOrder === 'desc' ? (
-                <>
-                  <ArrowDownWideNarrow size={14} className="text-amber-500" /> Recientes primero
-                </>
-              ) : (
-                <>
-                  <ArrowUpNarrowWide size={14} className="text-amber-500" /> Antiguos primero
-                </>
-              )}
-            </button>
-          </div>
-          {(startDate || endDate || vendedorFilter || searchTerm || transportistaFilter) && (
-            <>
-              <div className="hidden md:block text-slate-200">|</div>
+        {/* Date Ranges & Controls */}
+        <div className="bg-white p-4 rounded-[32px] border-2 border-slate-100 shadow-sm space-y-3">
+          {/* Active Tab Date Mode Indicator (Historial specific toggle) */}
+          {activeTab === 'HISTORIAL' && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 px-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <Filter size={14} className="text-emerald-600" /> Criterio de Fecha para Historial:
+                </span>
+              </div>
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+                <button
+                  onClick={() => { setDateFilterType('despacho'); playSound('click'); }}
+                  className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 ${
+                    dateFilterType === 'despacho'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Truck size={13} /> Fecha de Despacho (Recomendado)
+                </button>
+                <button
+                  onClick={() => { setDateFilterType('venta'); playSound('click'); }}
+                  className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 ${
+                    dateFilterType === 'venta'
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Calendar size={13} /> Fecha de Venta
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Date Inputs */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
+                  {activeTab === 'HISTORIAL' ? (dateFilterType === 'despacho' ? 'Despacho Desde' : 'Venta Desde') : 'Desde'}
+                </span>
+                <input 
+                  type="date" 
+                  className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-amber-500 focus:bg-white transition-colors"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+
+              <span className="text-slate-300 font-bold">-</span>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Hasta
+                </span>
+                <input 
+                  type="date" 
+                  className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-amber-500 focus:bg-white transition-colors"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1 pl-2">
+                <button 
+                  onClick={() => setDatePreset('today')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                >
+                  Hoy
+                </button>
+                <button 
+                  onClick={() => setDatePreset('yesterday')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                >
+                  Ayer
+                </button>
+                <button 
+                  onClick={() => setDatePreset('week')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                >
+                  7 Días
+                </button>
+                <button 
+                  onClick={() => setDatePreset('month')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                >
+                  Este Mes
+                </button>
+              </div>
+            </div>
+
+            {/* Sort order & Clear filters */}
+            <div className="flex items-center gap-3">
               <button 
                 onClick={() => {
-                  setStartDate('');
-                  setEndDate('');
-                  setVendedorFilter('');
-                  setSearchTerm('');
-                  setTransportistaFilter('');
+                  setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
                   playSound('click');
                 }}
-                className="px-4 py-2 text-[10px] font-black text-red-500 hover:text-red-600 uppercase tracking-widest"
+                className="group flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl hover:border-amber-500 transition-all font-bold text-[10px] uppercase tracking-widest text-slate-700"
+                title="Cambiar orden cronológico"
               >
-                Limpiar Filtros
+                {sortOrder === 'desc' ? (
+                  <>
+                    <ArrowDownWideNarrow size={14} className="text-amber-500" /> Más recientes primero
+                  </>
+                ) : (
+                  <>
+                    <ArrowUpNarrowWide size={14} className="text-amber-500" /> Más antiguos primero
+                  </>
+                )}
               </button>
-            </>
+
+              {(startDate || endDate || vendedorFilter || searchTerm || transportistaFilter) && (
+                <button 
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                    setVendedorFilter('');
+                    setSearchTerm('');
+                    setTransportistaFilter('');
+                    playSound('click');
+                  }}
+                  className="px-3 py-2 text-[10px] font-black text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl uppercase tracking-widest transition-colors"
+                >
+                  Limpiar Filtros
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Active Filter Summary Bar */}
+          {(startDate || endDate || transportistaFilter || vendedorFilter || searchTerm) && (
+            <div className="pt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filtrando por:</span>
+              {activeTab === 'HISTORIAL' && (
+                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                  {dateFilterType === 'despacho' ? '🚚 Fecha de Despacho' : '📋 Fecha de Venta'}
+                </span>
+              )}
+              {startDate && (
+                <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                  Desde: {startDate}
+                </span>
+              )}
+              {endDate && (
+                <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                  Hasta: {endDate}
+                </span>
+              )}
+              {transportistaFilter && (
+                <span className="bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                  Transportista: {transportistaFilter}
+                </span>
+              )}
+              {vendedorFilter && (
+                <span className="bg-purple-50 text-purple-800 border border-purple-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                  Vendedor: {vendedorFilter}
+                </span>
+              )}
+              {searchTerm && (
+                <span className="bg-slate-100 text-slate-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                  Búsqueda: "{searchTerm}"
+                </span>
+              )}
+              <span className="text-[11px] font-bold text-slate-400 ml-auto">
+                {currentList.length} resultado(s) encontrados
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -333,24 +580,43 @@ export default function Despachos() {
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {currentList.map((sale) => (
-            <div key={sale.id} className={`group bg-white rounded-[40px] border-2 ${verifyingSaleId === sale.id ? 'border-amber-400 ring-4 ring-amber-100' : 'border-slate-50'} shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col`}>
+            <div key={sale.id} className={`group bg-white rounded-[40px] border-2 ${verifyingSaleId === sale.id ? 'border-amber-400 ring-4 ring-amber-100' : 'border-slate-100'} shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col`}>
               
               {/* Card Header */}
-              <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-start">
+              <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-block px-3 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-black mb-2">#{sale.numeroVenta}</span>
+                    <span className="inline-block px-3 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-black mb-1.5">#{sale.numeroVenta}</span>
                     {sale.comprobante && (
-                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 mb-2">
+                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 mb-1.5 hover:scale-110 transition-transform" title="Ver Comprobante">
                         <Camera size={16} />
                       </a>
                     )}
+                    {sale.tipoDespacho && (
+                      <span className="inline-block px-2.5 py-0.5 bg-slate-200 text-slate-700 rounded-md text-[9px] font-black uppercase mb-1.5">
+                        {sale.tipoDespacho}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs font-bold text-slate-500">{sale.fecha}</p>
+                  
+                  {/* Dates Display */}
+                  <div className="space-y-0.5 mt-1">
+                    {sale.fechaDespacho && (
+                      <p className="text-xs font-black text-emerald-700 flex items-center gap-1">
+                        <Truck size={13} className="text-emerald-600" /> 
+                        <span>Despacho: {formatDisplayDateTime(sale.fechaDespacho)}</span>
+                      </p>
+                    )}
+                    <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                      <Calendar size={12} className="text-slate-400" />
+                      <span>Venta: {formatDisplayDate(sale.fecha)} {sale.hora ? `(${sale.hora})` : ''}</span>
+                    </p>
+                  </div>
                 </div>
+
                 <div className="text-right flex flex-col items-end gap-2">
                   <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {sale.status}
+                    {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
                   </span>
                   <button 
                     onClick={() => {
@@ -359,6 +625,7 @@ export default function Despachos() {
                         }
                     }}
                     className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Eliminar despacho"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -366,49 +633,86 @@ export default function Despachos() {
               </div>
 
               {/* Card Body */}
-              <div className="p-6 flex-1 space-y-6">
+              <div className="p-6 flex-1 space-y-5">
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</p>
                   <p className="text-lg font-black text-slate-900 uppercase leading-tight truncate">{sale.cliente}</p>
                   <p className="text-xs font-medium text-slate-500 flex items-center gap-1 mt-1">
-                    <Phone size={12} /> {sale.telefono}
+                    <Phone size={12} /> {sale.telefono || 'Sin teléfono'} {sale.rut ? `• RUT: ${sale.rut}` : ''}
                   </p>
                 </div>
 
-                <div className="bg-slate-50 p-4 rounded-[24px] border border-slate-100">
-                    <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                    <MapPin size={10} /> Destino {sale.agencia && <span className="text-blue-500">| Agencia: {sale.agencia}</span>}
-                  </p>
+                {/* Transportista & Destino */}
+                <div className="bg-slate-50 p-4 rounded-[24px] border border-slate-100 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-1">
+                      <MapPin size={11} /> Destino
+                    </p>
+                    {sale.agencia && (
+                      <span className="text-[10px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                        Agencia: {sale.agencia}
+                      </span>
+                    )}
+                  </div>
+                  
                   <p className="text-xs font-bold text-slate-700 uppercase leading-snug">
-                    {sale.direccion || 'RETIRO EN TIENDA'}
+                    {sale.direccion || 'RETIRO EN TIENDA / BODEGA'}
                   </p>
+
+                  {(sale.transportista || sale.agencia) && (
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center gap-1 text-xs font-bold text-slate-800">
+                      <Truck size={13} className="text-amber-600" />
+                      <span>Transporte: <strong className="text-slate-900">{sale.transportista || sale.agencia}</strong></span>
+                    </div>
+                  )}
                 </div>
 
+                {/* Product Content */}
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Contenido</p>
-                  <div className="flex items-center justify-between bg-white border-2 border-slate-100 p-3 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center">
-                        <Package size={20} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-black text-slate-900">{stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</p>
-                        <p className="text-[10px] text-slate-500 font-bold">CANT: {sale.cantidad}</p>
+                  {sale.items && sale.items.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {sale.items.map((it, idx) => {
+                        const product = stock.find(item => item.codigo === it.codigoFardo);
+                        return (
+                          <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl">
+                            <div className="flex items-center gap-2.5">
+                              <Package size={16} className="text-blue-500" />
+                              <div>
+                                <p className="text-xs font-black text-slate-800">{product?.tipo || it.codigoFardo}</p>
+                                <p className="text-[9px] text-slate-400 font-mono">{it.codigoFardo}</p>
+                              </div>
+                            </div>
+                            <span className="text-xs font-black text-slate-700 bg-slate-100 px-2 py-1 rounded-lg">x{it.cantidad}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between bg-white border-2 border-slate-100 p-3 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center">
+                          <Package size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-slate-900">{stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</p>
+                          <p className="text-[10px] text-slate-500 font-bold">CANTIDAD: {sale.cantidad || 1}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Verification Section */}
+                {/* Verification Section for Pending Sales */}
                 {verifyingSaleId === sale.id && sale.status === SaleStatus.PENDIENTE && (
-                  <div className="bg-amber-50 p-4 rounded-[24px] border-2 border-amber-100 animate-in zoom-in duration-300">
+                  <div className="bg-amber-50 p-4 rounded-[24px] border-2 border-amber-200 animate-in zoom-in duration-300 space-y-3">
                     {sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO') ? (
-                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-3">Verificación para Retiro</p>
+                      <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest text-center">Verificación para Retiro</p>
                     ) : (
-                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-3">Verificación para Envío</p>
+                      <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest text-center">Verificación para Envío</p>
                     )}
                     
-                    <div className="flex items-center justify-center gap-4 mb-4">
+                    <div className="flex items-center justify-center gap-4 py-2">
                       <button 
                         onClick={() => handleDecrementItem(sale)}
                         className="w-10 h-10 bg-white rounded-full shadow-sm border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-100 active:scale-90 transition-all"
@@ -416,10 +720,10 @@ export default function Despachos() {
                         <Minus size={20} />
                       </button>
                       <div className="text-center">
-                        <span className={`text-3xl font-black ${sale.itemsDespachados === sale.cantidad ? 'text-emerald-500' : 'text-slate-900'}`}>
+                        <span className={`text-3xl font-black ${(sale.itemsDespachados || 0) === (sale.cantidad || 1) ? 'text-emerald-500' : 'text-slate-900'}`}>
                           {sale.itemsDespachados || 0}
                         </span>
-                        <span className="text-sm font-bold text-slate-400"> / {sale.cantidad}</span>
+                        <span className="text-sm font-bold text-slate-400"> / {sale.cantidad || 1}</span>
                       </div>
                       <button 
                         onClick={() => handleIncrementItem(sale)}
@@ -429,25 +733,25 @@ export default function Despachos() {
                       </button>
                     </div>
 
-                    {sale.itemsDespachados === sale.cantidad ? (
-                      <div className="text-center text-[10px] font-black text-emerald-600 bg-emerald-100 py-2 rounded-xl mb-3 animate-pulse">
+                    {(sale.itemsDespachados || 0) === (sale.cantidad || 1) ? (
+                      <div className="text-center text-[10px] font-black text-emerald-600 bg-emerald-100 py-2 rounded-xl animate-pulse">
                         ¡CANTIDAD VERIFICADA!
                       </div>
-                    ) : (sale.itemsDespachados || 0) > sale.cantidad ? (
-                      <div className="text-center text-[10px] font-black text-red-600 bg-red-100 py-2 rounded-xl mb-3">
+                    ) : (sale.itemsDespachados || 0) > (sale.cantidad || 1) ? (
+                      <div className="text-center text-[10px] font-black text-red-600 bg-red-100 py-2 rounded-xl">
                         ¡EXCESO DE ITEMS!
                       </div>
                     ) : (
-                      <div className="text-center text-[10px] font-bold text-amber-600/70 mb-3">
+                      <div className="text-center text-[10px] font-bold text-amber-700/80">
                         Confirma los productos físicamente
                       </div>
                     )}
 
                     {sale.tipoDespacho === DispatchType.DOMICILIO && (
-                      <div className="mb-4">
-                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-2">Asignar Transportista</p>
+                      <div>
+                        <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest text-center mb-1.5">Asignar Transportista</p>
                         <select 
-                          className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
+                          className="w-full px-4 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
                           value={sale.transportista || ''}
                           onChange={(e) => assignCarrier(sale.id, e.target.value)}
                         >
@@ -458,22 +762,23 @@ export default function Despachos() {
                         </select>
                       </div>
                     )}
+
                     {sale.tipoDespacho === DispatchType.AGENCIA && (
-                      <div className="mb-4 space-y-4">
+                      <div className="space-y-3">
                         <div>
-                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-2">Nombre de Agencia</p>
+                          <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest text-center mb-1">Nombre de Agencia</p>
                           <input 
                             type="text"
-                            className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
-                            placeholder="Nombre de la agencia..."
+                            className="w-full px-4 py-2 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
+                            placeholder="Ej: Starken, Chilexpress..."
                             value={sale.agencia || ''}
                             onChange={(e) => assignAgency(sale.id, e.target.value)}
                           />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest text-center mb-2">Transporte a Agencia</p>
+                          <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest text-center mb-1">Transporte a Agencia</p>
                           <select 
-                            className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
+                            className="w-full px-4 py-2 bg-white border border-amber-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-amber-400"
                             value={sale.transportista || ''}
                             onChange={(e) => assignCarrier(sale.id, e.target.value)}
                           >
@@ -488,7 +793,7 @@ export default function Despachos() {
 
                     <button 
                       onClick={() => handleConfirmDispatch(sale)}
-                      disabled={(sale.itemsDespachados || 0) !== sale.cantidad || ((sale.tipoDespacho === DispatchType.DOMICILIO || sale.tipoDespacho === DispatchType.AGENCIA) && !sale.transportista)}
+                      disabled={(sale.itemsDespachados || 0) !== (sale.cantidad || 1) || ((sale.tipoDespacho === DispatchType.DOMICILIO || sale.tipoDespacho === DispatchType.AGENCIA) && !sale.transportista)}
                       className="w-full py-3 bg-emerald-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
                     >
                       {sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO') ? 'Confirmar Retiro' : 'Confirmar Salida'}
@@ -516,8 +821,8 @@ export default function Despachos() {
                     </button>
                   )
                 ) : (
-                  <div className="w-full py-4 bg-emerald-100 text-emerald-600 rounded-[24px] text-xs font-black flex items-center justify-center gap-2 uppercase tracking-widest">
-                    <CheckCircle2 size={16} /> Completado
+                  <div className="w-full py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-[24px] text-xs font-black flex items-center justify-center gap-2 uppercase tracking-widest">
+                    <CheckCircle2 size={16} /> Despacho Completado
                   </div>
                 )}
               </div>
@@ -525,33 +830,88 @@ export default function Despachos() {
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden">
-          <table className="w-full text-left">
+        /* Table View */
+        <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[900px]">
             <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Venta</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Destino</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Items</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha Entrega</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Transportista/Agencia</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Estado</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Venta</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Destino / Tipo</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Producto(s)</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    {activeTab === 'HISTORIAL' ? 'Fecha Despacho' : 'Fecha Venta'}
+                  </th>
+                  {activeTab === 'HISTORIAL' && (
+                    <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha Venta</th>
+                  )}
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Transportista / Agencia</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {currentList.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-8 py-6 font-mono font-bold text-slate-600 flex items-center gap-2">#{sale.numeroVenta}</td>
-                    <td className="px-8 py-6 font-bold text-slate-900">{sale.cliente}</td>
-                    <td className="px-8 py-6 text-xs text-slate-500 uppercase max-w-xs truncate">{sale.direccion}</td>
-                    <td className="px-8 py-6 font-bold text-slate-700">{sale.cantidad} x {stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</td>
-                    <td className="px-8 py-6 text-xs text-slate-600 font-bold">{sale.fechaDespacho ? new Date(sale.fechaDespacho).toLocaleDateString() : 'N/A'}</td>
-                    <td className="px-8 py-6 text-xs text-slate-700 font-bold">{sale.transportista || sale.agencia || 'N/A'}</td>
-                    <td className="px-8 py-6 text-right">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                      {sale.status}
-                    </span>
-                  </td>
+                  <tr key={sale.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-5 font-mono font-bold text-slate-700">
+                      <span className="bg-slate-100 px-2.5 py-1 rounded-lg">#{sale.numeroVenta}</span>
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="font-bold text-slate-900 text-sm">{sale.cliente}</p>
+                      <p className="text-xs text-slate-400">{sale.telefono}</p>
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="text-xs text-slate-700 uppercase font-medium max-w-xs truncate">{sale.direccion || 'Retiro en Bodega'}</p>
+                      <span className="text-[10px] font-bold text-slate-400">{sale.tipoDespacho}</span>
+                    </td>
+                    <td className="px-6 py-5 font-bold text-xs text-slate-700">
+                      {sale.items && sale.items.length > 0 ? (
+                        <div>
+                          {sale.items.map((it, idx) => (
+                            <div key={idx}>
+                              {it.cantidad}x {stock.find(item => item.codigo === it.codigoFardo)?.tipo || it.codigoFardo}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        `${sale.cantidad || 1} x ${stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}`
+                      )}
+                    </td>
+                    <td className="px-6 py-5 text-xs font-bold">
+                      {activeTab === 'HISTORIAL' ? (
+                        sale.fechaDespacho ? (
+                          <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                            {formatDisplayDateTime(sale.fechaDespacho)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">{sale.conductorFecha || sale.fecha}</span>
+                        )
+                      ) : (
+                        <span className="text-slate-700">{formatDisplayDate(sale.fecha)}</span>
+                      )}
+                    </td>
+                    {activeTab === 'HISTORIAL' && (
+                      <td className="px-6 py-5 text-xs text-slate-500 font-medium">
+                        {formatDisplayDate(sale.fecha)}
+                      </td>
+                    )}
+                    <td className="px-6 py-5 text-xs font-bold">
+                      {sale.transportista ? (
+                        <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-100 inline-flex items-center gap-1">
+                          <Truck size={12} /> {sale.transportista}
+                        </span>
+                      ) : sale.agencia ? (
+                        <span className="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg border border-purple-100 inline-flex items-center gap-1">
+                          <Building2 size={12} /> {sale.agencia}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">No asignado</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
+                      </span>
+                    </td>
                 </tr>
               ))}
             </tbody>
@@ -559,15 +919,36 @@ export default function Despachos() {
         </div>
       )}
 
+      {/* Empty State */}
       {currentList.length === 0 && (
-        <div className="py-20 flex flex-col items-center justify-center text-center">
+        <div className="py-20 flex flex-col items-center justify-center text-center bg-white rounded-[40px] border border-slate-100 p-8 shadow-sm">
           <div className="w-20 h-20 bg-slate-100 text-slate-300 rounded-full flex items-center justify-center mb-6">
             <Box size={40} />
           </div>
-          <h3 className="text-2xl font-black text-slate-300 uppercase tracking-tight">Sin Movimientos</h3>
-          <p className="text-slate-400 font-medium mt-2">No hay despachos pendientes en esta categoría.</p>
+          <h3 className="text-2xl font-black text-slate-400 uppercase tracking-tight">Sin Movimientos</h3>
+          <p className="text-slate-400 font-medium mt-2 max-w-md">
+            {searchTerm || startDate || endDate || transportistaFilter || vendedorFilter
+              ? 'No se encontraron despachos que coincidan con los filtros aplicados. Intenta ajustando las fechas o el transportista.'
+              : 'No hay despachos registrados en esta categoría.'}
+          </p>
+          {(searchTerm || startDate || endDate || transportistaFilter || vendedorFilter) && (
+            <button
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setTransportistaFilter('');
+                setVendedorFilter('');
+                setSearchTerm('');
+                playSound('click');
+              }}
+              className="mt-6 px-6 py-2.5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-colors"
+            >
+              Restablecer Filtros
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
+
