@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus } from '../types';
+import { normalizeDateToISO } from '../utils/salesBackup';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
@@ -503,6 +504,10 @@ interface StoreContextType {
   lastSync: string | null;
   stockHistory: StockHistoryEvent[];
   addStockHistoryEvent: (event: Omit<StockHistoryEvent, 'id' | 'fecha'>) => Promise<void>;
+  archiveSalesBeforeDate: (cutoffDate: string, onProgress?: (current: number, total: number) => void) => Promise<{ archivedCount: number; remainingCount: number }>;
+  fetchArchivedSales: () => Promise<Sale[]>;
+  restoreArchivedSales: (salesToRestore: Sale[], onProgress?: (current: number, total: number) => void) => Promise<{ restoredCount: number }>;
+  deleteArchivedSales: (saleIds: string[]) => Promise<void>;
 }
 
 // Safe storage wrapper to prevent Safari private mode exception crashes
@@ -2119,6 +2124,187 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     });
   };
 
+  const archiveSalesBeforeDate = async (cutoffDate: string, onProgress?: (current: number, total: number) => void): Promise<{ archivedCount: number; remainingCount: number }> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede archivar ventas.");
+      throw new Error("No autorizado");
+    }
+
+    const normCutoff = normalizeDateToISO(cutoffDate);
+    if (!normCutoff) {
+      throw new Error("Fecha de corte inválida");
+    }
+
+    setIsSyncing(true);
+    try {
+      const salesDocs = await getDocs(collection(db, 'sales'));
+      const salesList = salesDocs.docs.map(d => ({ ...d.data(), id: d.id } as Sale));
+      
+      const toArchive = salesList.filter(s => {
+        const dIso = normalizeDateToISO(s.fecha);
+        return dIso && dIso < normCutoff;
+      });
+
+      if (toArchive.length === 0) {
+        return { archivedCount: 0, remainingCount: salesList.length };
+      }
+
+      let batch = writeBatch(db);
+      let count = 0;
+      let processed = 0;
+
+      for (const sale of toArchive) {
+        const archiveRef = doc(db, 'sales_archive', sale.id);
+        const saleRef = doc(db, 'sales', sale.id);
+
+        const cleanDoc = cleanUndefined({
+          ...sale,
+          archivedAt: new Date().toISOString(),
+          archivedBy: currentUser?.nombre || 'SISTEMA',
+          cutoffDate: normCutoff
+        });
+
+        batch.set(archiveRef, cleanDoc);
+        batch.delete(saleRef);
+        count++;
+        processed++;
+
+        if (onProgress) {
+          onProgress(processed, toArchive.length);
+        }
+
+        if (count >= 350) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+
+      // Log in backup registry
+      try {
+        const backupLogRef = doc(collection(db, 'backup_logs'));
+        await setDoc(backupLogRef, {
+          id: backupLogRef.id,
+          fecha: new Date().toISOString(),
+          tipo: 'ARCHIVO_HISTORICO_VENTAS',
+          cutoffDate: normCutoff,
+          ventasArchivadas: toArchive.length,
+          usuario: currentUser?.nombre || 'SISTEMA'
+        });
+      } catch (logErr) {
+        console.warn("Could not save backup log:", logErr);
+      }
+
+      playSound('success');
+      return { 
+        archivedCount: toArchive.length, 
+        remainingCount: salesList.length - toArchive.length 
+      };
+    } catch (error: any) {
+      console.error("Error al archivar ventas:", error);
+      throw error;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const fetchArchivedSales = async (): Promise<Sale[]> => {
+    try {
+      const snap = await getDocs(collection(db, 'sales_archive'));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Sale));
+      return list;
+    } catch (error: any) {
+      console.error("Error al consultar archivo de ventas:", error);
+      throw error;
+    }
+  };
+
+  const restoreArchivedSales = async (salesToRestore: Sale[], onProgress?: (current: number, total: number) => void): Promise<{ restoredCount: number }> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede restaurar ventas.");
+      throw new Error("No autorizado");
+    }
+
+    setIsSyncing(true);
+    try {
+      let batch = writeBatch(db);
+      let count = 0;
+      let processed = 0;
+
+      for (const sale of salesToRestore) {
+        const saleRef = doc(db, 'sales', sale.id);
+        const archiveRef = doc(db, 'sales_archive', sale.id);
+
+        const restoredSale = { ...sale };
+        delete (restoredSale as any).archivedAt;
+        delete (restoredSale as any).archivedBy;
+        delete (restoredSale as any).cutoffDate;
+
+        batch.set(saleRef, cleanUndefined(restoredSale));
+        batch.delete(archiveRef);
+        count++;
+        processed++;
+
+        if (onProgress) {
+          onProgress(processed, salesToRestore.length);
+        }
+
+        if (count >= 350) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+
+      if (count > 0) {
+        await batch.commit();
+      }
+
+      playSound('success');
+      return { restoredCount: salesToRestore.length };
+    } catch (error) {
+      console.error("Error al restaurar ventas archivadas:", error);
+      throw error;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const deleteArchivedSales = async (saleIds: string[]): Promise<void> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede eliminar registros del archivo histórico.");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      let batch = writeBatch(db);
+      let count = 0;
+      for (const id of saleIds) {
+        batch.delete(doc(db, 'sales_archive', id));
+        count++;
+        if (count >= 350) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+      if (count > 0) {
+        await batch.commit();
+      }
+      playSound('click');
+    } catch (e: any) {
+      console.error("Error al eliminar del archivo:", e);
+      throw e;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
@@ -2130,7 +2316,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       getStats, getReportData, syncWithCloud, pushToCloud, isSyncing, lastSync: settings.lastSync,
       productionRecords, addProductionRecord, deleteProductionRecord,
       commissionValues, pagoReenfardado, updateAppValues,
-      stockHistory, addStockHistoryEvent
+      stockHistory, addStockHistoryEvent,
+      archiveSalesBeforeDate, fetchArchivedSales, restoreArchivedSales, deleteArchivedSales
     }}>
       {children}
     </StoreContext.Provider>

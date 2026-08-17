@@ -61,6 +61,10 @@
       "schema": { "$ref": "Sale" },
       "description": "Sales collection"
     },
+    "/sales_archive/{saleId}": {
+      "schema": { "$ref": "Sale" },
+      "description": "Historical archived sales repository collection"
+    },
     "/stock/{itemId}": {
       "schema": { "$ref": "StockItem" },
       "description": "Stock collection"

@@ -7,10 +7,12 @@ import {
   Table as TableIcon, Server, HardDrive, UserPlus, Shield,
   SearchCode, Eye, UploadCloud,
   FileText, Package, Wallet, 
-  Boxes, Truck, Layers, Edit3
+  Boxes, Truck, Layers, Edit3, Archive, FileSpreadsheet, FileJson, Smartphone
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole } from '../types';
+import { VentasArchiveModal } from '../components/VentasArchiveModal';
+import { exportSalesToExcel, exportSalesToJSON } from '../utils/salesBackup';
 
 export default function Configuracion() {
   const { 
@@ -21,7 +23,8 @@ export default function Configuracion() {
     commissionValues, pagoReenfardado, updateAppValues, currentUser
   } = useStore();
   
-  const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS' | 'VALORES'>('RED');
+  const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS' | 'VALORES' | 'ARCHIVE'>('RED');
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [apiUrl, setApiUrl] = useState(settings.cloudUrl);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
 
@@ -130,6 +133,7 @@ export default function Configuracion() {
         <div className="flex bg-slate-200 p-1.5 rounded-[24px] shadow-inner overflow-x-auto">
           {[
             { id: 'RED', label: 'Red', icon: Globe },
+            { id: 'ARCHIVE', label: 'Respaldo & Archivo', icon: Archive },
             { id: 'STAFF', label: 'Personal', icon: Users },
             { id: 'DB', label: 'Rescate DB', icon: Server },
             { id: 'VALORES', label: 'Valores y Comisiones', icon: Wallet },
@@ -621,7 +625,114 @@ export default function Configuracion() {
             </div>
           </div>
         )}
+
+        {/* PESTAÑA RESPALDO Y ARCHIVO HISTÓRICO */}
+        {activeTab === 'ARCHIVE' && (
+          <div className="max-w-4xl mx-auto w-full space-y-8 animate-in zoom-in duration-500">
+            <div className="bg-slate-900 p-10 rounded-[48px] border-2 border-slate-800 shadow-2xl relative overflow-hidden text-white">
+              <div className="absolute top-0 right-0 p-8 opacity-10 text-white"><Archive size={140} /></div>
+              <div className="relative z-10 space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                    <Archive size={32} />
+                  </div>
+                  <div>
+                    <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
+                      Optimización y Rendimiento
+                    </span>
+                    <h3 className="text-3xl font-black uppercase tracking-tight text-white mt-1">
+                      Repositorio Histórico de Ventas
+                    </h3>
+                  </div>
+                </div>
+
+                <p className="text-slate-300 text-xs font-medium leading-relaxed max-w-2xl">
+                  Archiva de forma segura las ventas antiguas para descongestionar la memoria de los teléfonos y computadores de los vendedores y despachadores. Podrás descargar respaldos completos en <b>Excel (.xlsx)</b> y <b>JSON</b>, además de consultar o restaurar ventas cuando lo necesites.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="bg-white/5 border border-white/10 p-5 rounded-3xl">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Ventas Activas en Sistema</p>
+                    <p className="text-3xl font-black text-emerald-400 mt-1">{sales.length}</p>
+                    <p className="text-[10px] text-slate-400 mt-1 font-bold">Cargadas en teléfonos y PCs</p>
+                  </div>
+                  <div className="bg-white/5 border border-white/10 p-5 rounded-3xl">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Copia Offline Rápida</p>
+                    <p className="text-xs font-black text-white mt-2">Exporta en 1 clic tus ventas a Excel</p>
+                    <button
+                      onClick={() => {
+                        exportSalesToExcel(sales, `Respaldo_Completo_Ventas_${new Date().toISOString().substring(0, 10)}`, 'Todas_Las_Ventas');
+                        playSound('success');
+                      }}
+                      className="mt-2 text-xs font-black text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider"
+                    >
+                      <FileSpreadsheet size={14} /> Descargar Excel Actual
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={() => { setIsArchiveModalOpen(true); playSound('click'); }}
+                    className="flex-1 py-5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black rounded-3xl text-sm uppercase tracking-wider transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 active:scale-95"
+                  >
+                    <Archive size={20} /> ABRIR HERRAMIENTA DE ARCHIVO Y RESPALDO
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tarjeta de Respaldo Rápido de Base de Datos */}
+            <div className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-xl space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                  <HardDrive size={24} />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-slate-900 uppercase">Descargas Directas de Seguridad</h4>
+                  <p className="text-xs text-slate-500 font-medium">Guarda una copia de seguridad en tu equipo</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  onClick={() => {
+                    exportSalesToExcel(sales, `Respaldo_Ventas_Excel_${new Date().toISOString().substring(0, 10)}`);
+                    playSound('success');
+                  }}
+                  className="p-6 bg-slate-50 hover:bg-emerald-50 text-slate-800 hover:text-emerald-900 border-2 border-slate-200 hover:border-emerald-300 rounded-3xl font-black text-xs uppercase tracking-wider flex items-center gap-3 transition-all text-left shadow-sm"
+                >
+                  <FileSpreadsheet size={24} className="text-emerald-600" />
+                  <div>
+                    <p className="text-sm font-black">Descargar Excel (.xlsx)</p>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{sales.length} ventas formateadas</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    exportSalesToJSON(sales, `Respaldo_Ventas_JSON_${new Date().toISOString().substring(0, 10)}`);
+                    playSound('success');
+                  }}
+                  className="p-6 bg-slate-50 hover:bg-blue-50 text-slate-800 hover:text-blue-900 border-2 border-slate-200 hover:border-blue-300 rounded-3xl font-black text-xs uppercase tracking-wider flex items-center gap-3 transition-all text-left shadow-sm"
+                >
+                  <FileJson size={24} className="text-blue-600" />
+                  <div>
+                    <p className="text-sm font-black">Descargar JSON (.json)</p>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">Estructura pura de base de datos</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Modal de Repositorio de Respaldo y Archivo Histórico de Ventas */}
+      <VentasArchiveModal 
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+      />
     </div>
   );
 }

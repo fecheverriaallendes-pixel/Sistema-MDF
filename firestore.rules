@@ -4,6 +4,9 @@ service cloud.firestore {
     match /sales/{document=**} {
       allow read, write: if true;
     }
+    match /sales_archive/{document=**} {
+      allow read, write: if true;
+    }
     match /incidents/{document=**} {
       allow read, write: if true;
     }

@@ -1,11 +1,12 @@
 
 import React, { useState, useRef } from 'react';
-import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera } from 'lucide-react';
+import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 import { smartTextMatch } from '../utils/search';
 import { Label } from '../components/Label';
 import { Invoice } from '../components/Invoice';
+import { VentasArchiveModal } from '../components/VentasArchiveModal';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -35,6 +36,7 @@ export default function Ventas() {
   const [printType, setPrintType] = useState<'FACTURA' | 'ETIQUETAS' | null>(null);
   const [sortKey, setSortKey] = useState<'numeroVenta' | 'fecha'>('numeroVenta');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
 
@@ -166,19 +168,31 @@ export default function Ventas() {
           <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase">Historial de Ventas</h2>
           <p className="text-slate-500 italic font-medium">Gestión de clientes y recolección de datos pendientes</p>
         </div>
-        <div className="flex bg-slate-200 p-1.5 rounded-[24px] shadow-inner">
-          <button 
-            onClick={() => { setActiveTab('PENDING'); playSound('click'); }}
-            className={`flex items-center gap-3 px-8 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${activeTab === 'PENDING' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-600'}`}
-          >
-            <AlertCircle size={18} /> Pendientes Live ({pendingLiveSales.length})
-          </button>
-          <button 
-            onClick={() => { setActiveTab('READY'); playSound('click'); }}
-            className={`flex items-center gap-3 px-8 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${activeTab === 'READY' ? 'bg-emerald-500 text-white shadow-xl' : 'text-slate-600'}`}
-          >
-            <CheckCircle2 size={18} /> Ventas Completas ({readySales.length})
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => { setIsArchiveModalOpen(true); playSound('click'); }}
+              className="flex items-center gap-2 px-5 py-3.5 bg-slate-900 hover:bg-black text-white rounded-[20px] font-black text-xs uppercase tracking-wider transition-all shadow-lg hover:shadow-slate-900/20 active:scale-95"
+              title="Archivar ventas antiguas y descargar copias de respaldo"
+            >
+              <Archive size={16} className="text-emerald-400" />
+              <span>Respaldar / Archivar</span>
+            </button>
+          )}
+          <div className="flex bg-slate-200 p-1.5 rounded-[24px] shadow-inner">
+            <button 
+              onClick={() => { setActiveTab('PENDING'); playSound('click'); }}
+              className={`flex items-center gap-3 px-6 py-3 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${activeTab === 'PENDING' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-600'}`}
+            >
+              <AlertCircle size={18} /> Pendientes Live ({pendingLiveSales.length})
+            </button>
+            <button 
+              onClick={() => { setActiveTab('READY'); playSound('click'); }}
+              className={`flex items-center gap-3 px-6 py-3 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all ${activeTab === 'READY' ? 'bg-emerald-500 text-white shadow-xl' : 'text-slate-600'}`}
+            >
+              <CheckCircle2 size={18} /> Ventas Completas ({readySales.length})
+            </button>
+          </div>
         </div>
       </div>
 
@@ -476,6 +490,12 @@ export default function Ventas() {
           </div>
         </div>
       )}
+
+      {/* Modal de Repositorio de Respaldo y Archivo Histórico de Ventas */}
+      <VentasArchiveModal 
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+      />
     </div>
   );
 }
