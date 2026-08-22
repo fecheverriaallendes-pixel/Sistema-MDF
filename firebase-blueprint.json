@@ -79,6 +79,18 @@
     "/usa_purchases/{purchaseId}": {
       "schema": { "$ref": "UsaPurchase" },
       "description": "USA container purchases and statement in USD"
+    },
+    "/salary_advances/{advanceId}": {
+      "description": "Employee salary advances deducted on Saturday payments"
+    },
+    "/employee_loans/{loanId}": {
+      "description": "Employee loans with multi-week installments"
+    },
+    "/work_extras/{extraId}": {
+      "description": "Extra loading, unloading and bonus works"
+    },
+    "/payroll_records/{recordId}": {
+      "description": "Weekly payroll settlement records and receipts"
     }
   }
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
@@ -508,6 +508,29 @@ interface StoreContextType {
   fetchArchivedSales: () => Promise<Sale[]>;
   restoreArchivedSales: (salesToRestore: Sale[], onProgress?: (current: number, total: number) => void) => Promise<{ restoredCount: number }>;
   deleteArchivedSales: (saleIds: string[]) => Promise<void>;
+
+  // Nómina, Sueldos, Adelantos, Préstamos y Pagos Extras
+  salaryAdvances: SalaryAdvance[];
+  addSalaryAdvance: (advance: Omit<SalaryAdvance, 'id' | 'createdAt'>) => Promise<SalaryAdvance>;
+  updateSalaryAdvance: (id: string, updated: Partial<SalaryAdvance>) => Promise<void>;
+  deleteSalaryAdvance: (id: string) => Promise<void>;
+
+  employeeLoans: EmployeeLoan[];
+  addEmployeeLoan: (loan: Omit<EmployeeLoan, 'id' | 'saldoPendiente' | 'cuotasPagadas' | 'historialPagos' | 'createdAt' | 'updatedAt'>) => Promise<EmployeeLoan>;
+  updateEmployeeLoan: (id: string, updated: Partial<EmployeeLoan>) => Promise<void>;
+  deleteEmployeeLoan: (id: string) => Promise<void>;
+  addLoanPayment: (loanId: string, payment: Omit<LoanPayment, 'id'>) => Promise<void>;
+
+  workExtras: WorkExtra[];
+  addWorkExtra: (extra: Omit<WorkExtra, 'id' | 'total' | 'createdAt'>) => Promise<WorkExtra>;
+  bulkAddWorkExtras: (extras: Omit<WorkExtra, 'id' | 'total' | 'createdAt'>[]) => Promise<void>;
+  updateWorkExtra: (id: string, updated: Partial<WorkExtra>) => Promise<void>;
+  deleteWorkExtra: (id: string) => Promise<void>;
+
+  payrollRecords: WeeklyPayrollRecord[];
+  savePayrollRecord: (record: Omit<WeeklyPayrollRecord, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WeeklyPayrollRecord>;
+  updatePayrollRecord: (id: string, updated: Partial<WeeklyPayrollRecord>) => Promise<void>;
+  deletePayrollRecord: (id: string) => Promise<void>;
 }
 
 // Safe storage wrapper to prevent Safari private mode exception crashes
@@ -641,6 +664,22 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const saved = safeLocalStorage.getItem('mdf_stock_history');
     return saved ? JSON.parse(saved) : [];
   });
+  const [salaryAdvances, setSalaryAdvances] = useState<SalaryAdvance[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_salary_advances');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [employeeLoans, setEmployeeLoans] = useState<EmployeeLoan[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_employee_loans');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [workExtras, setWorkExtras] = useState<WorkExtra[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_work_extras');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [payrollRecords, setPayrollRecords] = useState<WeeklyPayrollRecord[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_payroll_records');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const isSyncingRef = useRef(false);
 
@@ -747,6 +786,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubAppValues: any;
     let unsubCustomers: any;
     let unsubStockHistory: any;
+    let unsubSalaryAdvances: any;
+    let unsubEmployeeLoans: any;
+    let unsubWorkExtras: any;
+    let unsubPayrollRecords: any;
 
     const initFirebase = async () => {
       try {
@@ -807,6 +850,18 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubStockHistory = onSnapshot(collection(db, 'stock_history'), (snap) => {
           setStockHistory(snap.docs.map(d => d.data() as StockHistoryEvent));
         });
+        unsubSalaryAdvances = onSnapshot(collection(db, 'salary_advances'), (snap) => {
+          setSalaryAdvances(snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryAdvance)));
+        });
+        unsubEmployeeLoans = onSnapshot(collection(db, 'employee_loans'), (snap) => {
+          setEmployeeLoans(snap.docs.map(d => ({ ...d.data(), id: d.id } as EmployeeLoan)));
+        });
+        unsubWorkExtras = onSnapshot(collection(db, 'work_extras'), (snap) => {
+          setWorkExtras(snap.docs.map(d => ({ ...d.data(), id: d.id } as WorkExtra)));
+        });
+        unsubPayrollRecords = onSnapshot(collection(db, 'payroll_records'), (snap) => {
+          setPayrollRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyPayrollRecord)));
+        });
       } catch (error: any) {
         console.error("Error al suscribirse a colecciones de Firebase:", error.code, error.message);
       }
@@ -829,6 +884,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubAppValues) unsubAppValues();
       if (unsubCustomers) unsubCustomers();
       if (unsubStockHistory) unsubStockHistory();
+      if (unsubSalaryAdvances) unsubSalaryAdvances();
+      if (unsubEmployeeLoans) unsubEmployeeLoans();
+      if (unsubWorkExtras) unsubWorkExtras();
+      if (unsubPayrollRecords) unsubPayrollRecords();
     };
   }, []);
 
@@ -843,7 +902,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_settings', JSON.stringify(settings));
     safeLocalStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
     safeLocalStorage.setItem('mdf_incidents', JSON.stringify(incidents));
-  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents]);
+    safeLocalStorage.setItem('mdf_salary_advances', JSON.stringify(salaryAdvances));
+    safeLocalStorage.setItem('mdf_employee_loans', JSON.stringify(employeeLoans));
+    safeLocalStorage.setItem('mdf_work_extras', JSON.stringify(workExtras));
+    safeLocalStorage.setItem('mdf_payroll_records', JSON.stringify(payrollRecords));
+  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords]);
 
   useEffect(() => {
     safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
@@ -1554,7 +1617,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   const addStaff = (member: Omit<StaffMember, 'id' | 'activo'>) => {
     const newId = Math.random().toString(36).substr(2, 9);
-    setDoc(doc(db, 'staff', newId), { ...member, id: newId, activo: true });
+    setDoc(doc(db, 'staff', newId), cleanUndefined({ ...member, id: newId, activo: true }));
   };
 
   const updateStaff = async (id: string, updatedMember: Partial<StaffMember>) => {
@@ -1563,7 +1626,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (!current) return;
 
       const updated = { ...current, ...updatedMember };
-      await setDoc(doc(db, 'staff', id), updated);
+      await setDoc(doc(db, 'staff', id), cleanUndefined(updated));
 
       if (updatedMember.nombre && updatedMember.nombre.trim() !== current.nombre.trim()) {
         const oldName = current.nombre.trim();
@@ -2305,6 +2368,199 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
 
+  // ----------------------------------------------------
+  // NÓMINA, SUELDOS, ADELANTOS, PRÉSTAMOS Y EXTRAS
+  // ----------------------------------------------------
+  const addSalaryAdvance = async (advance: Omit<SalaryAdvance, 'id' | 'createdAt'>): Promise<SalaryAdvance> => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const newAdvance: SalaryAdvance = {
+      ...advance,
+      id,
+      monto: Number(advance.monto) || 0,
+      descontado: advance.descontado ?? false,
+      createdAt: now
+    };
+    await setDoc(doc(db, 'salary_advances', id), cleanUndefined(newAdvance));
+    playSound('success');
+    return newAdvance;
+  };
+
+  const updateSalaryAdvance = async (id: string, updated: Partial<SalaryAdvance>): Promise<void> => {
+    const current = salaryAdvances.find(a => a.id === id);
+    if (!current) return;
+    const merged = { ...current, ...updated };
+    await setDoc(doc(db, 'salary_advances', id), cleanUndefined(merged));
+    playSound('click');
+  };
+
+  const deleteSalaryAdvance = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'salary_advances', id));
+    playSound('click');
+  };
+
+  const addEmployeeLoan = async (loan: Omit<EmployeeLoan, 'id' | 'saldoPendiente' | 'cuotasPagadas' | 'historialPagos' | 'createdAt' | 'updatedAt'>): Promise<EmployeeLoan> => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const montoTotal = Number(loan.montoTotal) || 0;
+    const cuotas = Math.max(1, Number(loan.numeroCuotas) || 1);
+    const montoCuotaSemanal = loan.montoCuotaSemanal && loan.montoCuotaSemanal > 0 
+      ? Number(loan.montoCuotaSemanal) 
+      : Math.round(montoTotal / cuotas);
+
+    const newLoan: EmployeeLoan = {
+      ...loan,
+      id,
+      montoTotal,
+      numeroCuotas: cuotas,
+      montoCuotaSemanal,
+      saldoPendiente: montoTotal,
+      cuotasPagadas: 0,
+      estado: 'ACTIVO',
+      historialPagos: [],
+      createdAt: now,
+      updatedAt: now
+    };
+    await setDoc(doc(db, 'employee_loans', id), cleanUndefined(newLoan));
+    playSound('success');
+    return newLoan;
+  };
+
+  const updateEmployeeLoan = async (id: string, updated: Partial<EmployeeLoan>): Promise<void> => {
+    const current = employeeLoans.find(l => l.id === id);
+    if (!current) return;
+    const now = new Date().toISOString();
+    const merged = { ...current, ...updated, updatedAt: now };
+    if (typeof merged.saldoPendiente === 'number' && merged.saldoPendiente <= 0) {
+      merged.estado = 'PAGADO';
+    }
+    await setDoc(doc(db, 'employee_loans', id), cleanUndefined(merged));
+    playSound('click');
+  };
+
+  const deleteEmployeeLoan = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'employee_loans', id));
+    playSound('click');
+  };
+
+  const addLoanPayment = async (loanId: string, payment: Omit<LoanPayment, 'id'>): Promise<void> => {
+    const current = employeeLoans.find(l => l.id === loanId);
+    if (!current) return;
+    const now = new Date().toISOString();
+    const paymentId = Math.random().toString(36).substr(2, 9);
+    const newPayment: LoanPayment = {
+      ...payment,
+      id: paymentId,
+      monto: Number(payment.monto) || 0,
+      fecha: payment.fecha || now.split('T')[0]
+    };
+    const newHistorial = [...(current.historialPagos || []), newPayment];
+    const totalPagado = newHistorial.reduce((acc, p) => acc + (Number(p.monto) || 0), 0);
+    const saldoPendiente = Math.max(0, current.montoTotal - totalPagado);
+    const cuotasPagadas = newHistorial.length;
+    const estado = saldoPendiente <= 0 ? 'PAGADO' : 'ACTIVO';
+
+    const updatedLoan: EmployeeLoan = {
+      ...current,
+      saldoPendiente,
+      cuotasPagadas,
+      estado,
+      historialPagos: newHistorial,
+      updatedAt: now
+    };
+    await setDoc(doc(db, 'employee_loans', loanId), cleanUndefined(updatedLoan));
+    playSound('success');
+  };
+
+  const addWorkExtra = async (extra: Omit<WorkExtra, 'id' | 'total' | 'createdAt'>): Promise<WorkExtra> => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const cantidad = Number(extra.cantidad) || 1;
+    const valorUnitario = Number(extra.valorUnitario) || 0;
+    const total = cantidad * valorUnitario;
+
+    const newExtra: WorkExtra = {
+      ...extra,
+      id,
+      cantidad,
+      valorUnitario,
+      total,
+      liquidado: extra.liquidado ?? false,
+      createdAt: now
+    };
+    await setDoc(doc(db, 'work_extras', id), cleanUndefined(newExtra));
+    playSound('success');
+    return newExtra;
+  };
+
+  const bulkAddWorkExtras = async (extras: Omit<WorkExtra, 'id' | 'total' | 'createdAt'>[]): Promise<void> => {
+    if (!extras || extras.length === 0) return;
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    for (const extra of extras) {
+      const id = Math.random().toString(36).substr(2, 9);
+      const cantidad = Number(extra.cantidad) || 1;
+      const valorUnitario = Number(extra.valorUnitario) || 0;
+      const total = cantidad * valorUnitario;
+      const newExtra: WorkExtra = {
+        ...extra,
+        id,
+        cantidad,
+        valorUnitario,
+        total,
+        liquidado: extra.liquidado ?? false,
+        createdAt: now
+      };
+      batch.set(doc(db, 'work_extras', id), cleanUndefined(newExtra));
+    }
+    await batch.commit();
+    playSound('success');
+  };
+
+  const updateWorkExtra = async (id: string, updated: Partial<WorkExtra>): Promise<void> => {
+    const current = workExtras.find(w => w.id === id);
+    if (!current) return;
+    const merged = { ...current, ...updated };
+    if (updated.cantidad !== undefined || updated.valorUnitario !== undefined) {
+      merged.total = (Number(merged.cantidad) || 0) * (Number(merged.valorUnitario) || 0);
+    }
+    await setDoc(doc(db, 'work_extras', id), cleanUndefined(merged));
+    playSound('click');
+  };
+
+  const deleteWorkExtra = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'work_extras', id));
+    playSound('click');
+  };
+
+  const savePayrollRecord = async (record: Omit<WeeklyPayrollRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<WeeklyPayrollRecord> => {
+    const id = `${record.workerId}_${record.fechaPago}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    const now = new Date().toISOString();
+    const newRecord: WeeklyPayrollRecord = {
+      ...record,
+      id,
+      createdAt: now,
+      updatedAt: now
+    };
+    await setDoc(doc(db, 'payroll_records', id), cleanUndefined(newRecord));
+    playSound('success');
+    return newRecord;
+  };
+
+  const updatePayrollRecord = async (id: string, updated: Partial<WeeklyPayrollRecord>): Promise<void> => {
+    const current = payrollRecords.find(p => p.id === id);
+    if (!current) return;
+    const now = new Date().toISOString();
+    const merged = { ...current, ...updated, updatedAt: now };
+    await setDoc(doc(db, 'payroll_records', id), cleanUndefined(merged));
+    playSound('click');
+  };
+
+  const deletePayrollRecord = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'payroll_records', id));
+    playSound('click');
+  };
+
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
@@ -2317,7 +2573,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       productionRecords, addProductionRecord, deleteProductionRecord,
       commissionValues, pagoReenfardado, updateAppValues,
       stockHistory, addStockHistoryEvent,
-      archiveSalesBeforeDate, fetchArchivedSales, restoreArchivedSales, deleteArchivedSales
+      archiveSalesBeforeDate, fetchArchivedSales, restoreArchivedSales, deleteArchivedSales,
+      salaryAdvances, addSalaryAdvance, updateSalaryAdvance, deleteSalaryAdvance,
+      employeeLoans, addEmployeeLoan, updateEmployeeLoan, deleteEmployeeLoan, addLoanPayment,
+      workExtras, addWorkExtra, bulkAddWorkExtras, updateWorkExtra, deleteWorkExtra,
+      payrollRecords, savePayrollRecord, updatePayrollRecord, deletePayrollRecord
     }}>
       {children}
     </StoreContext.Provider>

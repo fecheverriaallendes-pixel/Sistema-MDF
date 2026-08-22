@@ -64,10 +64,14 @@ export const COMMISSION_VALUES: Record<CommissionType, number> = {
 export enum StaffRole {
   VENDEDOR = 'Vendedor',
   BODEGA = 'Jefe de Bodega',
+  OPERARIO_BODEGA = 'Bodeguero / Operario',
+  CHOFER = 'Chofer / Conductor',
+  PEONETA = 'Peoneta / Cuadrilla Carga',
   DESPACHO = 'Encargado de Despacho',
   ADMIN = 'Administrador',
   TRANSPORTISTA = 'Transportista',
-  POST_VENTA = 'Post-Venta'
+  POST_VENTA = 'Post-Venta',
+  OTRO_PERSONAL = 'Otro Personal'
 }
 
 export enum PurchaseType {
@@ -136,9 +140,182 @@ export interface UsaPurchase {
 export interface StaffMember {
   id: string;
   nombre: string;
-  rol: StaffRole;
-  pin: string;
+  rol: StaffRole | string;
+  pin?: string;
   activo: boolean;
+  tieneAccesoSistema?: boolean; // true: Usuario con login y PIN; false: Personal de nómina (bodegueros, choferes, peonetas, etc.)
+  soloNomina?: boolean;
+  rut?: string;
+  telefono?: string;
+  email?: string;
+  fechaIngreso?: string;
+  
+  // Sueldo base semanal pactado
+  sueldoBaseSemanal?: number; // Ej: $120.000 o $150.000 semanal
+  
+  // Tarifas por defecto para este trabajador
+  tarifaDescargaCamion?: number; // Ej: $25.000 o $30.000 por camión/contenedor
+  tarifaCargaCamion?: number; // Ej: $15.000 por carga de camión
+  tarifaReenfardado?: number; // Ej: $4.000 por fardo
+  tarifaFlete?: number; // Para transportistas
+  
+  // Datos bancarios para transferencias
+  banco?: string;
+  tipoCuenta?: 'Cuenta RUT' | 'Cuenta Corriente' | 'Cuenta Vista' | 'Cuenta de Ahorro' | string;
+  numeroCuenta?: string;
+  rutCuenta?: string;
+  
+  notas?: string;
+}
+
+export interface SalaryAdvance {
+  id: string;
+  workerId: string;
+  workerName: string;
+  fecha: string; // YYYY-MM-DD o ISO
+  monto: number;
+  metodo: 'Transferencia' | 'Efectivo' | 'Cheque' | string;
+  motivo?: string;
+  comprobante?: string;
+  descontado: boolean; // Si ya fue descontado en la liquidación del sábado
+  semanaPago?: string; // Fecha del sábado de pago o identificador de semana
+  payrollId?: string;
+  createdAt?: string;
+}
+
+export interface LoanPayment {
+  id: string;
+  fecha: string;
+  monto: number;
+  numeroCuota: number;
+  semanaPago?: string;
+  payrollId?: string;
+  nota?: string;
+}
+
+export interface EmployeeLoan {
+  id: string;
+  workerId: string;
+  workerName: string;
+  fechaOtorgamiento: string; // YYYY-MM-DD
+  montoTotal: number;
+  numeroCuotas: number; // Ej: 4 cuotas
+  montoCuotaSemanal: number; // Ej: $50.000
+  saldoPendiente: number;
+  cuotasPagadas: number;
+  estado: 'ACTIVO' | 'PAGADO' | 'CANCELADO';
+  motivo?: string;
+  historialPagos: LoanPayment[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type ExtraWorkType = 
+  | 'DESCARGA_CAMION' 
+  | 'CARGA_CAMION' 
+  | 'REENFARDADO' 
+  | 'DESPACHO_EXTRA' 
+  | 'BONO_META' 
+  | 'BONO_PUNTUALIDAD' 
+  | 'HORAS_EXTRAS' 
+  | 'OTRO';
+
+export interface WorkExtra {
+  id: string;
+  workerId: string;
+  workerName: string;
+  fecha: string; // YYYY-MM-DD
+  tipo: ExtraWorkType | string;
+  descripcion: string;
+  cantidad: number; // Ej: 2 descargas
+  valorUnitario: number; // Ej: $25.000
+  total: number; // cantidad * valorUnitario
+  semanaPago?: string; // Fecha del sábado
+  liquidado?: boolean;
+  createdAt?: string;
+}
+
+export interface WeeklyPayrollRecord {
+  id: string;
+  semanaInicio: string; // Lunes YYYY-MM-DD
+  semanaFin: string; // Sábado o Domingo YYYY-MM-DD
+  fechaPago: string; // Sábado YYYY-MM-DD
+  workerId: string;
+  workerName: string;
+  cargo: string;
+  
+  // Haberes
+  sueldoBase: number;
+  comisionesTotal: number;
+  comisionesDetalle?: {
+    tipo: string;
+    cantidad: number;
+    subtotal: number;
+  }[];
+  commissionEntries?: {
+    id: string;
+    fecha: string;
+    vendedor: string;
+    tipo: string;
+    qty: number;
+    subtotal: number;
+    codigo: string;
+    saleNumber?: number;
+    source?: string;
+    esManual?: boolean;
+  }[];
+  extrasTotal: number;
+  extrasDetalle?: {
+    id?: string;
+    tipo: string;
+    descripcion: string;
+    cantidad: number;
+    valorUnitario: number;
+    subtotal: number;
+  }[];
+  otrosBonosTotal: number;
+  totalHaberes: number;
+  
+  // Descuentos
+  adelantosTotal: number;
+  adelantosDetalle?: {
+    id?: string;
+    fecha: string;
+    monto: number;
+    motivo?: string;
+  }[];
+  cuotaPrestamoTotal: number;
+  prestamosDetalle?: {
+    loanId: string;
+    montoCuota: number;
+    saldoRestante: number;
+  }[];
+  otrosDescuentosTotal: number;
+  otrosDescuentosDetalle?: {
+    motivo: string;
+    monto: number;
+  }[];
+  totalDescuentos: number;
+  
+  // Líquido
+  liquidoPagar: number;
+  
+  // Estado y Pago
+  estado: 'PENDIENTE' | 'PAGADO' | 'TRANSFERIDO';
+  metodoPago?: 'Transferencia' | 'Efectivo' | 'Cheque' | string;
+  comprobanteTransferencia?: string;
+  pagadoAt?: string;
+  pagadoBy?: string;
+  notas?: string;
+  
+  datosBancarios?: {
+    banco?: string;
+    tipoCuenta?: string;
+    numeroCuenta?: string;
+    rut?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface StockItem {

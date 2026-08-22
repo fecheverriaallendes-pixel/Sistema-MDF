@@ -33,6 +33,7 @@ import Despachos from './pages/Despachos';
 import Etiquetas from './pages/Etiquetas';
 import Configuracion from './pages/Configuracion';
 import Comisiones from './pages/Comisiones';
+import Sueldos from './pages/Sueldos';
 import Proveedores from './pages/Proveedores';
 import Catalogo from './pages/Catalogo';
 import CatalogoPublico from './pages/CatalogoPublico';
@@ -57,7 +58,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'CRM Clientes', icon: UserIcon, path: '/crm', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Registrar Venta', icon: PlusCircle, path: '/registrar', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Ventas y Clientes', icon: FileText, path: '/ventas', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
-    { name: 'Nómina Comisiones', icon: Coins, path: '/comisiones', roles: [StaffRole.ADMIN] },
+    { name: 'Sueldos y Remuneraciones', icon: Coins, path: '/sueldos', roles: [StaffRole.ADMIN] },
     { name: 'Cheques', icon: CreditCard, path: '/cheques', roles: [StaffRole.ADMIN] },
     { name: 'Pagos Proveedores', icon: Wallet, path: '/proveedores', roles: [StaffRole.ADMIN] },
     { name: 'Inventario Stock', icon: Package, path: '/stock', roles: [StaffRole.ADMIN, StaffRole.BODEGA, StaffRole.DESPACHO] },
@@ -293,7 +294,9 @@ export default function App() {
               <Route path="/post-venta" element={<ProtectedRoute roles={[StaffRole.POST_VENTA, StaffRole.ADMIN]}><PostVenta /></ProtectedRoute>} />
               <Route path="/etiquetas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Etiquetas /></ProtectedRoute>} />
               <Route path="/configuracion" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Configuracion /></ProtectedRoute>} />
-              <Route path="/comisiones" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Comisiones /></ProtectedRoute>} />
+              <Route path="/sueldos" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Sueldos /></ProtectedRoute>} />
+              <Route path="/remuneraciones" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Sueldos /></ProtectedRoute>} />
+              <Route path="/comisiones" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Sueldos /></ProtectedRoute>} />
               <Route path="/cheques" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Cheques /></ProtectedRoute>} />
               <Route path="/proveedores" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Proveedores /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" />} />

@@ -176,7 +176,7 @@ export default function Home() {
 
   const allAvailableUsers = [
     { id: 'master', nombre: 'ADMINISTRADOR MAESTRO', rol: StaffRole.ADMIN, pin: '2024' },
-    ...staff.filter(u => u.activo)
+    ...staff.filter(u => u.activo && u.tieneAccesoSistema !== false && !u.soloNomina)
   ];
 
   const handleManualSync = async () => {
