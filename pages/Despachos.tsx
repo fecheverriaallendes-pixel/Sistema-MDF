@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Send, 
   CheckCircle2, 
@@ -26,7 +27,11 @@ import {
   ArrowUpNarrowWide,
   Clock,
   Filter,
-  CheckCircle
+  CheckCircle,
+  Boxes,
+  Layers,
+  Sparkles,
+  ArrowUpRight
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
@@ -108,13 +113,17 @@ function formatDisplayDateTime(dateStr?: string | null): string {
 }
 
 export default function Despachos() {
-  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale } = useStore();
+  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale } = useStore();
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as any) || 'AGENCIA';
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [vendedorFilter, setVendedorFilter] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'RETIRO' | 'HISTORIAL'>('AGENCIA');
+  const [activeTab, setActiveTab] = useState<'AGENCIA' | 'DOMICILIO' | 'RETIRO' | 'JUNTA_COMPRA' | 'HISTORIAL'>(
+    ['AGENCIA', 'DOMICILIO', 'RETIRO', 'JUNTA_COMPRA', 'HISTORIAL'].includes(initialTab) ? initialTab : 'AGENCIA'
+  );
   const [dateFilterType, setDateFilterType] = useState<'despacho' | 'venta'>('despacho');
   const [transportistaFilter, setTransportistaFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -124,14 +133,26 @@ export default function Despachos() {
   const vendedores = Array.from(new Set(sales.map(s => s.vendedor).filter(Boolean)));
   
   // Categorize sales into tabs
-  const allAgencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-  const allHomeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && (s.juntaCompra === 'DESPACHO INMEDIATO' || !s.juntaCompra));
-  const allWithdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && (s.tipoDespacho === DispatchType.RETIRO || (s.juntaCompra && s.juntaCompra !== 'DESPACHO INMEDIATO')));
+  const isJunta = (s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
+  const allJuntaCompraSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && isJunta(s));
+  const allAgencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && !isJunta(s));
+  const allHomeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && !isJunta(s));
+  const allWithdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.RETIRO && !isJunta(s));
   const allHistorySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
+
+  const juntaTotalProducts = allJuntaCompraSales.reduce((acc, s) => {
+    if (s.items && s.items.length > 0) {
+      return acc + s.items.reduce((sum, it) => sum + (Number(it.cantidad) || 0), 0);
+    }
+    return acc + (Number(s.cantidad) || 1);
+  }, 0);
+
+  const juntaTotalMoney = allJuntaCompraSales.reduce((acc, s) => acc + (Number(s.total) || 0), 0);
 
   const activeTabList = activeTab === 'AGENCIA' ? allAgencySales 
                       : activeTab === 'DOMICILIO' ? allHomeSales 
                       : activeTab === 'RETIRO' ? allWithdrawalSales
+                      : activeTab === 'JUNTA_COMPRA' ? allJuntaCompraSales
                       : allHistorySales;
 
   // Filter the current list
@@ -335,32 +356,69 @@ export default function Despachos() {
       </div>
 
       {/* Tabs */}
-      <div className="flex p-1.5 bg-slate-200 rounded-[24px] w-full max-w-5xl mx-auto shadow-inner">
+      <div className="flex flex-wrap p-1.5 bg-slate-200 rounded-[24px] w-full max-w-6xl mx-auto shadow-inner gap-1">
         <button 
           onClick={() => { setActiveTab('AGENCIA'); playSound('click'); }}
-          className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'AGENCIA' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex-1 min-w-[140px] py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'AGENCIA' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <Building2 size={16} /> Envíos Agencia <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allAgencySales.length}</span>
+          <Building2 size={16} /> Agencia <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allAgencySales.length}</span>
         </button>
         <button 
           onClick={() => { setActiveTab('DOMICILIO'); playSound('click'); }}
-          className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'DOMICILIO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex-1 min-w-[140px] py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'DOMICILIO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <Home size={16} /> Despacho Domicilio <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allHomeSales.length}</span>
+          <Home size={16} /> Domicilio <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allHomeSales.length}</span>
         </button>
         <button 
           onClick={() => { setActiveTab('RETIRO'); playSound('click'); }}
-          className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'RETIRO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex-1 min-w-[140px] py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'RETIRO' ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <Package size={16} /> Retiro Local <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allWithdrawalSales.length}</span>
+          <Package size={16} /> Retiro <span className="bg-slate-100 px-2 py-0.5 rounded-full text-[10px]">{allWithdrawalSales.length}</span>
+        </button>
+        <button 
+          onClick={() => { setActiveTab('JUNTA_COMPRA'); playSound('click'); }}
+          className={`flex-1 min-w-[180px] py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'JUNTA_COMPRA' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-indigo-900'}`}
+        >
+          <Boxes size={16} /> 📦 Junta Compra <span className={`${activeTab === 'JUNTA_COMPRA' ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-800'} px-2 py-0.5 rounded-full text-[10px] font-mono`}>{allJuntaCompraSales.length} vta ({juntaTotalProducts} u)</span>
         </button>
         <button 
           onClick={() => { setActiveTab('HISTORIAL'); playSound('click'); }}
-          className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'HISTORIAL' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`flex-1 min-w-[140px] py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'HISTORIAL' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          <CheckCircle2 size={16} /> Historial Despachados <span className={`${activeTab === 'HISTORIAL' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded-full text-[10px]`}>{allHistorySales.length}</span>
+          <CheckCircle2 size={16} /> Historial <span className={`${activeTab === 'HISTORIAL' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded-full text-[10px]`}>{allHistorySales.length}</span>
         </button>
       </div>
+
+      {/* Banner Informativo Junta Compra */}
+      {activeTab === 'JUNTA_COMPRA' && (
+        <div className="max-w-6xl mx-auto bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white p-6 md:p-8 rounded-[36px] shadow-xl border border-indigo-700/50 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20 text-indigo-300 shrink-0">
+              <Boxes size={32} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 rounded-full text-[10px] font-black uppercase tracking-wider">
+                  Custodia Temporal Bodega
+                </span>
+                <span className="text-xs text-indigo-300 font-medium">Junta Compra MDF</span>
+              </div>
+              <h3 className="text-2xl font-black uppercase tracking-tight mt-1">
+                {allJuntaCompraSales.length} Ventas • {juntaTotalProducts} Fardos Retenidos
+              </h3>
+              <p className="text-xs text-indigo-200/80 font-medium mt-0.5">
+                Los clientes acumulan compras para enviarlas en un solo despacho. Cuando el cliente dé la orden, haz clic en "Liberar para Despacho".
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="bg-white/10 px-5 py-3 rounded-2xl border border-white/10 text-right">
+              <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest">Valor Acumulado</p>
+              <p className="text-xl font-black font-mono text-emerald-400">${juntaTotalMoney.toLocaleString('es-CL')}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <div className="space-y-4 max-w-6xl mx-auto">
@@ -597,6 +655,11 @@ export default function Despachos() {
                         {sale.tipoDespacho}
                       </span>
                     )}
+                    {isJunta(sale) && (
+                      <span className="inline-block px-2.5 py-0.5 bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-md text-[9px] font-black uppercase mb-1.5 shadow-sm">
+                        📦 Junta Compra
+                      </span>
+                    )}
                   </div>
                   
                   {/* Dates Display */}
@@ -803,7 +866,21 @@ export default function Despachos() {
               </div>
 
               {/* Card Footer */}
-              <div className="p-6 bg-slate-50/50 mt-auto border-t border-slate-100">
+              <div className="p-6 bg-slate-50/50 mt-auto border-t border-slate-100 space-y-2">
+                {isJunta(sale) && sale.status === SaleStatus.PENDIENTE && (
+                  <button 
+                    onClick={() => {
+                      if (confirm(`¿Liberar Venta #${sale.numeroVenta} (${sale.cliente}) de Junta Compra para Despacho Inmediato?`)) {
+                        updateSale(sale.id, { juntaCompra: 'DESPACHO INMEDIATO' });
+                        playSound('success');
+                      }
+                    }}
+                    className="w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-[20px] text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
+                  >
+                    <Sparkles size={14} /> Liberar a Despacho Inmediato
+                  </button>
+                )}
+
                 {sale.status === SaleStatus.PENDIENTE ? (
                   verifyingSaleId !== sale.id ? (
                     <button 
@@ -861,7 +938,14 @@ export default function Despachos() {
                     </td>
                     <td className="px-6 py-5">
                       <p className="text-xs text-slate-700 uppercase font-medium max-w-xs truncate">{sale.direccion || 'Retiro en Bodega'}</p>
-                      <span className="text-[10px] font-bold text-slate-400">{sale.tipoDespacho}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] font-bold text-slate-400">{sale.tipoDespacho}</span>
+                        {isJunta(sale) && (
+                          <span className="bg-indigo-100 text-indigo-800 px-2 py-0.2 rounded text-[9px] font-black">
+                            📦 Junta Compra
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-5 font-bold text-xs text-slate-700">
                       {sale.items && sale.items.length > 0 ? (

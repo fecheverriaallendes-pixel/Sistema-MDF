@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ReportModal } from '../components/ReportModal';
 import { 
   TrendingUp, 
@@ -17,7 +17,14 @@ import {
   ArrowUpRight,
   LayoutDashboard,
   FileText,
-  Truck
+  Truck,
+  Boxes,
+  Layers,
+  Search,
+  CheckCircle2,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -35,31 +42,42 @@ import {
 import { useStore } from '../store/GlobalContext';
 import { Sale } from '../types';
 
-const StatCard = ({ title, value, icon: Icon, color, subtitle, trend }: any) => (
-  <div className="bg-white p-7 rounded-[40px] border border-slate-100 shadow-[0_15px_40px_rgba(0,0,0,0.03)] relative overflow-hidden group hover:shadow-xl transition-all duration-500">
-    <div className={`absolute -right-6 -top-6 w-28 h-28 bg-${color}-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 scale-150`}></div>
-    <div className={`w-14 h-14 rounded-2xl bg-${color}-50 text-${color}-600 flex items-center justify-center mb-6 relative z-10 transition-transform group-hover:rotate-6`}>
-      <Icon size={28} />
-    </div>
-    <div className="relative z-10">
-      <p className="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-widest">{title}</p>
-      <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
-      <div className="flex items-center justify-between mt-3">
-        <p className="text-[10px] text-slate-400 font-bold uppercase">{subtitle}</p>
-        {trend && (
-          <span className="flex items-center text-[10px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg">
-            <ArrowUpRight size={12} className="mr-1" /> {trend}
-          </span>
-        )}
+const StatCard = ({ title, value, icon: Icon, color, subtitle, trend, to }: any) => {
+  const content = (
+    <div className={`bg-white p-7 rounded-[40px] border border-slate-100 shadow-[0_15px_40px_rgba(0,0,0,0.03)] relative overflow-hidden group hover:shadow-xl transition-all duration-500 ${to ? 'cursor-pointer' : ''}`}>
+      <div className={`absolute -right-6 -top-6 w-28 h-28 bg-${color}-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 scale-150`}></div>
+      <div className={`w-14 h-14 rounded-2xl bg-${color}-50 text-${color}-600 flex items-center justify-center mb-6 relative z-10 transition-transform group-hover:rotate-6`}>
+        <Icon size={28} />
+      </div>
+      <div className="relative z-10">
+        <p className="text-[10px] font-black text-slate-400 mb-1 uppercase tracking-widest">{title}</p>
+        <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
+        <div className="flex items-center justify-between mt-3">
+          <p className="text-[10px] text-slate-400 font-bold uppercase">{subtitle}</p>
+          {trend && (
+            <span className="flex items-center text-[10px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg">
+              <ArrowUpRight size={12} className="mr-1" /> {trend}
+            </span>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+
+  if (to) {
+    return <Link to={to}>{content}</Link>;
+  }
+  return content;
+};
 
 export default function Dashboard() {
-  const { getStats, getReportData, syncWithCloud, isSyncing, settings, sales, coupons } = useStore();
+  const { getStats, getReportData, syncWithCloud, isSyncing, settings, sales, stock, coupons } = useStore();
   const [reportState, setReportState] = React.useState<{isOpen: boolean, type: 'weekly' | 'monthly' | 'custom', sales: Sale[]}>({isOpen: false, type: 'weekly', sales: []});
   const [dateRange, setDateRange] = React.useState({ start: '', end: '' });
+  const [juntaSearchTerm, setJuntaSearchTerm] = useState('');
+  const [juntaViewMode, setJuntaViewMode] = useState<'clientes' | 'ventas'>('clientes');
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  
   const stats = getStats();
 
   const pendingCoupons = coupons.filter(c => !c.used).length;
@@ -91,6 +109,81 @@ export default function Dashboard() {
       return { name: day.split('/')[0], total };
     });
   }, [sales]);
+
+  // Junta Compra análisis detallado
+  const isJunta = (s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
+  
+  const juntaPendingSales = useMemo(() => {
+    return (sales || []).filter(s => s.status === 'Pendiente' && isJunta(s));
+  }, [sales]);
+
+  const juntaByCustomer = useMemo(() => {
+    const map: Record<string, {
+      cliente: string;
+      telefono?: string;
+      rut?: string;
+      direccion?: string;
+      ventas: Sale[];
+      totalFardos: number;
+      montoTotal: number;
+      vendedores: string[];
+    }> = {};
+
+    juntaPendingSales.forEach(sale => {
+      const clientKey = (sale.cliente || 'CLIENTE SIN NOMBRE').trim().toUpperCase();
+      if (!map[clientKey]) {
+        map[clientKey] = {
+          cliente: sale.cliente || 'Sin Nombre',
+          telefono: sale.telefono,
+          rut: sale.rut,
+          direccion: sale.direccion,
+          ventas: [],
+          totalFardos: 0,
+          montoTotal: 0,
+          vendedores: []
+        };
+      }
+      map[clientKey].ventas.push(sale);
+      const qty = sale.items && sale.items.length > 0 
+        ? sale.items.reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0)
+        : (Number(sale.cantidad) || 1);
+      map[clientKey].totalFardos += qty;
+      map[clientKey].montoTotal += (Number(sale.total) || 0);
+      if (sale.vendedor && !map[clientKey].vendedores.includes(sale.vendedor)) {
+        map[clientKey].vendedores.push(sale.vendedor);
+      }
+    });
+
+    return Object.values(map).sort((a, b) => b.totalFardos - a.totalFardos);
+  }, [juntaPendingSales]);
+
+  const filteredJuntaCustomers = useMemo(() => {
+    if (!juntaSearchTerm.trim()) return juntaByCustomer;
+    const term = juntaSearchTerm.toLowerCase().trim();
+    return juntaByCustomer.filter(c => 
+      c.cliente.toLowerCase().includes(term) ||
+      (c.telefono || '').toLowerCase().includes(term) ||
+      c.ventas.some(v => 
+        v.numeroVenta?.toString().includes(term) ||
+        (v.codigoFardo || '').toLowerCase().includes(term) ||
+        (v.vendedor || '').toLowerCase().includes(term) ||
+        v.items?.some(it => it.codigoFardo?.toLowerCase().includes(term))
+      )
+    );
+  }, [juntaByCustomer, juntaSearchTerm]);
+
+  const filteredJuntaSales = useMemo(() => {
+    if (!juntaSearchTerm.trim()) return juntaPendingSales;
+    const term = juntaSearchTerm.toLowerCase().trim();
+    return juntaPendingSales.filter(s =>
+      s.cliente.toLowerCase().includes(term) ||
+      s.numeroVenta?.toString().includes(term) ||
+      (s.codigoFardo || '').toLowerCase().includes(term) ||
+      (s.vendedor || '').toLowerCase().includes(term) ||
+      (s.telefono || '').toLowerCase().includes(term) ||
+      s.items?.some(it => it.codigoFardo?.toLowerCase().includes(term))
+    );
+  }, [juntaPendingSales, juntaSearchTerm]);
 
   const pendingBySeller = useMemo(() => {
     const summary: Record<string, {
@@ -210,6 +303,16 @@ export default function Dashboard() {
           color="amber" 
           subtitle={`${stats.disponibles} fardos en stock`}
         />
+        {/* KPI DESTACADO JUNTA COMPRA */}
+        <StatCard 
+          title="📦 Junta Compra" 
+          value={`${stats.juntaCompraVentas} Ventas`} 
+          icon={Boxes} 
+          color="indigo" 
+          subtitle={`${stats.juntaCompraProductos} productos/fardos en custodia`}
+          trend={`$${(stats.juntaCompraMonto || 0).toLocaleString('es-CL')}`}
+          to="/despachos"
+        />
         <StatCard 
           title="Eficiencia TikTok" 
           value={stats.pendientesDatos > 0 ? `${stats.pendientesDatos} Pend.` : 'Óptima'} 
@@ -219,9 +322,262 @@ export default function Dashboard() {
         />
         <StatCard title="Falta Completar" value={stats.faltaCompletar} icon={AlertCircle} color="red" subtitle="Pedidos con datos incompletos" />
         <StatCard title="Falta Pagar" value={stats.faltaPagar} icon={DollarSign} color="amber" subtitle="Pedidos pendientes de pago" />
-        <StatCard title="Falta Despachar" value={stats.faltaDespachar} icon={Truck} color="blue" subtitle="Pedidos listos para salir" />
+        <StatCard title="Falta Despachar" value={stats.faltaDespachar} icon={Truck} color="blue" subtitle="Pedidos listos para salir" to="/despachos" />
         <StatCard title="Cupones Pendientes" value={pendingCoupons} icon={Ticket} color="emerald" subtitle="Cupones por canjear" />
-        <StatCard title="Dinero en Cupones" value={`$${totalPendingValue.toLocaleString()}`} icon={DollarSign} color="red" subtitle="Valor total pendiente" />
+      </div>
+
+      {/* SECCIÓN DEDICADA: CONTROL OPERATIVO DE JUNTA COMPRA */}
+      <div className="bg-white p-8 md:p-10 rounded-[48px] border-2 border-indigo-100 shadow-xl overflow-hidden relative">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-8 border-b border-indigo-50">
+          <div className="flex items-start gap-4">
+            <div className="p-4 bg-indigo-600 text-white rounded-3xl shadow-lg shadow-indigo-600/30">
+              <Boxes size={32} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  Módulo de Custodia y Acumulación
+                </span>
+                <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  Admin • Bodega • Despacho
+                </span>
+              </div>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight mt-2">
+                Control Operativo de <span className="text-indigo-600">JUNTA COMPRA</span>
+              </h3>
+              <p className="text-slate-500 text-xs font-semibold mt-1">
+                Visualización centralizada de ventas y productos físicos retenidos en bodega para consolidación de envíos
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-indigo-50/60 p-4 rounded-[28px] border border-indigo-100">
+            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ventas en Espera</p>
+              <p className="text-xl font-black text-indigo-600">{stats.juntaCompraVentas}</p>
+            </div>
+            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fardos/Productos</p>
+              <p className="text-xl font-black text-emerald-600">{stats.juntaCompraProductos} u.</p>
+            </div>
+            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clientes</p>
+              <p className="text-xl font-black text-purple-600">{stats.juntaCompraClientes}</p>
+            </div>
+            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Custodia</p>
+              <p className="text-base font-black text-slate-900 font-mono">${(stats.juntaCompraMonto || 0).toLocaleString('es-CL')}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Toolbar & Filters */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6 mb-6">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text"
+              placeholder="Buscar por cliente, fardo, # venta o vendedor..."
+              value={juntaSearchTerm}
+              onChange={(e) => setJuntaSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-indigo-500 uppercase transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+              <button
+                onClick={() => setJuntaViewMode('clientes')}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${juntaViewMode === 'clientes' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Agrupado por Cliente ({filteredJuntaCustomers.length})
+              </button>
+              <button
+                onClick={() => setJuntaViewMode('ventas')}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${juntaViewMode === 'ventas' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                Lista de Ventas ({filteredJuntaSales.length})
+              </button>
+            </div>
+
+            <Link 
+              to="/despachos"
+              className="px-5 py-2.5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 shadow-md shrink-0"
+            >
+              <Truck size={16} /> Ir a Despachos <ExternalLink size={14} />
+            </Link>
+          </div>
+        </div>
+
+        {/* Content View */}
+        {juntaPendingSales.length === 0 ? (
+          <div className="py-16 text-center bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 size={32} />
+            </div>
+            <h4 className="text-base font-black text-slate-800 uppercase">Sin Pedidos en Junta Compra</h4>
+            <p className="text-slate-400 text-xs mt-1 font-medium">Actualmente no hay ventas acumulándose en espera de consolidación.</p>
+          </div>
+        ) : juntaViewMode === 'clientes' ? (
+          <div className="space-y-4">
+            {filteredJuntaCustomers.map((cust) => {
+              const isExpanded = expandedClient === cust.cliente;
+              return (
+                <div 
+                  key={cust.cliente}
+                  className="bg-slate-50/80 hover:bg-slate-50 rounded-[28px] border border-slate-200/80 p-5 transition-all overflow-hidden"
+                >
+                  <div 
+                    onClick={() => setExpandedClient(isExpanded ? null : cust.cliente)}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-base shadow-md">
+                        {cust.totalFardos}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">{cust.cliente}</h4>
+                          {cust.totalFardos > 1 && (
+                            <span className="px-2.5 py-0.5 bg-amber-500 text-white rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm">
+                              {cust.totalFardos} Fardos Listos
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-bold uppercase mt-0.5">
+                          {cust.ventas.length} {cust.ventas.length === 1 ? 'Venta' : 'Ventas'} • {cust.telefono || 'Sin Teléfono'} • Vendedor: {cust.vendedores.join(', ')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 self-end sm:self-auto">
+                      <div className="text-right">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Total Acumulado</span>
+                        <span className="text-lg font-black text-slate-900 font-mono">${cust.montoTotal.toLocaleString('es-CL')}</span>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700">
+                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded sale items */}
+                  {isExpanded && (
+                    <div className="mt-5 pt-5 border-t border-slate-200 space-y-3 animate-in fade-in duration-300">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detalle de Ventas y Fardos Acumulados:</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {cust.ventas.map((v) => (
+                          <div key={v.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="px-2.5 py-1 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg">
+                                Venta #{v.numeroVenta}
+                              </span>
+                              <span className={`px-2 py-0.5 text-[9px] font-black rounded-full uppercase ${v.estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {v.estadoPago || 'Pendiente'}
+                              </span>
+                            </div>
+
+                            {v.items && v.items.length > 0 ? (
+                              <div className="space-y-1">
+                                {v.items.map((it, idx) => {
+                                  const stockInfo = stock.find(st => st.codigo === it.codigoFardo);
+                                  return (
+                                    <div key={idx} className="flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-50 p-2 rounded-xl">
+                                      <span className="font-mono text-indigo-600">{it.cantidad}x [{it.codigoFardo}] {stockInfo?.tipo || 'Fardo'}</span>
+                                      <span className="font-mono text-slate-500">${(it.valorUnitario * it.cantidad).toLocaleString('es-CL')}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-50 p-2 rounded-xl">
+                                <span className="font-mono text-indigo-600">{v.cantidad || 1}x [{v.codigoFardo}] {v.variante || 'Fardo'}</span>
+                                <span className="font-mono text-slate-500">${(v.total || 0).toLocaleString('es-CL')}</span>
+                              </div>
+                            )}
+
+                            <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase pt-1">
+                              <span>Fecha: {v.fecha}</span>
+                              <span className="text-slate-600">Vendedor: {v.vendedor}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse font-sans">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest"># Venta</th>
+                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Productos / Fardos</th>
+                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Cantidad</th>
+                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendedor</th>
+                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado Pago</th>
+                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredJuntaSales.map((s) => {
+                  const qty = s.items && s.items.length > 0
+                    ? s.items.reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0)
+                    : (Number(s.cantidad) || 1);
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-4">
+                        <span className="px-2.5 py-1 bg-slate-900 text-white rounded-lg font-mono font-black text-xs">
+                          #{s.numeroVenta}
+                        </span>
+                      </td>
+                      <td className="py-4">
+                        <p className="font-black text-slate-900 uppercase text-xs">{s.cliente}</p>
+                        <p className="text-[10px] text-slate-400 font-bold">{s.telefono || 'Sin contacto'}</p>
+                      </td>
+                      <td className="py-4">
+                        {s.items && s.items.length > 0 ? (
+                          <div className="space-y-1">
+                            {s.items.map((it, idx) => (
+                              <span key={idx} className="inline-block mr-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black font-mono">
+                                {it.cantidad}x {it.codigoFardo}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black font-mono">
+                            {s.cantidad || 1}x {s.codigoFardo || 'S/C'} ({s.variante || 'FARDO'})
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 text-center">
+                        <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-black text-xs font-mono">
+                          {qty} u.
+                        </span>
+                      </td>
+                      <td className="py-4 text-xs font-black uppercase text-slate-700">
+                        {s.vendedor}
+                      </td>
+                      <td className="py-4 text-center">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${s.estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {s.estadoPago || 'Pendiente'}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right font-black text-slate-900 text-sm font-mono">
+                        ${(s.total || 0).toLocaleString('es-CL')}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -296,7 +652,7 @@ export default function Dashboard() {
               <AlertCircle className="text-rose-500 animate-pulse" size={24} /> Pendientes por Vendedor
             </h3>
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">
-              Ventas con datos incompletos, fardos de fardos sin etiquetar o pagos pendientes de confirmar
+              Ventas con datos incompletos, fardos sin etiquetar o pagos pendientes de confirmar
             </p>
           </div>
           <span className="px-4 py-2 bg-rose-50 text-rose-600 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0 self-start md:self-auto font-sans">

@@ -2191,6 +2191,18 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     sales.forEach(s => { if (s.vendedor) sellerStats[s.vendedor] = (sellerStats[s.vendedor] || 0) + s.total; });
     const topSellers = Object.entries(sellerStats).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
+    const isJunta = (s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
+    const juntaSales = sales.filter(s => s.status === SaleStatus.PENDIENTE && isJunta(s));
+    const juntaVentasCount = juntaSales.length;
+    const juntaProductosCount = juntaSales.reduce((acc, s) => {
+      if (s.items && s.items.length > 0) {
+        return acc + s.items.reduce((sum, it) => sum + (Number(it.cantidad) || 0), 0);
+      }
+      return acc + (Number(s.cantidad) || 1);
+    }, 0);
+    const juntaMontoTotal = juntaSales.reduce((acc, s) => acc + (Number(s.total) || 0), 0);
+    const juntaClientesCount = new Set(juntaSales.map(s => (s.cliente || '').trim().toUpperCase()).filter(Boolean)).size;
+
     return {
       ventasHoy: todaySales.reduce((acc, s) => acc + (s.total || 0), 0),
       countHoy: todaySales.length,
@@ -2204,7 +2216,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       deudaTotalProveedores: purchases.reduce((acc, p) => acc + p.saldoPendiente, 0),
       faltaCompletar: sales.filter(s => !s.datosCompletos).length,
       faltaPagar: sales.filter(s => s.estadoPago === 'Pendiente').length,
-      faltaDespachar: sales.filter(s => s.datosCompletos && s.status === 'Pendiente').length
+      faltaDespachar: sales.filter(s => s.datosCompletos && s.status === 'Pendiente').length,
+      juntaCompraVentas: juntaVentasCount,
+      juntaCompraProductos: juntaProductosCount,
+      juntaCompraMonto: juntaMontoTotal,
+      juntaCompraClientes: juntaClientesCount
     };
   };
 

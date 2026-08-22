@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp } from 'lucide-react';
+import { useLocation, Link } from 'react-router-dom';
+import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp, Sparkles, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 import { smartSearchMatch } from '../utils/search';
@@ -156,6 +156,22 @@ export default function Stock() {
     });
   }, [stock, searchTerm, providerFilter, categoryFilter]);
 
+  const juntaCompraStats = useMemo(() => {
+    const isJunta = (s: any) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
+    const pendingJuntaSales = (sales || []).filter(s => s.status === 'PENDIENTE' && isJunta(s));
+    const totalProducts = pendingJuntaSales.reduce((acc, s) => {
+      if (s.items && s.items.length > 0) {
+        return acc + s.items.reduce((sum: number, it: any) => sum + (Number(it.cantidad) || 0), 0);
+      }
+      return acc + (Number(s.cantidad) || 1);
+    }, 0);
+    return {
+      ventas: pendingJuntaSales.length,
+      productos: totalProducts,
+      clientes: new Set(pendingJuntaSales.map(s => s.cliente)).size
+    };
+  }, [sales]);
+
   const downloadFormat = () => {
     const csvContent = "codigo,tipo,proveedor,precioCosto,precioSugerido,stockActual,unidad\nF-101,Polerones Premium,Bale Center,100000,150000,10,FARDO\nU-102,Jeans Unitario,USA Direct,8000,15000,50,PIEZA";
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -279,6 +295,34 @@ export default function Stock() {
           </div>
         )}
       </div>
+
+      {/* Junta Compra Bodega Status */}
+      {juntaCompraStats.ventas > 0 && (
+        <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white p-5 md:p-6 rounded-[32px] shadow-lg border border-indigo-700/50 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20 text-indigo-300 shrink-0">
+              <Boxes size={26} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 rounded-full text-[10px] font-black uppercase tracking-wider">
+                  Custodia en Bodega
+                </span>
+                <span className="text-xs font-bold text-indigo-300">📦 Junta Compra Activa</span>
+              </div>
+              <h4 className="text-lg font-black uppercase tracking-tight mt-0.5">
+                {juntaCompraStats.productos} productos en espera de despacho ({juntaCompraStats.ventas} ventas de {juntaCompraStats.clientes} clientes)
+              </h4>
+            </div>
+          </div>
+          <Link
+            to="/despachos?tab=JUNTA_COMPRA"
+            className="flex items-center gap-2 px-6 py-3 bg-white text-indigo-950 hover:bg-indigo-50 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md shrink-0 active:scale-95"
+          >
+            Ver en Despachos <ChevronRight size={16} />
+          </Link>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 items-center justify-between w-full">
         <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
