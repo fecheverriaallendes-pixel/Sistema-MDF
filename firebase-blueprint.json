@@ -54,9 +54,31 @@
         "estado": { "type": "string" }
       },
       "required": ["proveedor", "montoTotalUsd", "saldoPendienteUsd", "estado"]
+    },
+    "SaleReturn": {
+      "title": "SaleReturn",
+      "description": "Customer sales returns with optional commission deduction and warehouse restock",
+      "type": "object",
+      "properties": {
+        "codigoDevolucion": { "type": "string" },
+        "fecha": { "type": "string" },
+        "cliente": { "type": "string" },
+        "vendedor": { "type": "string" },
+        "agencia": { "type": "string" },
+        "producto": { "type": "string" },
+        "motivo": { "type": "string" },
+        "costo": { "type": "number" },
+        "aplicaDescuentoComision": { "type": "boolean" },
+        "montoDescuentoComision": { "type": "number" }
+      },
+      "required": ["codigoDevolucion", "fecha", "cliente", "vendedor", "producto", "motivo"]
     }
   },
   "firestore": {
+    "/devoluciones/{returnId}": {
+      "schema": { "$ref": "SaleReturn" },
+      "description": "Sales returns and commission deductions"
+    },
     "/sales/{saleId}": {
       "schema": { "$ref": "Sale" },
       "description": "Sales collection"

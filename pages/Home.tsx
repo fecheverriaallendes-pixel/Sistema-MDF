@@ -32,7 +32,8 @@ import {
   Check,
   Tag,
   Calendar,
-  TrendingUp
+  TrendingUp,
+  RotateCcw
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, CommissionType } from '../types';
@@ -244,6 +245,15 @@ export default function Home() {
       color: 'bg-blue-600',
       shadow: 'shadow-blue-600/30',
       roles: [StaffRole.ADMIN, StaffRole.VENDEDOR]
+    },
+    { 
+      name: 'Devoluciones', 
+      desc: 'Registro de devoluciones y descuentos', 
+      icon: RotateCcw, 
+      path: '/devoluciones',
+      color: 'bg-rose-600',
+      shadow: 'shadow-rose-600/30',
+      roles: [StaffRole.ADMIN]
     },
     { 
       name: 'Bodega y Stock', 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
@@ -531,6 +531,12 @@ interface StoreContextType {
   savePayrollRecord: (record: Omit<WeeklyPayrollRecord, 'id' | 'createdAt' | 'updatedAt'>) => Promise<WeeklyPayrollRecord>;
   updatePayrollRecord: (id: string, updated: Partial<WeeklyPayrollRecord>) => Promise<void>;
   deletePayrollRecord: (id: string) => Promise<void>;
+
+  // Devoluciones de Venta
+  saleReturns: SaleReturn[];
+  addSaleReturn: (data: Omit<SaleReturn, 'id' | 'codigoDevolucion' | 'createdAt'>) => Promise<SaleReturn>;
+  updateSaleReturn: (id: string, updated: Partial<SaleReturn>) => Promise<void>;
+  deleteSaleReturn: (id: string) => Promise<void>;
 }
 
 // Safe storage wrapper to prevent Safari private mode exception crashes
@@ -680,6 +686,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const saved = safeLocalStorage.getItem('mdf_payroll_records');
     return saved ? JSON.parse(saved) : [];
   });
+  const [saleReturns, setSaleReturns] = useState<SaleReturn[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_sale_returns');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const isSyncingRef = useRef(false);
 
@@ -790,6 +800,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubEmployeeLoans: any;
     let unsubWorkExtras: any;
     let unsubPayrollRecords: any;
+    let unsubReturns: any;
 
     const initFirebase = async () => {
       try {
@@ -862,6 +873,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubPayrollRecords = onSnapshot(collection(db, 'payroll_records'), (snap) => {
           setPayrollRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyPayrollRecord)));
         });
+        unsubReturns = onSnapshot(collection(db, 'devoluciones'), (snap) => {
+          setSaleReturns(snap.docs.map(d => ({ ...d.data(), id: d.id } as SaleReturn)));
+        });
       } catch (error: any) {
         console.error("Error al suscribirse a colecciones de Firebase:", error.code, error.message);
       }
@@ -888,6 +902,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubEmployeeLoans) unsubEmployeeLoans();
       if (unsubWorkExtras) unsubWorkExtras();
       if (unsubPayrollRecords) unsubPayrollRecords();
+      if (unsubReturns) unsubReturns();
     };
   }, []);
 
@@ -906,7 +921,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_employee_loans', JSON.stringify(employeeLoans));
     safeLocalStorage.setItem('mdf_work_extras', JSON.stringify(workExtras));
     safeLocalStorage.setItem('mdf_payroll_records', JSON.stringify(payrollRecords));
-  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords]);
+    safeLocalStorage.setItem('mdf_sale_returns', JSON.stringify(saleReturns));
+  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords, saleReturns]);
 
   useEffect(() => {
     safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
@@ -2561,6 +2577,147 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('click');
   };
 
+  const generateReturnCode = (currentReturns: SaleReturn[]): string => {
+    if (!currentReturns || currentReturns.length === 0) return 'DEV-0001';
+    const codes = currentReturns
+      .map(r => {
+        const match = r.codigoDevolucion?.match(/DEV-(\d+)/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter(Boolean);
+    const maxCode = codes.length > 0 ? Math.max(...codes) : 0;
+    const nextNum = maxCode + 1;
+    return `DEV-${String(nextNum).padStart(4, '0')}`;
+  };
+
+  const addSaleReturn = async (data: Omit<SaleReturn, 'id' | 'codigoDevolucion' | 'createdAt'>): Promise<SaleReturn> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo la cuenta de Administrador puede registrar devoluciones.");
+      throw new Error("No autorizado");
+    }
+
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const nextCode = generateReturnCode(saleReturns);
+    let linkedAjusteId: string | undefined = undefined;
+
+    // Si aplica descuento de comisión al vendedor, creamos el ajuste negativo
+    if (data.aplicaDescuentoComision && (Number(data.montoDescuentoComision) || 0) > 0) {
+      const adjId = Math.random().toString(36).substr(2, 9);
+      const discountAmount = -Math.abs(Number(data.montoDescuentoComision));
+      
+      const newAdj: CommissionAdjustment = {
+        id: adjId,
+        fecha: data.fecha || new Date().toLocaleDateString('es-CL'),
+        vendedor: data.vendedor,
+        monto: discountAmount,
+        motivo: `Devolución ${nextCode}: ${data.producto} (${data.motivo}) - Cliente: ${data.cliente}`
+      };
+      await setDoc(doc(db, 'adjustments', adjId), newAdj);
+      linkedAjusteId = adjId;
+    }
+
+    // Si reingresa a stock y se seleccionó un código de fardo existente
+    if (data.reingresaStock && data.codigoFardo) {
+      const cleanCode = data.codigoFardo.trim().toUpperCase();
+      const stockItem = stock.find(s => s.codigo.trim().toUpperCase() === cleanCode);
+      if (stockItem) {
+        const newStockQty = (stockItem.stockActual || 0) + (Number(data.cantidad) || 1);
+        await setDoc(doc(db, 'stock', stockItem.id), {
+          ...stockItem,
+          stockActual: newStockQty,
+          disponible: newStockQty > 0
+        });
+        await addStockHistoryEvent({
+          productId: cleanCode,
+          tipo: 'INGRESO',
+          cantidad: Number(data.cantidad) || 1,
+          balanceAntes: stockItem.stockActual || 0,
+          balanceDespues: newStockQty,
+          vendedor: currentUser?.nombre || 'ADMINISTRADOR',
+          observaciones: `Reingreso por Devolución ${nextCode} - Cliente: ${data.cliente}`
+        });
+      }
+    }
+
+    const newReturn: SaleReturn = {
+      ...data,
+      id,
+      codigoDevolucion: nextCode,
+      ajusteId: linkedAjusteId,
+      costo: Number(data.costo) || 0,
+      montoDescuentoComision: Number(data.montoDescuentoComision) || 0,
+      registradoPor: currentUser?.nombre || 'ADMINISTRADOR',
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await setDoc(doc(db, 'devoluciones', id), cleanUndefined(newReturn));
+    playSound('success');
+    return newReturn;
+  };
+
+  const updateSaleReturn = async (id: string, updated: Partial<SaleReturn>): Promise<void> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo la cuenta de Administrador puede editar devoluciones.");
+      throw new Error("No autorizado");
+    }
+
+    const current = saleReturns.find(r => r.id === id);
+    if (!current) return;
+    const now = new Date().toISOString();
+    const merged: SaleReturn = { ...current, ...updated, updatedAt: now };
+
+    // Sincronizar o crear/eliminar ajuste de comisión si cambió
+    if (merged.aplicaDescuentoComision && (Number(merged.montoDescuentoComision) || 0) > 0) {
+      const discountAmount = -Math.abs(Number(merged.montoDescuentoComision));
+      const adjMotivo = `Devolución ${merged.codigoDevolucion}: ${merged.producto} (${merged.motivo}) - Cliente: ${merged.cliente}`;
+      
+      if (current.ajusteId) {
+        // Actualizar ajuste existente
+        await setDoc(doc(db, 'adjustments', current.ajusteId), {
+          id: current.ajusteId,
+          fecha: merged.fecha || new Date().toLocaleDateString('es-CL'),
+          vendedor: merged.vendedor,
+          monto: discountAmount,
+          motivo: adjMotivo
+        });
+      } else {
+        // Crear nuevo ajuste
+        const newAdjId = Math.random().toString(36).substr(2, 9);
+        await setDoc(doc(db, 'adjustments', newAdjId), {
+          id: newAdjId,
+          fecha: merged.fecha || new Date().toLocaleDateString('es-CL'),
+          vendedor: merged.vendedor,
+          monto: discountAmount,
+          motivo: adjMotivo
+        });
+        merged.ajusteId = newAdjId;
+      }
+    } else if (current.ajusteId && (!merged.aplicaDescuentoComision || (Number(merged.montoDescuentoComision) || 0) <= 0)) {
+      // Eliminar ajuste si ya no aplica
+      await deleteDoc(doc(db, 'adjustments', current.ajusteId));
+      merged.ajusteId = undefined;
+    }
+
+    await setDoc(doc(db, 'devoluciones', id), cleanUndefined(merged));
+    playSound('click');
+  };
+
+  const deleteSaleReturn = async (id: string): Promise<void> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo la cuenta de Administrador puede eliminar devoluciones.");
+      throw new Error("No autorizado");
+    }
+
+    const current = saleReturns.find(r => r.id === id);
+    if (current?.ajusteId) {
+      await deleteDoc(doc(db, 'adjustments', current.ajusteId));
+    }
+    await deleteDoc(doc(db, 'devoluciones', id));
+    playSound('click');
+  };
+
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
@@ -2577,7 +2734,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       salaryAdvances, addSalaryAdvance, updateSalaryAdvance, deleteSalaryAdvance,
       employeeLoans, addEmployeeLoan, updateEmployeeLoan, deleteEmployeeLoan, addLoanPayment,
       workExtras, addWorkExtra, bulkAddWorkExtras, updateWorkExtra, deleteWorkExtra,
-      payrollRecords, savePayrollRecord, updatePayrollRecord, deletePayrollRecord
+      payrollRecords, savePayrollRecord, updatePayrollRecord, deletePayrollRecord,
+      saleReturns, addSaleReturn, updateSaleReturn, deleteSaleReturn
     }}>
       {children}
     </StoreContext.Provider>

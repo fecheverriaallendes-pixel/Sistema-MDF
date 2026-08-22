@@ -22,7 +22,8 @@ import {
   BookOpen,
   CreditCard,
   Factory,
-  Percent
+  Percent,
+  RotateCcw
 } from 'lucide-react';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
@@ -42,6 +43,7 @@ import PostVenta from './pages/PostVenta';
 import Produccion from './pages/Produccion';
 import Cheques from './pages/Cheques';
 import TransportistaView from './pages/TransportistaView';
+import Devoluciones from './pages/Devoluciones';
 import { useStore } from './store/GlobalContext';
 import { StaffRole } from './types';
 
@@ -58,6 +60,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'CRM Clientes', icon: UserIcon, path: '/crm', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Registrar Venta', icon: PlusCircle, path: '/registrar', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
     { name: 'Ventas y Clientes', icon: FileText, path: '/ventas', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR] },
+    { name: 'Devoluciones', icon: RotateCcw, path: '/devoluciones', roles: [StaffRole.ADMIN] },
     { name: 'Sueldos y Remuneraciones', icon: Coins, path: '/sueldos', roles: [StaffRole.ADMIN] },
     { name: 'Cheques', icon: CreditCard, path: '/cheques', roles: [StaffRole.ADMIN] },
     { name: 'Pagos Proveedores', icon: Wallet, path: '/proveedores', roles: [StaffRole.ADMIN] },
@@ -286,6 +289,7 @@ export default function App() {
               <Route path="/catalogo" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Catalogo /></ProtectedRoute>} />
               <Route path="/registrar" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><RegistrarVenta /></ProtectedRoute>} />
               <Route path="/ventas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Ventas /></ProtectedRoute>} />
+              <Route path="/devoluciones" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Devoluciones /></ProtectedRoute>} />
               <Route path="/stock" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.BODEGA, StaffRole.DESPACHO]}><Stock /></ProtectedRoute>} />
               <Route path="/transportista" element={<ProtectedRoute roles={[StaffRole.TRANSPORTISTA, StaffRole.ADMIN]}><TransportistaView /></ProtectedRoute>} />
               <Route path="/despachos" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Despachos /></ProtectedRoute>} />

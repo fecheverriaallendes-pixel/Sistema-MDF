@@ -382,6 +382,43 @@ export interface CommissionAdjustment {
   motivo: string;
 }
 
+export interface SaleReturn {
+  id: string;
+  codigoDevolucion: string; // Ej: DEV-0001
+  fecha: string; // Formato texto/fecha: "20 Agosto", "20/08/2026", etc.
+  fechaIso?: string; // YYYY-MM-DD
+  cliente: string; // Ej: "Romina Fuenzalida"
+  clienteRut?: string;
+  clienteTelefono?: string;
+  vendedor: string; // Ej: "Anais Luna"
+  vendedorId?: string;
+  agencia: string; // Ej: "Cliente", "Starken", "Chilexpress", "Blue Express", "Retiro en Bodega"
+  producto: string; // Ej: "blusas"
+  codigoFardo?: string; // Ej: "MDF-105"
+  kilos?: string | number; // Ej: "46,6"
+  cantidad?: number;
+  motivo: string; // Ej: "Calidad ofrecida no corresponde a la del producto", "Mal etiquetado de origen (Sin descuento a vendedor)"
+  motivoDetalle?: string;
+  costo: number; // Ej: 0
+  observaciones?: string;
+  
+  // Gestión de Comisión
+  aplicaDescuentoComision: boolean;
+  montoDescuentoComision: number; // Ej: 3000
+  ajusteId?: string; // ID en collection 'adjustments'
+
+  // Gestión de Stock
+  reingresaStock: boolean;
+  estadoProducto?: 'BUENO' | 'MERMA' | 'REENFARDAR' | 'EN_REVISION';
+
+  // Auditoría y Vinculación
+  saleId?: string;
+  numeroVenta?: number | string;
+  registradoPor: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Coupon {
   id: string;
   code: string;
