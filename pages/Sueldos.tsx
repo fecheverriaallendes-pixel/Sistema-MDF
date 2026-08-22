@@ -27,7 +27,11 @@ import {
   Percent,
   Check,
   FileSpreadsheet,
-  ArrowRight
+  ArrowRight,
+  Video,
+  Moon,
+  Smartphone,
+  Sparkles
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import {
@@ -37,7 +41,8 @@ import {
   SalaryAdvance,
   EmployeeLoan,
   WorkExtra,
-  WeeklyPayrollRecord
+  WeeklyPayrollRecord,
+  TikTokLiveRecord
 } from '../types';
 
 import LiquidacionIndividualModal from '../components/sueldos/LiquidacionIndividualModal';
@@ -46,7 +51,9 @@ import TransferListModal from '../components/sueldos/TransferListModal';
 import AdelantoModal from '../components/sueldos/AdelantoModal';
 import PrestamoModal from '../components/sueldos/PrestamoModal';
 import TrabajoExtraModal from '../components/sueldos/TrabajoExtraModal';
+import TikTokLiveModal from '../components/sueldos/TikTokLiveModal';
 import TrabajadorModal from '../components/sueldos/TrabajadorModal';
+import AsistenciaSemanalModal from '../components/sueldos/AsistenciaSemanalModal';
 
 const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.FARDO_NORMAL]: 3000,
@@ -55,7 +62,7 @@ const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.LOTE]: 1000,
 };
 
-type ActiveTab = 'liquidaciones' | 'adelantos' | 'prestamos' | 'extras' | 'personal' | 'historial';
+type ActiveTab = 'liquidaciones' | 'asistencia' | 'adelantos' | 'prestamos' | 'extras' | 'tiktok' | 'personal' | 'historial';
 
 export default function Sueldos() {
   const {
@@ -79,10 +86,18 @@ export default function Sueldos() {
     bulkAddWorkExtras,
     updateWorkExtra,
     deleteWorkExtra,
+    tiktokLives,
+    addTikTokLive,
+    bulkAddTikTokLives,
+    updateTikTokLive,
+    deleteTikTokLive,
     payrollRecords,
     savePayrollRecord,
     updatePayrollRecord,
     deletePayrollRecord,
+    weeklyAttendance,
+    saveWeeklyAttendance,
+    deleteWeeklyAttendance,
     adjustments,
     addAdjustment,
     removeAdjustment,
@@ -102,16 +117,21 @@ export default function Sueldos() {
   const [isLiquidacionModalOpen, setIsLiquidacionModalOpen] = useState(false);
   const [selectedLiquidacionData, setSelectedLiquidacionData] = useState<any>(null);
 
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [selectedAttendanceStaff, setSelectedAttendanceStaff] = useState<StaffMember | null>(null);
+
   const [isNominaModalOpen, setIsNominaModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   const [isAdelantoModalOpen, setIsAdelantoModalOpen] = useState(false);
   const [isPrestamoModalOpen, setIsPrestamoModalOpen] = useState(false);
   const [isExtraModalOpen, setIsExtraModalOpen] = useState(false);
+  const [isTikTokModalOpen, setIsTikTokModalOpen] = useState(false);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
   const [quickExtraTargetWorker, setQuickExtraTargetWorker] = useState<string | undefined>(undefined);
+  const [quickTikTokTargetWorker, setQuickTikTokTargetWorker] = useState<string | undefined>(undefined);
   const [copiedWorkerId, setCopiedWorkerId] = useState<string | null>(null);
 
   // Manual payment statuses in current view if not saved in payrollRecords yet
@@ -322,6 +342,19 @@ export default function Sueldos() {
   }, [workExtras, weekRange]);
 
   // ----------------------------------------------------
+  // WEEKLY TIKTOK LIVES ($15.000 / Noche)
+  // ----------------------------------------------------
+  const weeklyTikTokLives = useMemo(() => {
+    if (!Array.isArray(tiktokLives)) return [];
+    return tiktokLives.filter(l => {
+      if (!l.fecha) return false;
+      const liveDate = parseDateSafely(l.fecha);
+      if (!liveDate) return false;
+      return liveDate >= weekRange.start && liveDate <= weekRange.end;
+    });
+  }, [tiktokLives, weekRange]);
+
+  // ----------------------------------------------------
   // WEEKLY MANUAL ADJUSTMENTS
   // ----------------------------------------------------
   const weeklyAdjustments = useMemo(() => {
@@ -334,14 +367,37 @@ export default function Sueldos() {
   }, [adjustments, weekRange]);
 
   // ----------------------------------------------------
+  // WEEKLY ATTENDANCE FOR CURRENT WEEK
+  // ----------------------------------------------------
+  const currentWeekAttendance = useMemo(() => {
+    if (!Array.isArray(weeklyAttendance)) return [];
+    return weeklyAttendance.filter(a => {
+      if (!a) return false;
+      return a.fechaPago === weekRange.saturdayStr || (a.semanaInicio === weekRange.startStr && a.semanaFin === weekRange.saturdayStr);
+    });
+  }, [weeklyAttendance, weekRange]);
+
+  // ----------------------------------------------------
   // CONSOLIDATED WORKER PAYROLL CALCULATION
   // ----------------------------------------------------
   const calculatedPayrollList = useMemo(() => {
     const activeStaff = staff.filter(s => s.activo !== false);
 
     return activeStaff.map(member => {
-      // 1. Sueldo base semanal pactado
-      const sueldoBase = member.sueldoBaseSemanal !== undefined ? Number(member.sueldoBaseSemanal) : 120000;
+      // 1. Sueldo base semanal pactado (Base para 6 días de trabajo)
+      const sueldoBasePactado = member.sueldoBaseSemanal !== undefined ? Number(member.sueldoBaseSemanal) : 120000;
+      const valorDia = Math.round(sueldoBasePactado / 6);
+
+      // Asistencia de la semana registrada
+      const attendance = currentWeekAttendance.find(
+        a => (a.workerId === member.id || a.workerName === member.nombre)
+      );
+
+      const diasTrabajados = attendance?.diasTrabajados !== undefined ? Number(attendance.diasTrabajados) : 6;
+      const diasFaltas = attendance?.diasFaltas !== undefined ? Number(attendance.diasFaltas) : Math.max(0, 6 - diasTrabajados);
+      const descuentoFaltas = attendance?.descuentoFaltas !== undefined ? Number(attendance.descuentoFaltas) : Math.round(diasFaltas * valorDia);
+      const sueldoBase = attendance?.sueldoBaseAPagar !== undefined ? Number(attendance.sueldoBaseAPagar) : Math.max(0, sueldoBasePactado - descuentoFaltas);
+      const detalleAsistencia = attendance?.diasDetalle;
 
       // 2. Comisiones si es vendedor o tiene ventas
       const commissionData = sellerCommissionsMap[member.nombre] || { total: 0, count: 0, details: [], entries: [] };
@@ -351,18 +407,31 @@ export default function Sueldos() {
       const workerExtras = weeklyWorkExtras.filter(e => e.workerId === member.id || e.workerName === member.nombre);
       const extrasTotal = workerExtras.reduce((acc, e) => acc + (Number(e.total) || 0), 0);
 
-      // 4. Otros bonos positivos desde adjustments
+      // 4. Noches de TikTok Live ($15.000 / noche)
+      const workerTikTokLives = weeklyTikTokLives.filter(l => l.workerId === member.id || l.workerName === member.nombre);
+      const tiktokLivesTotal = workerTikTokLives.reduce((acc, l) => acc + (Number(l.total) || 0), 0);
+      const tiktokLivesCount = workerTikTokLives.reduce((acc, l) => acc + (Number(l.cantidadNoches) || 1), 0);
+      const tiktokLivesDetalle = workerTikTokLives.map(l => ({
+        fecha: l.fecha,
+        cantidad: Number(l.cantidadNoches) || 1,
+        valorNoche: Number(l.valorNoche) || 15000,
+        subtotal: Number(l.total) || 15000,
+        tema: l.tema,
+        observacion: l.observacion
+      }));
+
+      // 5. Otros bonos positivos desde adjustments
       const workerPositiveAdj = weeklyAdjustments.filter(a => a.vendedor === member.nombre && a.monto > 0);
       const otrosBonosTotal = workerPositiveAdj.reduce((acc, a) => acc + a.monto, 0);
 
       // TOTAL HABERES
-      const totalHaberes = sueldoBase + comisionesTotal + extrasTotal + otrosBonosTotal;
+      const totalHaberes = sueldoBase + comisionesTotal + extrasTotal + tiktokLivesTotal + otrosBonosTotal;
 
-      // 5. Adelantos de la semana
+      // 6. Adelantos de la semana
       const workerAdvances = weeklyAdvances.filter(a => a.workerId === member.id || a.workerName === member.nombre);
       const adelantosTotal = workerAdvances.reduce((acc, a) => acc + (Number(a.monto) || 0), 0);
 
-      // 6. Préstamos activos y cuota semanal
+      // 7. Préstamos activos y cuota semanal
       const activeLoans = employeeLoans.filter(
         l => (l.workerId === member.id || l.workerName === member.nombre) && l.estado === 'ACTIVO' && l.saldoPendiente > 0
       );
@@ -379,7 +448,7 @@ export default function Sueldos() {
       });
       const cuotaPrestamoTotal = prestamosDetalle.reduce((acc, p) => acc + p.montoCuota, 0);
 
-      // 7. Otros descuentos negativos desde adjustments
+      // 8. Otros descuentos negativos desde adjustments
       const workerNegativeAdj = weeklyAdjustments.filter(a => a.vendedor === member.nombre && a.monto < 0);
       const otrosDescuentosTotal = Math.abs(workerNegativeAdj.reduce((acc, a) => acc + a.monto, 0));
 
@@ -411,12 +480,23 @@ export default function Sueldos() {
         semanaInicio: weekRange.startStr,
         semanaFin: weekRange.saturdayStr,
         fechaPago: weekRange.saturdayStr,
+        sueldoBasePactado,
+        diasTrabajados,
+        diasFaltas,
+        descuentoFaltas,
+        valorDia,
+        detalleAsistencia,
+        attendanceRecord: attendance,
         sueldoBase,
         comisionesTotal,
         comisionesDetalle: commissionData.details,
         commissionEntries: commissionData.entries,
         extrasTotal,
         workerExtras,
+        tiktokLivesTotal,
+        tiktokLivesCount,
+        tiktokLivesDetalle,
+        workerTikTokLives,
         otrosBonosTotal,
         totalHaberes,
         adelantosTotal,
@@ -435,8 +515,10 @@ export default function Sueldos() {
     });
   }, [
     staff,
+    currentWeekAttendance,
     sellerCommissionsMap,
     weeklyWorkExtras,
+    weeklyTikTokLives,
     weeklyAdvances,
     weeklyAdjustments,
     employeeLoans,
@@ -464,6 +546,8 @@ export default function Sueldos() {
       totalHaberes: calculatedPayrollList.reduce((acc, i) => acc + i.totalHaberes, 0),
       totalBase: calculatedPayrollList.reduce((acc, i) => acc + i.sueldoBase, 0),
       totalComisiones: calculatedPayrollList.reduce((acc, i) => acc + i.comisionesTotal, 0),
+      totalTikTokLives: calculatedPayrollList.reduce((acc, i) => acc + (i.tiktokLivesTotal || 0), 0),
+      totalNochesTikTok: calculatedPayrollList.reduce((acc, i) => acc + (i.tiktokLivesCount || 0), 0),
       totalExtras: calculatedPayrollList.reduce((acc, i) => acc + i.extrasTotal, 0),
       totalDescuentos: calculatedPayrollList.reduce((acc, i) => acc + i.totalDescuentos, 0),
       totalAdelantos: calculatedPayrollList.reduce((acc, i) => acc + i.adelantosTotal, 0),
@@ -490,6 +574,12 @@ export default function Sueldos() {
         semanaInicio: item.semanaInicio,
         semanaFin: item.semanaFin,
         fechaPago: item.fechaPago,
+        sueldoBasePactado: item.sueldoBasePactado,
+        diasTrabajados: item.diasTrabajados,
+        diasFaltas: item.diasFaltas,
+        descuentoFaltas: item.descuentoFaltas,
+        valorDia: item.valorDia,
+        detalleAsistencia: item.detalleAsistencia,
         sueldoBase: item.sueldoBase,
         comisionesTotal: item.comisionesTotal,
         comisionesDetalle: item.comisionesDetalle,
@@ -501,6 +591,9 @@ export default function Sueldos() {
           valorUnitario: e.valorUnitario,
           subtotal: e.total
         })),
+        tiktokLivesTotal: item.tiktokLivesTotal,
+        tiktokLivesCount: item.tiktokLivesCount,
+        tiktokLivesDetalle: item.tiktokLivesDetalle,
         otrosBonosTotal: item.otrosBonosTotal,
         totalHaberes: item.totalHaberes,
         adelantosTotal: item.adelantosTotal,
@@ -550,6 +643,23 @@ export default function Sueldos() {
     }
   };
 
+  const handleOpenAttendanceModal = (memberOrId: StaffMember | string) => {
+    if (typeof memberOrId === 'string') {
+      const m = staff.find(s => s.id === memberOrId) || {
+        id: memberOrId,
+        nombre: memberOrId,
+        rol: 'Personal',
+        activo: true,
+        sueldoBaseSemanal: 120000
+      };
+      setSelectedAttendanceStaff(m as StaffMember);
+    } else {
+      setSelectedAttendanceStaff(memberOrId);
+    }
+    setIsAttendanceModalOpen(true);
+    playSound('click');
+  };
+
   const handleOpenIndividualModal = (item: typeof calculatedPayrollList[0]) => {
     setSelectedLiquidacionData({
       staffMember: item.member,
@@ -559,6 +669,12 @@ export default function Sueldos() {
         semanaInicio: item.semanaInicio,
         semanaFin: item.semanaFin,
         fechaPago: item.fechaPago,
+        sueldoBasePactado: item.sueldoBasePactado,
+        diasTrabajados: item.diasTrabajados,
+        diasFaltas: item.diasFaltas,
+        descuentoFaltas: item.descuentoFaltas,
+        valorDia: item.valorDia,
+        detalleAsistencia: item.detalleAsistencia,
         sueldoBase: item.sueldoBase,
         comisionesTotal: item.comisionesTotal,
         comisionesDetalle: item.comisionesDetalle,
@@ -571,6 +687,9 @@ export default function Sueldos() {
           valorUnitario: e.valorUnitario,
           subtotal: e.total
         })),
+        tiktokLivesTotal: item.tiktokLivesTotal,
+        tiktokLivesCount: item.tiktokLivesCount,
+        tiktokLivesDetalle: item.tiktokLivesDetalle,
         otrosBonosTotal: item.otrosBonosTotal,
         totalHaberes: item.totalHaberes,
         adelantosTotal: item.adelantosTotal,
@@ -611,6 +730,12 @@ export default function Sueldos() {
   const handleOpenQuickExtra = (workerId?: string) => {
     setQuickExtraTargetWorker(workerId);
     setIsExtraModalOpen(true);
+    playSound('click');
+  };
+
+  const handleOpenQuickTikTok = (workerId?: string) => {
+    setQuickTikTokTargetWorker(workerId);
+    setIsTikTokModalOpen(true);
     playSound('click');
   };
 
@@ -718,6 +843,23 @@ export default function Sueldos() {
         </button>
 
         <button
+          onClick={() => { setActiveTab('asistencia'); playSound('click'); }}
+          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'asistencia'
+              ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Clock size={16} className={activeTab === 'asistencia' ? 'text-indigo-400' : 'text-slate-400'} />
+          Asistencia & Faltas (6 Días)
+          {currentWeekAttendance.length > 0 && (
+            <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-400">
+              {currentWeekAttendance.length} reg
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => { setActiveTab('adelantos'); playSound('click'); }}
           className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
             activeTab === 'adelantos'
@@ -769,6 +911,23 @@ export default function Sueldos() {
         </button>
 
         <button
+          onClick={() => { setActiveTab('tiktok'); playSound('click'); }}
+          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'tiktok'
+              ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Moon size={16} className={activeTab === 'tiktok' ? 'text-rose-400' : 'text-slate-400'} />
+          Lives TikTok ($15.000)
+          {weeklyTikTokLives.length > 0 && (
+            <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-400 font-bold">
+              {weeklyTikTokLives.length}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => { setActiveTab('personal'); playSound('click'); }}
           className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
             activeTab === 'personal'
@@ -810,25 +969,39 @@ export default function Sueldos() {
               </div>
 
               {/* Métricas Haberes y Descuentos */}
-              <div className="grid grid-cols-2 gap-3 lg:col-span-2">
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 lg:col-span-2">
+                <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl backdrop-blur-sm">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Sueldos Base</p>
-                  <p className="text-lg font-black text-white">${weeklyTotals.totalBase.toLocaleString('es-CL')}</p>
+                  <p className="text-base font-black text-white">${weeklyTotals.totalBase.toLocaleString('es-CL')}</p>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+                <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl backdrop-blur-sm">
                   <p className="text-[9px] font-black text-emerald-400 uppercase tracking-wider mb-1">Comisiones Ventas</p>
-                  <p className="text-lg font-black text-emerald-300">${weeklyTotals.totalComisiones.toLocaleString('es-CL')}</p>
+                  <p className="text-base font-black text-emerald-300">${weeklyTotals.totalComisiones.toLocaleString('es-CL')}</p>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+                <div className="bg-white/5 border border-rose-500/30 bg-rose-500/10 p-3.5 rounded-2xl backdrop-blur-sm">
+                  <p className="text-[9px] font-black text-rose-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Moon size={11} /> Lives TikTok ($15k)
+                  </p>
+                  <p className="text-base font-black text-rose-300">
+                    ${weeklyTotals.totalTikTokLives.toLocaleString('es-CL')} <span className="text-[10px] font-normal text-rose-200/80">({weeklyTotals.totalNochesTikTok}n)</span>
+                  </p>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl backdrop-blur-sm">
                   <p className="text-[9px] font-black text-blue-400 uppercase tracking-wider mb-1">Descargas & Extras</p>
-                  <p className="text-lg font-black text-blue-300">${weeklyTotals.totalExtras.toLocaleString('es-CL')}</p>
+                  <p className="text-base font-black text-blue-300">${weeklyTotals.totalExtras.toLocaleString('es-CL')}</p>
                 </div>
 
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-sm">
+                <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl backdrop-blur-sm">
+                  <p className="text-[9px] font-black text-amber-400 uppercase tracking-wider mb-1">Adelantos</p>
+                  <p className="text-base font-black text-amber-300">-${weeklyTotals.totalAdelantos.toLocaleString('es-CL')}</p>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl backdrop-blur-sm">
                   <p className="text-[9px] font-black text-red-400 uppercase tracking-wider mb-1">Total Descuentos</p>
-                  <p className="text-lg font-black text-red-300">-${weeklyTotals.totalDescuentos.toLocaleString('es-CL')}</p>
+                  <p className="text-base font-black text-red-300">-${weeklyTotals.totalDescuentos.toLocaleString('es-CL')}</p>
                 </div>
               </div>
 
@@ -867,6 +1040,26 @@ export default function Sueldos() {
 
             {/* Botones de Registro Rápido */}
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  if (filteredPayrollList.length > 0) {
+                    handleOpenAttendanceModal(filteredPayrollList[0].member);
+                  } else if (staff.length > 0) {
+                    handleOpenAttendanceModal(staff[0]);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-2xl font-black text-xs uppercase tracking-wider transition-all"
+              >
+                <Clock size={15} /> + Asistencia (6 Días)
+              </button>
+
+              <button
+                onClick={() => handleOpenQuickTikTok()}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-xs"
+              >
+                <Moon size={15} className="text-rose-600" /> + Live TikTok ($15.000)
+              </button>
+
               <button
                 onClick={() => {
                   setIsAdelantoModalOpen(true);
@@ -921,13 +1114,36 @@ export default function Sueldos() {
                       </div>
 
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
                             {item.workerName}
                           </h3>
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">
                             {item.cargo}
                           </span>
+
+                          {/* Badge interactivo de Asistencia Semanal (6 días) */}
+                          <button
+                            onClick={() => handleOpenAttendanceModal(item.member)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black transition-all border shadow-xs ${
+                              item.diasTrabajados === 6
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                : item.diasTrabajados >= 5
+                                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                : 'bg-rose-50 text-rose-900 border-rose-300 hover:bg-rose-100'
+                            }`}
+                            title="Haga clic para editar la asistencia y faltas semanales de este trabajador"
+                          >
+                            <Clock size={12} className={item.diasTrabajados === 6 ? 'text-emerald-600' : 'text-amber-600'} />
+                            <span>{item.diasTrabajados} / 6 Días</span>
+                            {item.diasFaltas > 0 ? (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-md">
+                                -{item.diasFaltas}d (-${item.descuentoFaltas.toLocaleString('es-CL')})
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-600 font-bold hidden sm:inline">Completa</span>
+                            )}
+                          </button>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1 font-medium">
@@ -1012,10 +1228,31 @@ export default function Sueldos() {
                         <span className="text-xs font-black text-emerald-800">${item.totalHaberes.toLocaleString('es-CL')}</span>
                       </div>
 
-                      {/* Sueldo Base */}
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-600 font-medium">Sueldo Base Semanal:</span>
-                        <span className="font-bold text-slate-900">${item.sueldoBase.toLocaleString('es-CL')}</span>
+                      {/* Sueldo Base con cálculo de 6 días y faltas */}
+                      <div className="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-700 font-bold flex items-center gap-1.5">
+                            <Clock size={13} className="text-indigo-600" />
+                            Sueldo Base ({item.diasTrabajados} / 6 días):
+                          </span>
+                          <span className="font-black text-slate-900 text-sm">${item.sueldoBase.toLocaleString('es-CL')}</span>
+                        </div>
+                        {item.diasFaltas > 0 ? (
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                            <span>Pactado 6d: ${item.sueldoBasePactado.toLocaleString('es-CL')} · Desc. {item.diasFaltas} {item.diasFaltas === 1 ? 'falta' : 'faltas'}:</span>
+                            <span className="font-bold text-rose-600">-${item.descuentoFaltas.toLocaleString('es-CL')}</span>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-emerald-700 font-medium flex items-center justify-between">
+                            <span>Semana completa de 6 días trabajados (${item.valorDia.toLocaleString('es-CL')}/día)</span>
+                            <button
+                              onClick={() => handleOpenAttendanceModal(item.member)}
+                              className="text-[10px] font-bold text-indigo-600 hover:underline"
+                            >
+                              Editar
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Comisiones */}
@@ -1029,6 +1266,25 @@ export default function Sueldos() {
                             <div key={i} className="flex items-center justify-between text-[10px] text-slate-400 pl-2">
                               <span>• {d.type.split(' (')[0]} (x{d.qty})</span>
                               <span>${d.subtotal.toLocaleString('es-CL')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Noches de TikTok Live ($15.000 / noche) */}
+                      {item.tiktokLivesTotal > 0 && (
+                        <div className="text-xs space-y-1 bg-rose-50/80 p-2.5 rounded-xl border border-rose-200">
+                          <div className="flex items-center justify-between">
+                            <span className="text-rose-950 font-bold flex items-center gap-1">
+                              <Moon size={12} className="text-rose-600" />
+                              Lives TikTok ({item.tiktokLivesCount} noche{item.tiktokLivesCount === 1 ? '' : 's'}):
+                            </span>
+                            <span className="font-black text-rose-700">+${item.tiktokLivesTotal.toLocaleString('es-CL')}</span>
+                          </div>
+                          {item.workerTikTokLives.map((l: TikTokLiveRecord) => (
+                            <div key={l.id} className="flex items-center justify-between text-[10px] text-slate-600 pl-2">
+                              <span>• {l.fecha}: {l.tema || 'Live Nocturno'} (x{l.cantidadNoches})</span>
+                              <span className="font-bold text-rose-800">${l.total?.toLocaleString('es-CL')}</span>
                             </div>
                           ))}
                         </div>
@@ -1058,13 +1314,21 @@ export default function Sueldos() {
                         </div>
                       )}
 
-                      {/* Botón rápido para agregar descarga o bono a este trabajador */}
-                      <button
-                        onClick={() => handleOpenQuickExtra(item.workerId)}
-                        className="w-full mt-2 py-1.5 text-center text-[10px] font-black text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-dashed border-emerald-200"
-                      >
-                        + Agregar Descarga / Bono a {item.workerName.split(' ')[0]}
-                      </button>
+                      {/* Botones rápidos para agregar extra o noche tiktok */}
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <button
+                          onClick={() => handleOpenQuickTikTok(item.workerId)}
+                          className="py-1.5 px-2 text-center text-[10px] font-black text-rose-700 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors border border-dashed border-rose-200 flex items-center justify-center gap-1"
+                        >
+                          <Moon size={11} /> + Live TikTok
+                        </button>
+                        <button
+                          onClick={() => handleOpenQuickExtra(item.workerId)}
+                          className="py-1.5 px-2 text-center text-[10px] font-black text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-dashed border-emerald-200 flex items-center justify-center gap-1"
+                        >
+                          <Truck size={11} /> + Descarga
+                        </button>
+                      </div>
                     </div>
 
                     {/* COLUMNA 2: DESCUENTOS (-) */}
@@ -1141,6 +1405,226 @@ export default function Sueldos() {
                 </p>
               </div>
             )}
+          </div>
+
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA: ASISTENCIA Y FALTAS SEMANALES (BASE 6 DÍAS) */}
+      {/* ========================================================================= */}
+      {activeTab === 'asistencia' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          {/* BANNER INFORMATIVO Y ACCIONES RÁPIDAS */}
+          <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white p-6 md:p-8 rounded-[32px] shadow-xl relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 blur-3xl rounded-full pointer-events-none"></div>
+
+            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-2xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  <Clock size={13} /> Sistema de Asistencia Semanal (6 Días)
+                </div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">
+                  Semana del Lunes {weekRange.startStr} al Sábado {weekRange.saturdayStr}
+                </h2>
+                <p className="text-xs text-indigo-200/80 leading-relaxed font-medium">
+                  El sueldo base semanal de cada trabajador se pacta en base a <span className="text-white font-bold">6 días trabajados</span> (Lunes a Sábado). 
+                  Si un trabajador falta o trabaja medio día, el sistema descuenta automáticamente el valor diario proporcional (<span className="text-white font-bold">Sueldo Base ÷ 6</span>).
+                </p>
+              </div>
+
+              {/* Botón Acción Masiva */}
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={async () => {
+                    const activeStaff = staff.filter(s => s.activo !== false);
+                    for (const member of activeStaff) {
+                      const pactado = member.sueldoBaseSemanal !== undefined ? Number(member.sueldoBaseSemanal) : 120000;
+                      const valDia = Math.round(pactado / 6);
+                      await saveWeeklyAttendance({
+                        workerId: member.id,
+                        workerName: member.nombre,
+                        semanaInicio: weekRange.startStr,
+                        semanaFin: weekRange.saturdayStr,
+                        fechaPago: weekRange.saturdayStr,
+                        diasTrabajados: 6,
+                        diasFaltas: 0,
+                        diasPactados: 6,
+                        sueldoBasePactado: pactado,
+                        valorDia: valDia,
+                        descuentoFaltas: 0,
+                        sueldoBaseAPagar: pactado,
+                        notas: 'Semana completa 6 días (asignación rápida)'
+                      });
+                    }
+                    playSound('success');
+                  }}
+                  className="flex items-center gap-2 px-5 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/30 active:scale-95 whitespace-nowrap"
+                >
+                  <CheckCircle2 size={16} /> Marcar Todos 6 Días
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* TABLA DE ASISTENCIA POR TRABAJADOR */}
+          <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-black text-slate-900 uppercase">Control de Asistencia del Personal ({calculatedPayrollList.length})</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Selecciona los días trabajados o abre el modal para detallar día por día (Lunes a Sábado).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500">Filtrar:</span>
+                <select
+                  value={roleFilter}
+                  onChange={e => setRoleFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none"
+                >
+                  <option value="TODOS">Todos los Cargos</option>
+                  <option value={StaffRole.VENDEDOR}>Vendedoras</option>
+                  <option value={StaffRole.BODEGA}>Bodega</option>
+                  <option value={StaffRole.DESPACHO}>Despacho</option>
+                  <option value={StaffRole.TRANSPORTISTA}>Transportistas</option>
+                  <option value={StaffRole.ADMIN}>Administración</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-black uppercase text-[10px] tracking-wider">
+                    <th className="py-3.5 px-6 text-left">Trabajador & Cargo</th>
+                    <th className="py-3.5 px-4 text-center">Sueldo Base Pactado</th>
+                    <th className="py-3.5 px-4 text-center">Valor Día (÷ 6)</th>
+                    <th className="py-3.5 px-6 text-center">Ajuste Rápido de Días</th>
+                    <th className="py-3.5 px-4 text-center">Días Trab.</th>
+                    <th className="py-3.5 px-4 text-right">Desc. Faltas</th>
+                    <th className="py-3.5 px-4 text-right">Sueldo Base Neto</th>
+                    <th className="py-3.5 px-6 text-center">Detalle Diario</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredPayrollList.map(item => {
+                    const pactado = item.sueldoBasePactado;
+                    const valDia = item.valorDia;
+                    const worked = item.diasTrabajados;
+                    const faltas = item.diasFaltas;
+                    const desc = item.descuentoFaltas;
+                    const finalBase = item.sueldoBase;
+
+                    const handleQuickSetDays = async (days: number) => {
+                      const missing = Math.max(0, 6 - days);
+                      const missingDiscount = Math.round(missing * valDia);
+                      const baseToPay = Math.max(0, pactado - missingDiscount);
+
+                      await saveWeeklyAttendance({
+                        workerId: item.workerId,
+                        workerName: item.workerName,
+                        semanaInicio: weekRange.startStr,
+                        semanaFin: weekRange.saturdayStr,
+                        fechaPago: weekRange.saturdayStr,
+                        diasTrabajados: days,
+                        diasFaltas: missing,
+                        diasPactados: 6,
+                        sueldoBasePactado: pactado,
+                        valorDia: valDia,
+                        descuentoFaltas: missingDiscount,
+                        sueldoBaseAPagar: baseToPay,
+                        notas: `Ajuste rápido a ${days} días trabajados`
+                      });
+                      playSound('click');
+                    };
+
+                    return (
+                      <tr key={item.workerId} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs">
+                              {item.workerName.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-black text-slate-900 uppercase text-xs">{item.workerName}</p>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">{item.cargo}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4 text-center font-bold text-slate-800">
+                          ${pactado.toLocaleString('es-CL')}
+                        </td>
+
+                        <td className="py-4 px-4 text-center font-mono text-slate-500 font-bold">
+                          ${valDia.toLocaleString('es-CL')}/d
+                        </td>
+
+                        {/* Presets Rápidos */}
+                        <td className="py-4 px-6 text-center">
+                          <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                            {[6.0, 5.5, 5.0, 4.5, 4.0].map(d => (
+                              <button
+                                key={d}
+                                onClick={() => handleQuickSetDays(d)}
+                                className={`px-2 py-1 rounded-lg font-black text-[11px] transition-all ${
+                                  worked === d
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                                }`}
+                              >
+                                {d.toFixed(1)}d
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+
+                        {/* Días Trabajados */}
+                        <td className="py-4 px-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-xl font-black text-xs ${
+                            worked === 6
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : worked >= 5
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {worked} / 6
+                          </span>
+                        </td>
+
+                        {/* Descuento por Faltas */}
+                        <td className="py-4 px-4 text-right font-black">
+                          {desc > 0 ? (
+                            <span className="text-rose-600">-${desc.toLocaleString('es-CL')} <span className="text-[10px] text-slate-400 font-normal">(-{faltas}d)</span></span>
+                          ) : (
+                            <span className="text-emerald-600">$0</span>
+                          )}
+                        </td>
+
+                        {/* Sueldo Base a Pagar */}
+                        <td className="py-4 px-4 text-right font-black text-slate-900 text-sm">
+                          ${finalBase.toLocaleString('es-CL')}
+                        </td>
+
+                        {/* Botón Modal Detalle */}
+                        <td className="py-4 px-6 text-center">
+                          <button
+                            onClick={() => handleOpenAttendanceModal(item.member)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 rounded-xl font-black text-[11px] transition-all border border-slate-200"
+                          >
+                            <Calendar size={13} />
+                            <span>Detalle Días</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
         </div>
@@ -1427,7 +1911,140 @@ export default function Sueldos() {
       )}
 
       {/* ========================================================================= */}
-      {/* PESTAÑA 5: FICHA DE PERSONAL & SUELDOS */}
+      {/* PESTAÑA 5: TRANSMISIONES / LIVES DE TIKTOK ($15.000 / NOCHE) */}
+      {/* ========================================================================= */}
+      {activeTab === 'tiktok' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0">
+                <Moon size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-black text-slate-900 uppercase">Lives Nocturnos de TikTok</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-100 text-rose-800">
+                    Tarifa Fija: $15.000 / Noche
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Registro de noches de transmisiones en vivo realizadas por trabajadores para sumar automáticamente a sus haberes semanales.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => handleOpenQuickTikTok()}
+              className="flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-rose-500/20 active:scale-95 whitespace-nowrap"
+            >
+              <PlusCircle size={16} /> + Registrar Noche Live TikTok
+            </button>
+          </div>
+
+          {/* Tarjetas de Resumen TikTok */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Noches Totales (Semana)</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  {weeklyTikTokLives.reduce((acc, l) => acc + (Number(l.cantidadNoches) || 1), 0)} <span className="text-xs text-slate-400 font-normal">noches</span>
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-black">
+                <Moon size={20} />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-rose-500 uppercase tracking-wider">Total a Pagar por Lives</p>
+                <p className="text-2xl font-black text-rose-600 mt-1 font-mono">
+                  ${weeklyTikTokLives.reduce((acc, l) => acc + (Number(l.total) || 0), 0).toLocaleString('es-CL')}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-black">
+                <Coins size={20} />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Trabajadores en Live</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  {new Set(weeklyTikTokLives.map(l => l.workerName)).size} <span className="text-xs text-slate-400 font-normal">participantes</span>
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-black">
+                <Users size={20} />
+              </div>
+            </div>
+          </div>
+
+          {/* Tabla de Lives TikTok */}
+          <div className="bg-white rounded-[28px] border border-slate-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-black uppercase text-[10px] tracking-wider">
+                    <th className="py-3.5 px-4 text-left">Fecha</th>
+                    <th className="py-3.5 px-4 text-left">Trabajador</th>
+                    <th className="py-3.5 px-4 text-left">Tema / Detalle del Live</th>
+                    <th className="py-3.5 px-4 text-center">Noches</th>
+                    <th className="py-3.5 px-4 text-right">Tarifa x Noche</th>
+                    <th className="py-3.5 px-4 text-right">Total a Pagar</th>
+                    <th className="py-3.5 px-4 text-left">Observación</th>
+                    <th className="py-3.5 px-4 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {tiktokLives.map((live: TikTokLiveRecord) => (
+                    <tr key={live.id} className="hover:bg-slate-50/80">
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-700">{live.fecha}</td>
+                      <td className="py-3.5 px-4 font-black text-slate-900 uppercase">{live.workerName}</td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2.5 py-0.5 bg-rose-50 text-rose-800 font-black text-[10px] rounded-md uppercase inline-flex items-center gap-1">
+                          <Moon size={11} className="text-rose-500" />
+                          {live.tema || 'Live TikTok Nocturno'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center font-bold text-slate-800">x{live.cantidadNoches || 1}</td>
+                      <td className="py-3.5 px-4 text-right font-medium text-slate-700">${(live.valorNoche || 15000).toLocaleString('es-CL')}</td>
+                      <td className="py-3.5 px-4 text-right font-black text-rose-600 font-mono">
+                        +${live.total?.toLocaleString('es-CL')}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 italic max-w-xs truncate">{live.observacion || '-'}</td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          onClick={async () => {
+                            if (confirm(`¿Eliminar registro de Live TikTok de ${live.workerName} del ${live.fecha}?`)) {
+                              await deleteTikTokLive(live.id);
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar registro"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {tiktokLives.length === 0 && (
+              <div className="py-16 text-center text-slate-400 italic">
+                No hay transmisiones de TikTok Live registradas actualmente.
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA 6: FICHA DE PERSONAL & SUELDOS */}
       {/* ========================================================================= */}
       {activeTab === 'personal' && (
         <div className="space-y-6 animate-in fade-in duration-300">
@@ -1572,8 +2189,13 @@ export default function Sueldos() {
             rut: item.rut,
             banco: item.banco,
             numeroCuenta: item.numeroCuenta,
+            sueldoBasePactado: item.sueldoBasePactado,
+            diasTrabajados: item.diasTrabajados,
+            diasFaltas: item.diasFaltas,
             sueldoBase: item.sueldoBase,
             comisionesTotal: item.comisionesTotal,
+            tiktokLivesTotal: item.tiktokLivesTotal,
+            tiktokLivesCount: item.tiktokLivesCount,
             extrasTotal: item.extrasTotal,
             otrosBonosTotal: item.otrosBonosTotal,
             totalHaberes: item.totalHaberes,
@@ -1651,6 +2273,26 @@ export default function Sueldos() {
         />
       )}
 
+      {/* Modal Registrar Noches de TikTok Live */}
+      {isTikTokModalOpen && (
+        <TikTokLiveModal
+          isOpen={isTikTokModalOpen}
+          onClose={() => {
+            setIsTikTokModalOpen(false);
+            setQuickTikTokTargetWorker(undefined);
+          }}
+          staffList={staff}
+          defaultWorkerId={quickTikTokTargetWorker}
+          defaultSemanaPago={weekRange.saturdayStr}
+          onSaveSingle={async live => {
+            await addTikTokLive(live);
+          }}
+          onSaveMultiple={async lives => {
+            await bulkAddTikTokLives(lives);
+          }}
+        />
+      )}
+
       {/* Modal Crear / Editar Ficha Trabajador */}
       {isStaffModalOpen && (
         <TrabajadorModal
@@ -1663,6 +2305,36 @@ export default function Sueldos() {
             } else {
               await addStaff(staffData as StaffMember);
             }
+          }}
+        />
+      )}
+
+      {/* Modal Asistencia Semanal (6 días) */}
+      {isAttendanceModalOpen && selectedAttendanceStaff && (
+        <AsistenciaSemanalModal
+          isOpen={isAttendanceModalOpen}
+          onClose={() => {
+            setIsAttendanceModalOpen(false);
+            setSelectedAttendanceStaff(null);
+          }}
+          workerId={selectedAttendanceStaff.id}
+          workerName={selectedAttendanceStaff.nombre}
+          cargo={selectedAttendanceStaff.rol}
+          sueldoBaseSemanal={
+            selectedAttendanceStaff.sueldoBaseSemanal !== undefined
+              ? Number(selectedAttendanceStaff.sueldoBaseSemanal)
+              : 120000
+          }
+          semanaInicio={weekRange.startStr}
+          semanaFin={weekRange.saturdayStr}
+          startDateObj={weekRange.start}
+          currentAttendance={currentWeekAttendance.find(
+            a => a.workerId === selectedAttendanceStaff.id || a.workerName === selectedAttendanceStaff.nombre
+          )}
+          onSave={async attendanceData => {
+            await saveWeeklyAttendance(attendanceData);
+            setIsAttendanceModalOpen(false);
+            setSelectedAttendanceStaff(null);
           }}
         />
       )}

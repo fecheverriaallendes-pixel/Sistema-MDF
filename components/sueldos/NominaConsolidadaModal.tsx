@@ -7,8 +7,13 @@ interface NominaConsolidadaItem {
   rut?: string;
   banco?: string;
   numeroCuenta?: string;
+  diasTrabajados?: number;
+  diasFaltas?: number;
+  sueldoBasePactado?: number;
   sueldoBase: number;
   comisionesTotal: number;
+  tiktokLivesTotal?: number;
+  tiktokLivesCount?: number;
   extrasTotal: number;
   otrosBonosTotal: number;
   totalHaberes: number;
@@ -46,6 +51,7 @@ export default function NominaConsolidadaModal({
 
   const totalBase = items.reduce((acc, i) => acc + (i.sueldoBase || 0), 0);
   const totalComisiones = items.reduce((acc, i) => acc + (i.comisionesTotal || 0), 0);
+  const totalTikTokLives = items.reduce((acc, i) => acc + (i.tiktokLivesTotal || 0), 0);
   const totalExtras = items.reduce((acc, i) => acc + (i.extrasTotal || 0), 0);
   const totalHaberes = items.reduce((acc, i) => acc + (i.totalHaberes || 0), 0);
   const totalAdelantos = items.reduce((acc, i) => acc + (i.adelantosTotal || 0), 0);
@@ -108,8 +114,10 @@ export default function NominaConsolidadaModal({
                     <th className="py-2.5 px-3 text-left">N°</th>
                     <th className="py-2.5 px-3 text-left">Trabajador</th>
                     <th className="py-2.5 px-3 text-left">Cargo</th>
+                    <th className="py-2.5 px-2 text-center">Días Trab.</th>
                     <th className="py-2.5 px-3 text-right">Sueldo Base</th>
                     <th className="py-2.5 px-3 text-right">Comisiones</th>
+                    <th className="py-2.5 px-3 text-right text-rose-700 bg-rose-50/60">Lives TikTok</th>
                     <th className="py-2.5 px-3 text-right">Descargas/Extras</th>
                     <th className="py-2.5 px-3 text-right bg-emerald-50 text-emerald-900">Total Haberes</th>
                     <th className="py-2.5 px-3 text-right text-red-600">Adelantos</th>
@@ -128,8 +136,31 @@ export default function NominaConsolidadaModal({
                         {item.rut && <span className="block text-[9px] font-normal text-slate-500 font-mono">RUT: {item.rut}</span>}
                       </td>
                       <td className="py-2.5 px-3 text-slate-600">{item.cargo}</td>
-                      <td className="py-2.5 px-3 text-right font-medium text-slate-700">${item.sueldoBase.toLocaleString('es-CL')}</td>
+                      <td className="py-2.5 px-2 text-center">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-black ${
+                          (item.diasTrabajados ?? 6) === 6
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : (item.diasTrabajados ?? 6) >= 5
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {item.diasTrabajados ?? 6} / 6 d
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-medium text-slate-700">
+                        ${item.sueldoBase.toLocaleString('es-CL')}
+                        {item.sueldoBasePactado && item.sueldoBasePactado !== item.sueldoBase && (
+                          <span className="block text-[9px] text-rose-500 line-through">${item.sueldoBasePactado.toLocaleString('es-CL')}</span>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 text-right font-medium text-slate-700">${item.comisionesTotal.toLocaleString('es-CL')}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-rose-700 bg-rose-50/30">
+                        {item.tiktokLivesTotal && item.tiktokLivesTotal > 0 ? (
+                          <span>+${item.tiktokLivesTotal.toLocaleString('es-CL')} {item.tiktokLivesCount ? <span className="text-[9px] font-normal text-slate-500">({item.tiktokLivesCount}n)</span> : ''}</span>
+                        ) : (
+                          <span className="text-slate-300 font-normal">$0</span>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 text-right font-medium text-slate-700">${item.extrasTotal.toLocaleString('es-CL')}</td>
                       <td className="py-2.5 px-3 text-right font-black text-emerald-700 bg-emerald-50/50">${item.totalHaberes.toLocaleString('es-CL')}</td>
                       <td className="py-2.5 px-3 text-right font-medium text-red-600">{item.adelantosTotal > 0 ? `-$${item.adelantosTotal.toLocaleString('es-CL')}` : '$0'}</td>
@@ -144,9 +175,10 @@ export default function NominaConsolidadaModal({
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-900 bg-slate-900 text-white font-black text-xs uppercase">
-                    <td colSpan={3} className="py-3 px-3">TOTALES CONSOLIDADOS ({items.length} Trabajadores)</td>
+                    <td colSpan={4} className="py-3 px-3">TOTALES CONSOLIDADOS ({items.length} Trabajadores)</td>
                     <td className="py-3 px-3 text-right">${totalBase.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right">${totalComisiones.toLocaleString('es-CL')}</td>
+                    <td className="py-3 px-3 text-right text-rose-300">${totalTikTokLives.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right">${totalExtras.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right text-emerald-400">${totalHaberes.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right text-red-300">-${totalAdelantos.toLocaleString('es-CL')}</td>

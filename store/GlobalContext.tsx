@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
@@ -532,6 +532,18 @@ interface StoreContextType {
   updatePayrollRecord: (id: string, updated: Partial<WeeklyPayrollRecord>) => Promise<void>;
   deletePayrollRecord: (id: string) => Promise<void>;
 
+  // Asistencia Semanal y Días Trabajados (Base 6 días)
+  weeklyAttendance: WeeklyAttendance[];
+  saveWeeklyAttendance: (attendance: Omit<WeeklyAttendance, 'id' | 'updatedAt'>) => Promise<WeeklyAttendance>;
+  deleteWeeklyAttendance: (id: string) => Promise<void>;
+
+  // Noches de Lives TikTok ($15.000 / noche)
+  tiktokLives: TikTokLiveRecord[];
+  addTikTokLive: (live: Omit<TikTokLiveRecord, 'id' | 'total' | 'createdAt'>) => Promise<TikTokLiveRecord>;
+  bulkAddTikTokLives: (lives: Omit<TikTokLiveRecord, 'id' | 'total' | 'createdAt'>[]) => Promise<void>;
+  updateTikTokLive: (id: string, updated: Partial<TikTokLiveRecord>) => Promise<void>;
+  deleteTikTokLive: (id: string) => Promise<void>;
+
   // Devoluciones de Venta
   saleReturns: SaleReturn[];
   addSaleReturn: (data: Omit<SaleReturn, 'id' | 'codigoDevolucion' | 'createdAt'>) => Promise<SaleReturn>;
@@ -686,6 +698,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const saved = safeLocalStorage.getItem('mdf_payroll_records');
     return saved ? JSON.parse(saved) : [];
   });
+  const [weeklyAttendance, setWeeklyAttendance] = useState<WeeklyAttendance[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_weekly_attendance');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [tiktokLives, setTiktokLives] = useState<TikTokLiveRecord[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_tiktok_lives');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [saleReturns, setSaleReturns] = useState<SaleReturn[]>(() => {
     const saved = safeLocalStorage.getItem('mdf_sale_returns');
     return saved ? JSON.parse(saved) : [];
@@ -800,6 +820,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubEmployeeLoans: any;
     let unsubWorkExtras: any;
     let unsubPayrollRecords: any;
+    let unsubWeeklyAttendance: any;
+    let unsubTikTokLives: any;
     let unsubReturns: any;
 
     const initFirebase = async () => {
@@ -873,6 +895,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubPayrollRecords = onSnapshot(collection(db, 'payroll_records'), (snap) => {
           setPayrollRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyPayrollRecord)));
         });
+        unsubWeeklyAttendance = onSnapshot(collection(db, 'weekly_attendance'), (snap) => {
+          setWeeklyAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyAttendance)));
+        });
+        unsubTikTokLives = onSnapshot(collection(db, 'tiktok_lives'), (snap) => {
+          setTiktokLives(snap.docs.map(d => ({ ...d.data(), id: d.id } as TikTokLiveRecord)));
+        });
         unsubReturns = onSnapshot(collection(db, 'devoluciones'), (snap) => {
           setSaleReturns(snap.docs.map(d => ({ ...d.data(), id: d.id } as SaleReturn)));
         });
@@ -902,6 +930,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubEmployeeLoans) unsubEmployeeLoans();
       if (unsubWorkExtras) unsubWorkExtras();
       if (unsubPayrollRecords) unsubPayrollRecords();
+      if (unsubWeeklyAttendance) unsubWeeklyAttendance();
+      if (unsubTikTokLives) unsubTikTokLives();
       if (unsubReturns) unsubReturns();
     };
   }, []);
@@ -921,8 +951,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_employee_loans', JSON.stringify(employeeLoans));
     safeLocalStorage.setItem('mdf_work_extras', JSON.stringify(workExtras));
     safeLocalStorage.setItem('mdf_payroll_records', JSON.stringify(payrollRecords));
+    safeLocalStorage.setItem('mdf_weekly_attendance', JSON.stringify(weeklyAttendance));
+    safeLocalStorage.setItem('mdf_tiktok_lives', JSON.stringify(tiktokLives));
     safeLocalStorage.setItem('mdf_sale_returns', JSON.stringify(saleReturns));
-  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords, saleReturns]);
+  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords, weeklyAttendance, tiktokLives, saleReturns]);
 
   useEffect(() => {
     safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
@@ -2577,6 +2609,103 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('click');
   };
 
+  const saveWeeklyAttendance = async (attendance: Omit<WeeklyAttendance, 'id' | 'updatedAt'>): Promise<WeeklyAttendance> => {
+    const id = `${attendance.workerId}_${attendance.semanaFin}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    const now = new Date().toISOString();
+    const diasTrabajados = Number(attendance.diasTrabajados) || 0;
+    const diasPactados = Number(attendance.diasPactados) || 6;
+    const diasFaltas = Math.max(0, diasPactados - diasTrabajados);
+    const sueldoBasePactado = Number(attendance.sueldoBasePactado) || 0;
+    const valorDia = sueldoBasePactado > 0 ? Math.round(sueldoBasePactado / diasPactados) : 0;
+    const descuentoFaltas = Math.round(diasFaltas * valorDia);
+    const sueldoBaseAPagar = Math.round(diasTrabajados * valorDia);
+
+    const record: WeeklyAttendance = {
+      ...attendance,
+      id,
+      diasTrabajados,
+      diasFaltas,
+      diasPactados,
+      sueldoBasePactado,
+      valorDia,
+      descuentoFaltas,
+      sueldoBaseAPagar,
+      updatedAt: now
+    };
+
+    await setDoc(doc(db, 'weekly_attendance', id), cleanUndefined(record));
+    playSound('click');
+    return record;
+  };
+
+  const deleteWeeklyAttendance = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'weekly_attendance', id));
+    playSound('click');
+  };
+
+  const addTikTokLive = async (live: Omit<TikTokLiveRecord, 'id' | 'total' | 'createdAt'>): Promise<TikTokLiveRecord> => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const cantidadNoches = Number(live.cantidadNoches) || 1;
+    const valorNoche = live.valorNoche !== undefined ? Number(live.valorNoche) : 15000;
+    const total = cantidadNoches * valorNoche;
+
+    const newLive: TikTokLiveRecord = {
+      ...live,
+      id,
+      cantidadNoches,
+      valorNoche,
+      total,
+      liquidado: live.liquidado ?? false,
+      createdAt: now
+    };
+    await setDoc(doc(db, 'tiktok_lives', id), cleanUndefined(newLive));
+    playSound('success');
+    return newLive;
+  };
+
+  const bulkAddTikTokLives = async (lives: Omit<TikTokLiveRecord, 'id' | 'total' | 'createdAt'>[]): Promise<void> => {
+    if (!lives || lives.length === 0) return;
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    for (const live of lives) {
+      const id = Math.random().toString(36).substr(2, 9);
+      const cantidadNoches = Number(live.cantidadNoches) || 1;
+      const valorNoche = live.valorNoche !== undefined ? Number(live.valorNoche) : 15000;
+      const total = cantidadNoches * valorNoche;
+      const newLive: TikTokLiveRecord = {
+        ...live,
+        id,
+        cantidadNoches,
+        valorNoche,
+        total,
+        liquidado: live.liquidado ?? false,
+        createdAt: now
+      };
+      batch.set(doc(db, 'tiktok_lives', id), cleanUndefined(newLive));
+    }
+    await batch.commit();
+    playSound('success');
+  };
+
+  const updateTikTokLive = async (id: string, updated: Partial<TikTokLiveRecord>): Promise<void> => {
+    const current = tiktokLives.find(l => l.id === id);
+    if (!current) return;
+    const merged = { ...current, ...updated };
+    if (updated.cantidadNoches !== undefined || updated.valorNoche !== undefined) {
+      const cant = Number(merged.cantidadNoches) || 1;
+      const val = Number(merged.valorNoche) || 15000;
+      merged.total = cant * val;
+    }
+    await setDoc(doc(db, 'tiktok_lives', id), cleanUndefined(merged));
+    playSound('click');
+  };
+
+  const deleteTikTokLive = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'tiktok_lives', id));
+    playSound('click');
+  };
+
   const generateReturnCode = (currentReturns: SaleReturn[]): string => {
     if (!currentReturns || currentReturns.length === 0) return 'DEV-0001';
     const codes = currentReturns
@@ -2735,6 +2864,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       employeeLoans, addEmployeeLoan, updateEmployeeLoan, deleteEmployeeLoan, addLoanPayment,
       workExtras, addWorkExtra, bulkAddWorkExtras, updateWorkExtra, deleteWorkExtra,
       payrollRecords, savePayrollRecord, updatePayrollRecord, deletePayrollRecord,
+      weeklyAttendance, saveWeeklyAttendance, deleteWeeklyAttendance,
+      tiktokLives, addTikTokLive, bulkAddTikTokLives, updateTikTokLive, deleteTikTokLive,
       saleReturns, addSaleReturn, updateSaleReturn, deleteSaleReturn
     }}>
       {children}

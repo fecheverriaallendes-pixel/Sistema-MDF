@@ -235,6 +235,48 @@ export interface WorkExtra {
   createdAt?: string;
 }
 
+export interface TikTokLiveRecord {
+  id: string;
+  workerId: string;
+  workerName: string;
+  fecha: string; // YYYY-MM-DD
+  cantidadNoches: number; // Por defecto 1
+  valorNoche: number; // Por defecto 15000 CLP
+  total: number; // cantidadNoches * valorNoche
+  tema?: string; // ej: "Live Fardos Nocturno", "Live Remate TikTok"
+  observacion?: string;
+  semanaPago?: string; // Fecha del sábado
+  liquidado?: boolean;
+  createdAt?: string;
+}
+
+export interface DayAttendance {
+  diaNombre: string; // 'Lunes' | 'Martes' | 'Miércoles' | 'Jueves' | 'Viernes' | 'Sábado'
+  fecha?: string; // YYYY-MM-DD
+  estado: 'COMPLETO' | 'MEDIO_DIA' | 'FALTA' | 'PERMISO_PAGADO';
+  valorFraccion: number; // 1.0 = Completo / Permiso pagado, 0.5 = Medio Día, 0.0 = Falta
+  observacion?: string;
+}
+
+export interface WeeklyAttendance {
+  id: string; // `${workerId}_${semanaFin}`
+  workerId: string;
+  workerName: string;
+  semanaInicio: string;
+  semanaFin: string;
+  fechaPago: string; // Sábado
+  diasTrabajados: number; // Ej: 6, 5.5, 5, 4.5, 4
+  diasFaltas: number; // 6 - diasTrabajados
+  diasPactados: number; // 6 por defecto
+  sueldoBasePactado: number; // Ej: 120.000 para 6 días
+  valorDia: number; // sueldoBasePactado / 6
+  descuentoFaltas: number; // diasFaltas * valorDia
+  sueldoBaseAPagar: number; // diasTrabajados * valorDia
+  diasDetalle?: DayAttendance[];
+  notas?: string;
+  updatedAt?: string;
+}
+
 export interface WeeklyPayrollRecord {
   id: string;
   semanaInicio: string; // Lunes YYYY-MM-DD
@@ -244,8 +286,16 @@ export interface WeeklyPayrollRecord {
   workerName: string;
   cargo: string;
   
+  // Asistencia y Días Trabajados (Semana de 6 días)
+  sueldoBasePactado?: number; // Sueldo base semanal completo acordado (ej: $120.000)
+  diasTrabajados?: number; // Días trabajados (ej: 6, 5.5, 5)
+  diasFaltas?: number; // Faltas (ej: 0.5, 1)
+  descuentoFaltas?: number; // Monto descontado por faltas (ej: $10.000)
+  valorDia?: number; // Valor diario (sueldoBasePactado / 6)
+  detalleAsistencia?: DayAttendance[];
+
   // Haberes
-  sueldoBase: number;
+  sueldoBase: number; // Sueldo base final a pagar (descontadas las faltas)
   comisionesTotal: number;
   comisionesDetalle?: {
     tipo: string;
@@ -272,6 +322,17 @@ export interface WeeklyPayrollRecord {
     cantidad: number;
     valorUnitario: number;
     subtotal: number;
+  }[];
+  tiktokLivesTotal?: number;
+  tiktokLivesCount?: number;
+  tiktokLivesDetalle?: {
+    id?: string;
+    fecha: string;
+    cantidad: number;
+    valorNoche: number;
+    subtotal: number;
+    tema?: string;
+    observacion?: string;
   }[];
   otrosBonosTotal: number;
   totalHaberes: number;

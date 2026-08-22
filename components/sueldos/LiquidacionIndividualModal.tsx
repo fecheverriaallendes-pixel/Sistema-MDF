@@ -12,6 +12,18 @@ interface LiquidacionIndividualModalProps {
     semanaInicio: string;
     semanaFin: string;
     fechaPago: string;
+    sueldoBasePactado?: number;
+    diasTrabajados?: number;
+    diasFaltas?: number;
+    descuentoFaltas?: number;
+    valorDia?: number;
+    detalleAsistencia?: {
+      diaNombre: string;
+      fecha?: string;
+      estado: 'COMPLETO' | 'MEDIO_DIA' | 'FALTA' | 'PERMISO_PAGADO';
+      valorFraccion: number;
+      observacion?: string;
+    }[];
     sueldoBase: number;
     comisionesTotal: number;
     comisionesDetalle?: { tipo: string; cantidad: number; subtotal: number }[];
@@ -26,6 +38,9 @@ interface LiquidacionIndividualModalProps {
     }[];
     extrasTotal: number;
     extrasDetalle?: { tipo: string; descripcion: string; cantidad: number; valorUnitario: number; subtotal: number }[];
+    tiktokLivesTotal?: number;
+    tiktokLivesCount?: number;
+    tiktokLivesDetalle?: { fecha: string; cantidad: number; valorNoche: number; subtotal: number; tema?: string; observacion?: string }[];
     otrosBonosTotal: number;
     totalHaberes: number;
     adelantosTotal: number;
@@ -161,10 +176,59 @@ export default function LiquidacionIndividualModal({
                 </div>
 
                 <div className="space-y-3 text-xs">
-                  {/* Sueldo Base */}
-                  <div className="flex justify-between items-center py-1.5 border-b border-slate-100">
-                    <span className="font-medium text-slate-700">Sueldo Base Semanal</span>
-                    <span className="font-black text-slate-900">${record.sueldoBase.toLocaleString('es-CL')}</span>
+                  {/* Sueldo Base y Asistencia */}
+                  <div className="py-2 border-b border-slate-100">
+                    <div className="flex justify-between items-center font-medium text-slate-700">
+                      <div>
+                        <span className="font-bold text-slate-800">Sueldo Base Semanal</span>
+                        {record.diasTrabajados !== undefined && (
+                          <span className="ml-2 px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded text-[10px] font-black">
+                            {record.diasTrabajados} / 6 días
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-black text-slate-900">${record.sueldoBase.toLocaleString('es-CL')}</span>
+                    </div>
+
+                    {/* Desglose si hubo faltas o cálculo diario */}
+                    {record.sueldoBasePactado && record.sueldoBasePactado > 0 && (
+                      <div className="mt-1.5 pl-3 space-y-0.5 text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <div className="flex justify-between">
+                          <span>• Sueldo pactado (6 días completos):</span>
+                          <span className="font-semibold text-slate-700">${record.sueldoBasePactado.toLocaleString('es-CL')}</span>
+                        </div>
+                        {record.valorDia ? (
+                          <div className="flex justify-between">
+                            <span>• Valor día pactado (1/6):</span>
+                            <span>${record.valorDia.toLocaleString('es-CL')}</span>
+                          </div>
+                        ) : null}
+                        {(record.descuentoFaltas || 0) > 0 && (
+                          <div className="flex justify-between text-rose-600 font-bold">
+                            <span>• Descuento por {record.diasFaltas || 0} día(s) no trabajado(s):</span>
+                            <span>-${(record.descuentoFaltas || 0).toLocaleString('es-CL')}</span>
+                          </div>
+                        )}
+                        {record.detalleAsistencia && record.detalleAsistencia.length > 0 && (
+                          <div className="mt-1 pt-1 border-t border-slate-200 flex flex-wrap gap-1">
+                            {record.detalleAsistencia.map((d, i) => (
+                              <span
+                                key={i}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  d.estado === 'COMPLETO' || d.estado === 'PERMISO_PAGADO'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : d.estado === 'MEDIO_DIA'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}
+                              >
+                                {d.diaNombre.slice(0, 2)}: {d.valorFraccion === 1 ? '1.0' : d.valorFraccion === 0.5 ? '0.5' : 'Falta'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Comisiones */}
@@ -219,6 +283,40 @@ export default function LiquidacionIndividualModal({
                       ))}
                     </div>
                   )}
+
+                  {/* Lives de TikTok Nocturnos */}
+                  {record.tiktokLivesTotal && record.tiktokLivesTotal > 0 ? (
+                    <div className="py-2 border-b border-slate-100 bg-rose-50/60 p-3 rounded-xl border border-rose-200/80">
+                      <div className="flex justify-between items-center font-medium text-slate-800 mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                          <span className="font-black text-rose-950">Lives de TikTok Nocturnos</span>
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md text-[10px] font-black">
+                            {record.tiktokLivesCount || record.tiktokLivesDetalle?.reduce((acc, l) => acc + l.cantidad, 0) || 1} noche(s)
+                          </span>
+                        </div>
+                        <span className="font-black text-rose-700 font-mono text-sm">
+                          +${record.tiktokLivesTotal.toLocaleString('es-CL')}
+                        </span>
+                      </div>
+
+                      {record.tiktokLivesDetalle && record.tiktokLivesDetalle.length > 0 && (
+                        <div className="mt-1.5 space-y-1 pl-1">
+                          {record.tiktokLivesDetalle.map((l, i) => (
+                            <div key={i} className="flex justify-between items-center text-[10px] text-slate-600 bg-white/90 px-2.5 py-1 rounded-lg border border-rose-100 shadow-xs">
+                              <span className="truncate max-w-[260px]">
+                                • <strong className="text-slate-800">{l.fecha}</strong>: {l.tema || 'Live TikTok'} ({l.cantidad} noche a ${l.valorNoche?.toLocaleString('es-CL')})
+                                {l.observacion && <span className="text-slate-400 italic ml-1">({l.observacion})</span>}
+                              </span>
+                              <span className="font-mono font-bold text-rose-800 shrink-0 ml-2">
+                                +${l.subtotal.toLocaleString('es-CL')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
 
                   {/* Otros Bonos */}
                   {record.otrosBonosTotal > 0 && (
