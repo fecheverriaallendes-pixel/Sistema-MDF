@@ -186,6 +186,7 @@ const BottomNav = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
 
   const isVendedorOrAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
   const isBodegaOrDespacho = currentUser.rol === StaffRole.BODEGA || currentUser.rol === StaffRole.DESPACHO || currentUser.rol === StaffRole.ADMIN;
+  const canSeeDespachos = isBodegaOrDespacho || isVendedorOrAdmin;
   const isTransportista = currentUser.rol === StaffRole.TRANSPORTISTA;
 
   return (
@@ -234,7 +235,7 @@ const BottomNav = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
         </Link>
       )}
 
-      {isBodegaOrDespacho && (
+      {canSeeDespachos && (
         <Link 
           to="/despachos" 
           onClick={handleNavClick}

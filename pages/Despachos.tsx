@@ -31,10 +31,16 @@ import {
   Boxes,
   Layers,
   Sparkles,
-  ArrowUpRight
+  ArrowUpRight,
+  MessageSquare,
+  Copy,
+  Check,
+  Eye,
+  User
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
-import { SaleStatus, Sale, DispatchType, DispatchStatus } from '../types';
+import { SaleStatus, Sale, DispatchType, DispatchStatus, StaffRole } from '../types';
+import { SaleTrackingModal, generateWhatsAppTrackingMessage } from '../components/SaleTrackingModal';
 
 function parseLocalDate(dateStr?: string | null): Date {
   if (!dateStr) return new Date();
@@ -113,7 +119,7 @@ function formatDisplayDateTime(dateStr?: string | null): string {
 }
 
 export default function Despachos() {
-  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale } = useStore();
+  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser } = useStore();
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as any) || 'AGENCIA';
   const [searchTerm, setSearchTerm] = useState('');
@@ -128,6 +134,29 @@ export default function Despachos() {
   const [transportistaFilter, setTransportistaFilter] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
+  const [selectedTrackingSale, setSelectedTrackingSale] = useState<Sale | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyStatus = (sale: Sale) => {
+    const text = generateWhatsAppTrackingMessage(sale, stock);
+    navigator.clipboard.writeText(text);
+    setCopiedId(sale.id);
+    playSound('success');
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleOpenWhatsApp = (sale: Sale) => {
+    playSound('click');
+    const phone = (sale.telefono || '').replace(/\D/g, '');
+    if (!phone) {
+      alert("El cliente no tiene teléfono registrado.");
+      return;
+    }
+    const cleanPhone = phone.startsWith('56') ? phone : `56${phone}`;
+    const text = generateWhatsAppTrackingMessage(sale, stock);
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
 
   const allSales = sales;
   const vendedores = Array.from(new Set(sales.map(s => s.vendedor).filter(Boolean)));
@@ -447,7 +476,7 @@ export default function Despachos() {
                     {carriers.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="flex-1 lg:flex-none min-w-[180px]">
+              <div className="flex-1 lg:flex-none min-w-[180px] flex items-center gap-2">
                 <select 
                     className={`w-full px-5 py-4 rounded-[24px] border-2 font-bold text-sm outline-none transition-all ${vendedorFilter ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-white border-slate-100 text-slate-700'}`}
                     value={vendedorFilter}
@@ -456,6 +485,23 @@ export default function Despachos() {
                     <option value="">👤 Vendedor (Todos)</option>
                     {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
+                {currentUser?.nombre && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVendedorFilter(vendedorFilter === currentUser.nombre ? '' : currentUser.nombre);
+                      playSound('click');
+                    }}
+                    className={`px-4 py-4 rounded-[24px] font-black text-xs uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                      vendedorFilter === currentUser.nombre
+                        ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
+                        : 'bg-white border-2 border-slate-100 text-slate-700 hover:border-amber-300'
+                    }`}
+                    title="Filtrar solo mis ventas"
+                  >
+                    <User size={14} /> Mis Ventas
+                  </button>
+                )}
               </div>
             </div>
         </div>
@@ -867,6 +913,38 @@ export default function Despachos() {
 
               {/* Card Footer */}
               <div className="p-6 bg-slate-50/50 mt-auto border-t border-slate-100 space-y-2">
+                {/* WhatsApp status & Tracking actions */}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => handleOpenWhatsApp(sale)}
+                    className="flex-1 py-2.5 px-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-[11px] font-black uppercase flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
+                    title="Notificar estado por WhatsApp al cliente"
+                  >
+                    <MessageSquare size={13} /> WhatsApp
+                  </button>
+                  <button
+                    onClick={() => handleCopyStatus(sale)}
+                    className={`p-2.5 rounded-2xl border transition-all ${
+                      copiedId === sale.id 
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-300' 
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 active:scale-95'
+                    }`}
+                    title="Copiar texto de estado para WhatsApp"
+                  >
+                    {copiedId === sale.id ? <Check size={15} /> : <Copy size={15} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedTrackingSale(sale);
+                      playSound('click');
+                    }}
+                    className="p-2.5 bg-slate-900 hover:bg-black text-white rounded-2xl transition-all active:scale-95"
+                    title="Ver seguimiento completo"
+                  >
+                    <Eye size={15} />
+                  </button>
+                </div>
+
                 {isJunta(sale) && sale.status === SaleStatus.PENDIENTE && (
                   <button 
                     onClick={() => {
@@ -992,9 +1070,28 @@ export default function Despachos() {
                       )}
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
-                      </span>
+                      <div className="flex items-center justify-end gap-2">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
+                        </span>
+                        <button
+                          onClick={() => handleOpenWhatsApp(sale)}
+                          className="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all"
+                          title="Enviar estado por WhatsApp"
+                        >
+                          <MessageSquare size={13} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedTrackingSale(sale);
+                            playSound('click');
+                          }}
+                          className="p-1.5 bg-slate-900 hover:bg-black text-white rounded-lg transition-all"
+                          title="Ver tracking"
+                        >
+                          <Eye size={13} />
+                        </button>
+                      </div>
                     </td>
                 </tr>
               ))}
@@ -1031,6 +1128,20 @@ export default function Despachos() {
             </button>
           )}
         </div>
+      )}
+
+      {/* Modal de Seguimiento / Tracking */}
+      {selectedTrackingSale && (
+        <SaleTrackingModal
+          sale={selectedTrackingSale}
+          stock={stock}
+          onClose={() => setSelectedTrackingSale(null)}
+          onLiberarJuntaCompra={(s) => {
+            updateSale(s.id, { juntaCompra: 'DESPACHO INMEDIATO' });
+            playSound('success');
+            setSelectedTrackingSale(null);
+          }}
+        />
       )}
     </div>
   );

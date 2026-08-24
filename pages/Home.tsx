@@ -37,11 +37,12 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, CommissionType } from '../types';
+import { VendedoraShippingTracker } from '../components/VendedoraShippingTracker';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 export default function Home() {
-  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing, sales, adjustments, commissionValues } = useStore();
+  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing, sales, adjustments, commissionValues, updateSale } = useStore();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ user: '', pin: '' });
@@ -510,6 +511,18 @@ export default function Home() {
               </div>
            </div>
         </div>
+      )}
+
+      {/* SECCIÓN ESTADO DE ENVÍOS Y SEGUIMIENTO PARA VENDEDORAS */}
+      {canSeeCatalogue && (
+        <VendedoraShippingTracker 
+          sales={sales}
+          stock={stock}
+          vendedoraName={currentUser?.nombre}
+          isAdmin={currentUser?.rol === StaffRole.ADMIN}
+          onUpdateSale={updateSale}
+          playSound={playSound}
+        />
       )}
 
       {/* SECCIÓN CATÁLOGO RÁPIDO PARA VENDEDORES */}

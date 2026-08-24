@@ -7,6 +7,7 @@ import { smartTextMatch } from '../utils/search';
 import { Label } from '../components/Label';
 import { Invoice } from '../components/Invoice';
 import { VentasArchiveModal } from '../components/VentasArchiveModal';
+import { SaleTrackingModal, formatShippingStatus, generateWhatsAppTrackingMessage } from '../components/SaleTrackingModal';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -36,6 +37,8 @@ export default function Ventas() {
   const [printType, setPrintType] = useState<'FACTURA' | 'ETIQUETAS' | null>(null);
   const [sortKey, setSortKey] = useState<'numeroVenta' | 'fecha'>('numeroVenta');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [shippingFilter, setShippingFilter] = useState<'ALL' | 'PREP' | 'EN_RUTA' | 'JUNTA' | 'RETIRO' | 'ENTREGADO'>('ALL');
+  const [trackingSale, setTrackingSale] = useState<Sale | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
@@ -56,8 +59,23 @@ export default function Ventas() {
 
   const filteredSales = currentSales
     .filter(s => {
+      // Shipping status filter
+      if (shippingFilter !== 'ALL') {
+        const isJunta = Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA') && s.status === SaleStatus.PENDIENTE);
+        const isRetiro = s.tipoDespacho === DispatchType.RETIRO;
+        const isEnviado = s.status === SaleStatus.ENVIADO;
+        const isEnRuta = s.status === SaleStatus.PENDIENTE && Boolean(s.transportista) && !isJunta;
+        const isPrep = s.status === SaleStatus.PENDIENTE && !s.transportista && !isJunta && !isRetiro;
+
+        if (shippingFilter === 'PREP' && !isPrep) return false;
+        if (shippingFilter === 'EN_RUTA' && !isEnRuta) return false;
+        if (shippingFilter === 'JUNTA' && !isJunta) return false;
+        if (shippingFilter === 'RETIRO' && (!isRetiro || isEnviado)) return false;
+        if (shippingFilter === 'ENTREGADO' && !isEnviado) return false;
+      }
+
       const itemsText = (s.items || []).map(i => `${i.codigoFardo}`).join(' ');
-      const combined = `${s.cliente} ${s.codigoFardo || ''} ${s.numeroVenta} ${s.rut || ''} ${s.vendedor || ''} ${itemsText}`;
+      const combined = `${s.cliente} ${s.codigoFardo || ''} ${s.numeroVenta} ${s.rut || ''} ${s.vendedor || ''} ${itemsText} ${s.transportista || ''} ${s.agencia || ''}`;
       return smartTextMatch(combined, searchTerm);
     })
     .sort((a, b) => {
@@ -207,41 +225,58 @@ export default function Ventas() {
         />
       </div>
       
-      {activeTab === 'READY' && (
-        <div className="flex gap-4 p-4 bg-slate-50 rounded-[24px] no-print">
-          <select className="px-6 py-3 rounded-xl border font-bold" value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))}>
-            {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select className="px-6 py-3 rounded-xl border font-bold" value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))}>
-            {Array.from({length: 12}).map((_, i) => <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('es-ES', { month: 'long' })}</option>)}
-          </select>
-          <select className="px-6 py-3 rounded-xl border font-bold" value={sortKey} onChange={(e) => setSortKey(e.target.value as 'numeroVenta' | 'fecha')}>
-            <option value="numeroVenta">Ordenar por Nº Venta</option>
-            <option value="fecha">Ordenar por Fecha</option>
-          </select>
-          <button className="px-6 py-3 rounded-xl border font-bold bg-white" onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
-             {sortOrder === 'asc' ? 'A-Z (Asc)' : 'Z-A (Desc)'}
-          </button>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-4 p-4 bg-slate-50 rounded-[24px] no-print items-center">
+        {activeTab === 'READY' && (
+          <>
+            <select className="px-5 py-3 rounded-xl border font-bold text-sm bg-white" value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))}>
+              {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select className="px-5 py-3 rounded-xl border font-bold text-sm bg-white" value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))}>
+              {Array.from({length: 12}).map((_, i) => <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('es-ES', { month: 'long' })}</option>)}
+            </select>
+          </>
+        )}
+        <select 
+          className="px-5 py-3 rounded-xl border font-bold text-sm bg-white text-slate-800" 
+          value={shippingFilter} 
+          onChange={(e) => setShippingFilter(e.target.value as any)}
+        >
+          <option value="ALL">🚚 Envíos (Todos)</option>
+          <option value="PREP">⏳ En Preparación</option>
+          <option value="EN_RUTA">🚚 En Ruta / Asignado</option>
+          <option value="JUNTA">📦 Junta Compra</option>
+          <option value="RETIRO">🏢 Retiro en Bodega</option>
+          <option value="ENTREGADO">✅ Entregados / Despachados</option>
+        </select>
+        <select className="px-5 py-3 rounded-xl border font-bold text-sm bg-white" value={sortKey} onChange={(e) => setSortKey(e.target.value as 'numeroVenta' | 'fecha')}>
+          <option value="numeroVenta">Ordenar por Nº Venta</option>
+          <option value="fecha">Ordenar por Fecha</option>
+        </select>
+        <button className="px-5 py-3 rounded-xl border font-bold bg-white text-sm" onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
+           {sortOrder === 'asc' ? 'A-Z (Asc)' : 'Z-A (Desc)'}
+        </button>
+      </div>
 
       <div className="bg-white rounded-[48px] border border-slate-100 shadow-2xl overflow-hidden no-print">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Operación / Fecha</th>
-                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Producto / Mercadería</th>
-                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
-                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado Pago</th>
-                <th className="px-8 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Gestión</th>
+                <th className="px-6 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Operación / Fecha</th>
+                <th className="px-6 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                <th className="px-6 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest">Producto / Mercadería</th>
+                <th className="px-6 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
+                <th className="px-6 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado Pago</th>
+                <th className="px-6 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado Envío</th>
+                <th className="px-6 py-7 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Gestión</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredSales.map((sale) => (
+              {filteredSales.map((sale) => {
+                const statusInfo = formatShippingStatus(sale);
+                return (
                 <tr key={sale.id} className="group hover:bg-slate-50/80 transition-colors">
-                  <td className="px-8 py-6 font-mono font-black text-slate-900 text-lg flex items-center gap-3">
+                  <td className="px-6 py-6 font-mono font-black text-slate-900 text-lg flex items-center gap-3">
                     <div className="flex flex-col">
                       <span>#{sale.numeroVenta}</span>
                       <span className="text-[10px] text-slate-500 font-bold">{parseLocalDate(sale.fecha).toLocaleDateString()}</span>
@@ -252,7 +287,7 @@ export default function Ventas() {
                       </a>
                     )}
                   </td>
-                  <td className="px-8 py-6">
+                  <td className="px-6 py-6">
                     <div className="flex flex-col">
                       <span className="font-black text-slate-900 uppercase tracking-tight">{sale.cliente}</span>
                       <a 
@@ -265,7 +300,7 @@ export default function Ventas() {
                       <span className="text-[9px] text-slate-400 font-bold uppercase mt-1">Vendedor: {sale.vendedor || 'Desconocido'}</span>
                     </div>
                   </td>
-                  <td className="px-8 py-6">
+                  <td className="px-6 py-6">
                     <div className="flex flex-col">
                       <div className="flex items-center gap-3">
                         <Tag size={18} className="text-slate-400" />
@@ -282,10 +317,10 @@ export default function Ventas() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-8 py-6 text-right font-black text-slate-900 text-2xl tracking-tighter">
+                  <td className="px-6 py-6 text-right font-black text-slate-900 text-2xl tracking-tighter">
                     ${sale.total.toLocaleString()}
                   </td>
-                  <td className="px-8 py-6 text-center">
+                  <td className="px-6 py-6 text-center">
                     <button 
                       onClick={() => togglePaymentStatus(sale)}
                       className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase transition-all shadow-sm ${sale.estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-100'}`}
@@ -293,32 +328,62 @@ export default function Ventas() {
                       <BadgeDollarSign size={14} /> {sale.estadoPago}
                     </button>
                   </td>
-                      <td className="px-8 py-6 text-center">
-                      <div className="flex flex-col gap-2">
+                  <td className="px-6 py-6 text-center">
+                    <div className="flex flex-col items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          setTrackingSale(sale);
+                          playSound('click');
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm border hover:scale-105 ${statusInfo.badgeBg} ${statusInfo.badgeTextColor}`}
+                        title="Ver tracking y enviar estado al cliente"
+                      >
+                        <Truck size={12} /> {statusInfo.badgeText}
+                      </button>
+                      <div className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[130px]">
+                        {sale.tipoDespacho || 'Despacho'} {sale.transportista ? `• ${sale.transportista}` : ''}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-6 text-center">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-1.5 justify-center">
                         <button 
                           onClick={() => setEditingSale(sale)}
-                          className={`px-6 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all flex items-center gap-2 mx-auto shadow-xl ${activeTab === 'PENDING' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                          className={`px-4 py-2 rounded-[14px] font-black text-[11px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-md ${activeTab === 'PENDING' ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
                         >
-                          <FileEdit size={16} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
+                          <FileEdit size={14} /> {activeTab === 'PENDING' ? 'Completar' : 'Editar'}
                         </button>
-                        {(sale.datosCompletos || sale.tipoVenta === SaleType.NOTA_VENTA || console.log(`Debug sale: ${sale.numeroVenta}, tipoVenta: ${sale.tipoVenta}, datosCompletos: ${sale.datosCompletos}`)) && (
-                          <div className="flex gap-2 justify-center">
-                            <button onClick={() => { handlePrint(sale, 'FACTURA'); }} className="text-blue-500 hover:text-blue-700">Factura</button>
-                            <button onClick={() => { handlePrint(sale, 'ETIQUETAS'); }} className="text-emerald-500 hover:text-emerald-700">Etiquetas</button>
-                          </div>
-                        )}
-                        {isAdmin && (
-                          <button
-                            onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
-                            className="mt-2 text-red-500 hover:text-red-700 block mx-auto pt-2"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => {
+                            setTrackingSale(sale);
+                            playSound('click');
+                          }}
+                          className="px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-[14px] text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1"
+                          title="Tracking de Envío"
+                        >
+                          <Truck size={14} /> Tracking
+                        </button>
                       </div>
+                      {(sale.datosCompletos || sale.tipoVenta === SaleType.NOTA_VENTA) && (
+                        <div className="flex gap-2 justify-center text-xs font-bold">
+                          <button onClick={() => { handlePrint(sale, 'FACTURA'); }} className="text-blue-500 hover:text-blue-700">Factura</button>
+                          <button onClick={() => { handlePrint(sale, 'ETIQUETAS'); }} className="text-emerald-500 hover:text-emerald-700">Etiquetas</button>
+                        </div>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
+                          className="mt-1 text-red-500 hover:text-red-700 block mx-auto text-xs"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -496,6 +561,20 @@ export default function Ventas() {
         isOpen={isArchiveModalOpen}
         onClose={() => setIsArchiveModalOpen(false)}
       />
+
+      {/* Modal de Tracking de Envíos */}
+      {trackingSale && (
+        <SaleTrackingModal 
+          sale={trackingSale}
+          stock={stock}
+          onClose={() => setTrackingSale(null)}
+          onLiberarJuntaCompra={(s) => {
+            updateSale(s.id, { juntaCompra: 'DESPACHO INMEDIATO' });
+            playSound('success');
+            setTrackingSale(null);
+          }}
+        />
+      )}
     </div>
   );
 }
