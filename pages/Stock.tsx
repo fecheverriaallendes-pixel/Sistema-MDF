@@ -1,10 +1,12 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp, Sparkles, ChevronRight } from 'lucide-react';
+import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp, Sparkles, ChevronRight, Truck, FileText } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 import { smartSearchMatch } from '../utils/search';
+import { ValeEntradaModal } from '../components/stock/ValeEntradaModal';
+import { HistorialValesTab } from '../components/stock/HistorialValesTab';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -24,8 +26,10 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 export default function Stock() {
-  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound, stockHistory, sales } = useStore();
+  const { stock, addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, currentUser, playSound, stockHistory, sales, valesEntrada } = useStore();
   const location = useLocation();
+  const [activeMainView, setActiveMainView] = useState<'INVENTARIO' | 'VALES'>('INVENTARIO');
+  const [isAddingVale, setIsAddingVale] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
   const [categoryFilter, setCategoryFilter] = useState<'TODOS' | 'FARDO' | 'LOTE' | 'NEGATIVO'>('TODOS');
@@ -40,6 +44,12 @@ export default function Stock() {
     const action = params.get('action');
     if (action === 'add') {
       setIsAdding(true);
+    } else if (action === 'vale') {
+      setIsAddingVale(true);
+    }
+    const tab = params.get('tab');
+    if (tab === 'vales') {
+      setActiveMainView('VALES');
     }
   }, [location]);
   
@@ -269,60 +279,92 @@ export default function Stock() {
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8">
         <div>
           <h2 className="text-5xl font-black text-slate-900 tracking-tight uppercase">Inventario Central</h2>
-          <p className="text-slate-500 font-medium italic mt-2">Control maestro de Fardos y Piezas Unitarias</p>
+          <p className="text-slate-500 font-medium italic mt-2">Control maestro de Fardos, Piezas Unitarias y Cargamentos</p>
         </div>
         {canModify && (
           <div className="flex flex-wrap gap-4">
             <button 
-              onClick={downloadFormat}
-              className="flex items-center gap-2 px-8 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-sm"
+              onClick={() => { setIsAddingVale(true); playSound('transition'); }}
+              className="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-[24px] font-black text-xs uppercase tracking-wider transition-all shadow-xl shadow-emerald-600/25 active:scale-95 border-2 border-emerald-400/30"
             >
-              <Download size={18} /> CSV Pro
+              <Truck size={20} /> Vale de Entrada (Contenedor)
+            </button>
+            <button 
+              onClick={downloadFormat}
+              className="flex items-center gap-2 px-6 py-4 bg-white border-2 border-slate-100 text-slate-900 rounded-[24px] font-black text-xs uppercase hover:bg-slate-50 transition-all shadow-sm"
+            >
+              <Download size={16} /> CSV Pro
             </button>
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-8 py-4 bg-emerald-500 text-white rounded-[24px] font-black text-xs uppercase hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20"
+              className="flex items-center gap-2 px-6 py-4 bg-slate-800 text-white rounded-[24px] font-black text-xs uppercase hover:bg-slate-900 transition-all shadow-lg"
             >
-              <FileUp size={18} /> Carga Masiva
+              <FileUp size={16} /> Carga Masiva
             </button>
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".csv" />
             <button 
               onClick={() => setIsAdding(true)}
-              className="flex items-center gap-3 px-10 py-5 bg-slate-900 text-white rounded-[24px] font-black text-sm uppercase shadow-2xl hover:bg-black transition-all active:scale-95"
+              className="flex items-center gap-2 px-8 py-4 bg-slate-900 text-white rounded-[24px] font-black text-xs uppercase shadow-2xl hover:bg-black transition-all active:scale-95"
             >
-              <PackagePlus size={24} /> Registrar Entrada
+              <PackagePlus size={18} /> Entrada Simple
             </button>
           </div>
         )}
       </div>
 
-      {/* Junta Compra Bodega Status */}
-      {juntaCompraStats.ventas > 0 && (
-        <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white p-5 md:p-6 rounded-[32px] shadow-lg border border-indigo-700/50 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20 text-indigo-300 shrink-0">
-              <Boxes size={26} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 rounded-full text-[10px] font-black uppercase tracking-wider">
-                  Custodia en Bodega
-                </span>
-                <span className="text-xs font-bold text-indigo-300">📦 Junta Compra Activa</span>
+      {/* Selector de Vista Principal: Catálogo Central vs Historial de Vales de Entrada */}
+      <div className="flex bg-slate-100 p-2 rounded-[32px] w-fit shadow-sm border border-slate-200/50">
+        <button
+          type="button"
+          onClick={() => { setActiveMainView('INVENTARIO'); playSound('click'); }}
+          className={`flex items-center gap-2.5 px-8 py-3.5 rounded-[24px] font-black text-xs uppercase tracking-widest transition-all ${
+            activeMainView === 'INVENTARIO' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Package size={16} /> Catálogo e Inventario ({stock.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveMainView('VALES'); playSound('click'); }}
+          className={`flex items-center gap-2.5 px-8 py-3.5 rounded-[24px] font-black text-xs uppercase tracking-widest transition-all ${
+            activeMainView === 'VALES' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Truck size={16} /> Vales de Entrada y Contenedores ({valesEntrada?.length || 0})
+        </button>
+      </div>
+
+      {activeMainView === 'VALES' ? (
+        <HistorialValesTab onOpenNewVale={() => setIsAddingVale(true)} />
+      ) : (
+        <>
+          {/* Junta Compra Bodega Status */}
+          {juntaCompraStats.ventas > 0 && (
+            <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white p-5 md:p-6 rounded-[32px] shadow-lg border border-indigo-700/50 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20 text-indigo-300 shrink-0">
+                  <Boxes size={26} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 rounded-full text-[10px] font-black uppercase tracking-wider">
+                      Custodia en Bodega
+                    </span>
+                    <span className="text-xs font-bold text-indigo-300">📦 Junta Compra Activa</span>
+                  </div>
+                  <h4 className="text-lg font-black uppercase tracking-tight mt-0.5">
+                    {juntaCompraStats.productos} productos en espera de despacho ({juntaCompraStats.ventas} ventas de {juntaCompraStats.clientes} clientes)
+                  </h4>
+                </div>
               </div>
-              <h4 className="text-lg font-black uppercase tracking-tight mt-0.5">
-                {juntaCompraStats.productos} productos en espera de despacho ({juntaCompraStats.ventas} ventas de {juntaCompraStats.clientes} clientes)
-              </h4>
+              <Link
+                to="/despachos?tab=JUNTA_COMPRA"
+                className="flex items-center gap-2 px-6 py-3 bg-white text-indigo-950 hover:bg-indigo-50 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md shrink-0 active:scale-95"
+              >
+                Ver en Despachos <ChevronRight size={16} />
+              </Link>
             </div>
-          </div>
-          <Link
-            to="/despachos?tab=JUNTA_COMPRA"
-            className="flex items-center gap-2 px-6 py-3 bg-white text-indigo-950 hover:bg-indigo-50 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md shrink-0 active:scale-95"
-          >
-            Ver en Despachos <ChevronRight size={16} />
-          </Link>
-        </div>
-      )}
+          )}
 
       <div className="flex flex-col lg:flex-row gap-6 items-center justify-between w-full">
         <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
@@ -884,6 +926,18 @@ export default function Stock() {
             </div>
           </div>
         </div>
+      )}
+        </>
+      )}
+
+      {/* Modal Vale de Entrada de Mercadería / Contenedor */}
+      {isAddingVale && (
+        <ValeEntradaModal
+          onClose={() => setIsAddingVale(false)}
+          onValeCreated={() => {
+            setActiveMainView('VALES');
+          }}
+        />
       )}
     </div>
   );

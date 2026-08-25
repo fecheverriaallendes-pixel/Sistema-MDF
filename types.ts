@@ -513,13 +513,47 @@ export interface ProductionRecord {
 export interface StockHistoryEvent {
   id: string;
   productId: string;
-  tipo: 'INGRESO' | 'AJUSTE' | 'VENTA' | 'ANULACION' | 'CARGA_MASIVA';
+  tipo: 'INGRESO' | 'AJUSTE' | 'VENTA' | 'ANULACION' | 'CARGA_MASIVA' | 'VALE_ENTRADA';
   cantidad: number;
   balanceAntes?: number;
   balanceDespues?: number;
   fecha: string; // ISO timestamp
   vendedor: string;
   observaciones: string;
+}
+
+export interface ValeEntradaItem {
+  id: string;
+  codigo: string;
+  tipo: string;
+  categoria?: 'FARDO' | 'LOTE' | string;
+  unidad?: 'FARDO' | 'PIEZA' | 'MEDIO FARDO' | 'LOTE' | string;
+  proveedor?: string;
+  cantidad: number;
+  precioCosto?: number;
+  precioSugerido?: number;
+  peso?: number;
+  observaciones?: string;
+}
+
+export interface ValeEntrada {
+  id: string;
+  folio: string; // Ej: VE-0001 o VE-2026-001
+  fecha: string; // YYYY-MM-DD
+  hora?: string; // HH:mm
+  responsable: string; // OBLIGATORIO: Nombre del responsable en ingresar la mercadería
+  numeroContenedor?: string; // OPCIONAL: Número de contenedor o cargamento
+  proveedor?: string; // Proveedor principal o de origen
+  descripcion?: string; // Descripción del cargamento / contenedor
+  items: ValeEntradaItem[];
+  totalArticulos: number; // Cantidad de ítems distintos
+  totalUnidades: number; // Suma total de unidades/fardos
+  totalCostoEstimado?: number; // Suma de costo
+  totalVentaEstimada?: number; // Suma de venta sugerida
+  observaciones?: string;
+  usuarioRegistro?: string; // Usuario logueado que registró el vale
+  createdAt: string; // ISO string
+  updatedAt?: string;
 }
 
 export enum IncidentStatus {

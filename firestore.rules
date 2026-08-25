@@ -16,6 +16,9 @@ service cloud.firestore {
     match /stock/{document=**} {
       allow read, write: if true;
     }
+    match /vales_entrada/{document=**} {
+      allow read, write: if true;
+    }
     match /users/{userId} {
       allow read, write: if true;
     }

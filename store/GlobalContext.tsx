@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord, ValeEntrada, ValeEntradaItem } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
@@ -549,6 +549,11 @@ interface StoreContextType {
   addSaleReturn: (data: Omit<SaleReturn, 'id' | 'codigoDevolucion' | 'createdAt'>) => Promise<SaleReturn>;
   updateSaleReturn: (id: string, updated: Partial<SaleReturn>) => Promise<void>;
   deleteSaleReturn: (id: string) => Promise<void>;
+
+  // Vales de Entrada de Mercadería y Contenedores
+  valesEntrada: ValeEntrada[];
+  addValeEntrada: (vale: Omit<ValeEntrada, 'id' | 'folio' | 'createdAt'>) => Promise<ValeEntrada>;
+  deleteValeEntrada: (id: string, revertStock?: boolean) => Promise<void>;
 }
 
 // Safe storage wrapper to prevent Safari private mode exception crashes
@@ -710,6 +715,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const saved = safeLocalStorage.getItem('mdf_sale_returns');
     return saved ? JSON.parse(saved) : [];
   });
+  const [valesEntrada, setValesEntrada] = useState<ValeEntrada[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_vales_entrada');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const isSyncingRef = useRef(false);
 
@@ -823,6 +832,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubWeeklyAttendance: any;
     let unsubTikTokLives: any;
     let unsubReturns: any;
+    let unsubValesEntrada: any;
 
     const initFirebase = async () => {
       try {
@@ -904,6 +914,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubReturns = onSnapshot(collection(db, 'devoluciones'), (snap) => {
           setSaleReturns(snap.docs.map(d => ({ ...d.data(), id: d.id } as SaleReturn)));
         });
+        unsubValesEntrada = onSnapshot(collection(db, 'vales_entrada'), (snap) => {
+          setValesEntrada(snap.docs.map(d => ({ ...d.data(), id: d.id } as ValeEntrada)));
+        });
       } catch (error: any) {
         console.error("Error al suscribirse a colecciones de Firebase:", error.code, error.message);
       }
@@ -933,6 +946,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubWeeklyAttendance) unsubWeeklyAttendance();
       if (unsubTikTokLives) unsubTikTokLives();
       if (unsubReturns) unsubReturns();
+      if (unsubValesEntrada) unsubValesEntrada();
     };
   }, []);
 
@@ -954,7 +968,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_weekly_attendance', JSON.stringify(weeklyAttendance));
     safeLocalStorage.setItem('mdf_tiktok_lives', JSON.stringify(tiktokLives));
     safeLocalStorage.setItem('mdf_sale_returns', JSON.stringify(saleReturns));
-  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords, weeklyAttendance, tiktokLives, saleReturns]);
+    safeLocalStorage.setItem('mdf_vales_entrada', JSON.stringify(valesEntrada));
+  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords, weeklyAttendance, tiktokLives, saleReturns, valesEntrada]);
 
   useEffect(() => {
     safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
@@ -2863,6 +2878,135 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('click');
   };
 
+  const addValeEntrada = async (valeData: Omit<ValeEntrada, 'id' | 'folio' | 'createdAt'>): Promise<ValeEntrada> => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date();
+    
+    // Generar folio consecutivo: VE-0001, VE-0002...
+    const existingFolios = valesEntrada.map(v => v.folio).filter(Boolean);
+    let nextNum = 1;
+    if (existingFolios.length > 0) {
+      const numbers = existingFolios.map(f => {
+        const parts = f.split('-');
+        const lastPart = parts[parts.length - 1];
+        return parseInt(lastPart, 10) || 0;
+      });
+      nextNum = Math.max(...numbers, 0) + 1;
+    }
+    const folio = `VE-${String(nextNum).padStart(4, '0')}`;
+
+    const items = valeData.items || [];
+    const totalArticulos = items.length;
+    const totalUnidades = items.reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0);
+    const totalCostoEstimado = items.reduce((acc, it) => acc + ((Number(it.precioCosto) || 0) * (Number(it.cantidad) || 0)), 0);
+    const totalVentaEstimada = items.reduce((acc, it) => acc + ((Number(it.precioSugerido) || 0) * (Number(it.cantidad) || 0)), 0);
+
+    const newVale: ValeEntrada = {
+      ...valeData,
+      id,
+      folio,
+      totalArticulos,
+      totalUnidades,
+      totalCostoEstimado,
+      totalVentaEstimada,
+      usuarioRegistro: currentUser?.nombre || 'SISTEMA',
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    };
+
+    // Actualizar Stock en Firestore y registrar historial
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'vales_entrada', id), cleanUndefined(newVale));
+
+    for (const item of items) {
+      const cleanCode = (item.codigo || '').trim().toUpperCase();
+      if (!cleanCode) continue;
+
+      const existingStock = stock.find(s => s.codigo.trim().toUpperCase() === cleanCode);
+      const stockRef = doc(db, 'stock', cleanCode);
+      const qtyToAdd = Number(item.cantidad) || 0;
+
+      if (existingStock) {
+        // Increment stock and optionally update prices/supplier if specified
+        const updatePayload: any = {
+          stockActual: increment(qtyToAdd),
+          disponible: true
+        };
+        if (item.precioCosto !== undefined && Number(item.precioCosto) > 0) updatePayload.precioCosto = Number(item.precioCosto);
+        if (item.precioSugerido !== undefined && Number(item.precioSugerido) > 0) updatePayload.precioSugerido = Number(item.precioSugerido);
+        if (item.proveedor && item.proveedor.trim() !== '') updatePayload.proveedor = item.proveedor.trim().toUpperCase();
+
+        batch.update(stockRef, updatePayload);
+      } else {
+        // Create new stock item if not yet existing
+        const newItem: StockItem = {
+          id: cleanCode,
+          codigo: cleanCode,
+          tipo: item.tipo,
+          proveedor: (item.proveedor || valeData.proveedor || 'GENERAL').trim().toUpperCase(),
+          precioCosto: Number(item.precioCosto) || 0,
+          precioSugerido: Number(item.precioSugerido) || 0,
+          stockActual: qtyToAdd,
+          disponible: qtyToAdd > 0,
+          unidad: item.unidad || 'FARDO',
+          categoria: (item.categoria as any) || 'FARDO',
+          peso: item.peso || 0,
+          observaciones: item.observaciones || ''
+        };
+        batch.set(stockRef, cleanUndefined(newItem));
+      }
+
+      await addStockHistoryEvent({
+        productId: cleanCode,
+        tipo: 'VALE_ENTRADA',
+        cantidad: qtyToAdd,
+        balanceAntes: existingStock ? (existingStock.stockActual || 0) : 0,
+        balanceDespues: (existingStock ? (existingStock.stockActual || 0) : 0) + qtyToAdd,
+        vendedor: valeData.responsable,
+        observaciones: `Vale de Entrada ${folio} | Resp: ${valeData.responsable}${valeData.numeroContenedor ? ` | Contenedor: ${valeData.numeroContenedor}` : ''}`
+      });
+    }
+
+    await batch.commit();
+    playSound('success');
+    return newVale;
+  };
+
+  const deleteValeEntrada = async (id: string, revertStock = false): Promise<void> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el Administrador puede anular o eliminar Vales de Entrada.");
+      throw new Error("No autorizado");
+    }
+
+    const current = valesEntrada.find(v => v.id === id);
+    if (!current) return;
+
+    if (revertStock && current.items && current.items.length > 0) {
+      const batch = writeBatch(db);
+      for (const item of current.items) {
+        const cleanCode = (item.codigo || '').trim().toUpperCase();
+        const stockRef = doc(db, 'stock', cleanCode);
+        const qtyToRevert = Number(item.cantidad) || 0;
+        batch.update(stockRef, {
+          stockActual: increment(-qtyToRevert)
+        });
+
+        await addStockHistoryEvent({
+          productId: cleanCode,
+          tipo: 'ANULACION',
+          cantidad: -qtyToRevert,
+          vendedor: currentUser?.nombre || 'ADMINISTRADOR',
+          observaciones: `Anulación/Reversión de Vale de Entrada ${current.folio}`
+        });
+      }
+      batch.delete(doc(db, 'vales_entrada', id));
+      await batch.commit();
+    } else {
+      await deleteDoc(doc(db, 'vales_entrada', id));
+    }
+    playSound('click');
+  };
+
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
@@ -2882,7 +3026,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       payrollRecords, savePayrollRecord, updatePayrollRecord, deletePayrollRecord,
       weeklyAttendance, saveWeeklyAttendance, deleteWeeklyAttendance,
       tiktokLives, addTikTokLive, bulkAddTikTokLives, updateTikTokLive, deleteTikTokLive,
-      saleReturns, addSaleReturn, updateSaleReturn, deleteSaleReturn
+      saleReturns, addSaleReturn, updateSaleReturn, deleteSaleReturn,
+      valesEntrada, addValeEntrada, deleteValeEntrada
     }}>
       {children}
     </StoreContext.Provider>

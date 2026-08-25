@@ -72,9 +72,27 @@
         "montoDescuentoComision": { "type": "number" }
       },
       "required": ["codigoDevolucion", "fecha", "cliente", "vendedor", "producto", "motivo"]
+    },
+    "ValeEntrada": {
+      "title": "ValeEntrada",
+      "description": "Inbound cargo and container receipt voucher with multiple items, optional container ID and mandatory responsible staff",
+      "type": "object",
+      "properties": {
+        "folio": { "type": "string" },
+        "fecha": { "type": "string" },
+        "responsable": { "type": "string" },
+        "numeroContenedor": { "type": "string" },
+        "totalArticulos": { "type": "number" },
+        "totalUnidades": { "type": "number" }
+      },
+      "required": ["folio", "fecha", "responsable", "totalArticulos", "totalUnidades"]
     }
   },
   "firestore": {
+    "/vales_entrada/{valeId}": {
+      "schema": { "$ref": "ValeEntrada" },
+      "description": "Inbound shipment and container receipt vouchers"
+    },
     "/devoluciones/{returnId}": {
       "schema": { "$ref": "SaleReturn" },
       "description": "Sales returns and commission deductions"

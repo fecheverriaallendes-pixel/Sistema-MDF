@@ -266,12 +266,21 @@ export default function Home() {
       roles: [StaffRole.ADMIN, StaffRole.BODEGA]
     },
     { 
+      name: 'Vale de Entrada', 
+      desc: 'Ingreso de cargamentos y contenedores completos', 
+      icon: Truck, 
+      path: '/stock?action=vale',
+      color: 'bg-emerald-600',
+      shadow: 'shadow-emerald-600/30',
+      roles: [StaffRole.ADMIN, StaffRole.BODEGA]
+    },
+    { 
       name: 'Crear Producto', 
       desc: 'Añadir nuevo fardo o pieza al stock', 
       icon: PackagePlus, 
       path: '/stock?action=add',
-      color: 'bg-emerald-600',
-      shadow: 'shadow-emerald-600/30',
+      color: 'bg-teal-600',
+      shadow: 'shadow-teal-600/30',
       roles: [StaffRole.ADMIN, StaffRole.BODEGA]
     },
     { 
