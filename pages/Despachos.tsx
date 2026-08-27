@@ -765,7 +765,7 @@ export default function Despachos() {
                   </div>
                   
                   <p className="text-xs font-bold text-slate-700 uppercase leading-snug">
-                    {sale.direccion || 'RETIRO EN TIENDA / BODEGA'}
+                    {sale.direccion || 'RETIRO EN BODEGA'}
                   </p>
 
                   {(sale.transportista || sale.agencia) && (

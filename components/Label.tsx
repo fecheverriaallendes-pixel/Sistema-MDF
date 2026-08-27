@@ -8,34 +8,27 @@ export const getAgenciaODestino = (sale: Sale): string => {
   const junta = (sale.juntaCompra || '').trim().toUpperCase();
   const tipoDespachoRaw = (sale.tipoDespacho || '').toString().trim().toUpperCase();
 
-  // 1. If agencia is explicitly set and not 'DOMICILIO'
+  // 1. If juntaCompra or tipoDespacho or agencia is a Retiro
+  if (
+    junta.includes('RETIRO') || 
+    sale.tipoDespacho === DispatchType.RETIRO || 
+    tipoDespachoRaw.includes('RETIRO') || 
+    agencia.includes('RETIRO')
+  ) {
+    return 'RETIRO EN BODEGA';
+  }
+
+  // 2. If agencia is explicitly set and not 'DOMICILIO'
   if (agencia && agencia !== 'DOMICILIO') {
     return agencia;
   }
 
-  // 2. Check if juntaCompra specifies RETIRO BODEGA or RETIRO LOCAL
-  if (junta === 'RETIRO LOCAL' || junta === 'RETIRO BODEGA' || junta.includes('RETIRO')) {
-    return junta;
-  }
-
-  // 3. Check if tipoDespacho is RETIRO or contains RETIRO
-  if (sale.tipoDespacho === DispatchType.RETIRO || tipoDespachoRaw.includes('RETIRO')) {
-    if (agencia.includes('LOCAL') || tipoDespachoRaw.includes('LOCAL')) return 'RETIRO LOCAL';
-    if (agencia.includes('BODEGA') || tipoDespachoRaw.includes('BODEGA')) return 'RETIRO BODEGA';
-    return 'RETIRO EN BODEGA';
-  }
-
-  // 4. If agencia exists
-  if (agencia) {
-    return agencia;
-  }
-
-  // 5. If tipoDespacho is AGENCIA
+  // 3. If tipoDespacho is AGENCIA
   if (sale.tipoDespacho === DispatchType.AGENCIA || tipoDespachoRaw === 'AGENCIA') {
     return 'AGENCIA';
   }
 
-  // 6. Default fallback for domicilio
+  // 4. Default fallback for domicilio
   return 'DOMICILIO';
 };
 

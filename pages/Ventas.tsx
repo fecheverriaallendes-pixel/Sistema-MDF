@@ -450,8 +450,7 @@ export default function Ventas() {
                   <select className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" value={editingSale.juntaCompra} onChange={(e) => setEditingSale({...editingSale, juntaCompra: e.target.value})}>
                     <option value="DESPACHO INMEDIATO">DESPACHO INMEDIATO</option>
                     <option value="JUNTA COMPRA">JUNTA COMPRA</option>
-                    <option value="RETIRO BODEGA">RETIRO BODEGA</option>
-                    <option value="RETIRO LOCAL">RETIRO LOCAL</option>
+                    <option value="RETIRO BODEGA">RETIRO EN BODEGA</option>
                   </select>
                 </div>
               </div>
@@ -484,44 +483,19 @@ export default function Ventas() {
                   </button>
                   <button 
                     type="button"
-                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.RETIRO, agencia: editingSale.agencia && editingSale.agencia.includes('RETIRO') ? editingSale.agencia : 'RETIRO BODEGA'})}
+                    onClick={() => setEditingSale({...editingSale, tipoDespacho: DispatchType.RETIRO, agencia: 'RETIRO BODEGA'})}
                     className={`flex-1 py-3 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${editingSale.tipoDespacho === DispatchType.RETIRO ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:bg-slate-200'}`}
                   >
-                    <Package size={16} /> Retiro
+                    <Package size={16} /> Retiro en Bodega
                   </button>
                 </div>
                 {editingSale.tipoDespacho === DispatchType.AGENCIA && (
                   <input required type="text" className="w-full mt-4 px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={editingSale.agencia || ''} onChange={(e) => setEditingSale({...editingSale, agencia: e.target.value.toUpperCase()})}/>
                 )}
                 {editingSale.tipoDespacho === DispatchType.RETIRO && (
-                  <div className="space-y-2 mt-4 animate-in fade-in duration-300">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                      Lugar de Retiro
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditingSale({...editingSale, agencia: 'RETIRO LOCAL'})}
-                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
-                          editingSale.agencia === 'RETIRO LOCAL'
-                            ? 'bg-slate-900 text-white shadow-md'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        Retiro Local
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingSale({...editingSale, agencia: 'RETIRO BODEGA'})}
-                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
-                          editingSale.agencia === 'RETIRO BODEGA' || !editingSale.agencia
-                            ? 'bg-slate-900 text-white shadow-md'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        Retiro Bodega
-                      </button>
-                    </div>
+                  <div className="p-3 mt-3 bg-slate-100 border border-slate-200 rounded-2xl flex items-center gap-2 text-xs font-bold text-slate-700 animate-in fade-in duration-300">
+                    <Package size={16} className="text-slate-600 shrink-0" />
+                    <span>Retiro directo en Bodega</span>
                   </div>
                 )}
               </div>

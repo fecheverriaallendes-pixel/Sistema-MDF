@@ -1,7 +1,31 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Zap, ClipboardList, CheckCircle2, User, Phone, DollarSign, Package, MapPin, Tag, Truck, CreditCard, FileText, ChevronRight, Coins, Building2, Home } from 'lucide-react';
+import { 
+  Save, 
+  Zap, 
+  ClipboardList, 
+  CheckCircle2, 
+  User, 
+  Phone, 
+  DollarSign, 
+  Package, 
+  MapPin, 
+  Tag, 
+  Truck, 
+  CreditCard, 
+  FileText, 
+  ChevronRight, 
+  Coins, 
+  Building2, 
+  Home, 
+  Boxes, 
+  Sparkles, 
+  MessageSquare, 
+  Clock, 
+  Info,
+  Check
+} from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '../types';
 
@@ -66,7 +90,7 @@ export default function RegistrarVenta() {
       }
   };
 
-    const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
+  const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
     const uppercaseCode = code.toUpperCase();
     const foundItem = stock.find(s => s.codigo === uppercaseCode);
     const price = foundItem ? foundItem.precioSugerido : 0;
@@ -144,16 +168,29 @@ export default function RegistrarVenta() {
       }
     }
     
+    // Determine dispatch fields cleanly
+    let finalTipoDespacho = formData.tipoDespacho;
+    let finalAgencia = formData.agencia;
+
+    if (formData.juntaCompra && (formData.juntaCompra === 'RETIRO BODEGA' || formData.juntaCompra.includes('RETIRO'))) {
+      finalTipoDespacho = DispatchType.RETIRO;
+      finalAgencia = 'RETIRO BODEGA';
+    } else if (!isQuick && !finalTipoDespacho) {
+      finalTipoDespacho = DispatchType.AGENCIA;
+    }
+
     const finalData = {
       ...formData,
       tipoVenta: isQuick ? SaleType.LIVE : isNotaVenta ? SaleType.NOTA_VENTA : SaleType.NORMAL,
       items: isNotaVenta ? items : undefined,
-      total: isNotaVenta ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0) : formData.valorUnitario * formData.cantidad,
+      total: isNotaVenta ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0) : formData.valorUnitario * (formData.cantidad || 1),
       status: SaleStatus.PENDIENTE,
       datosCompletos: !isQuick,
       variante: isQuick ? '' : formData.variante, 
-      tipoDespacho: isQuick ? undefined : (formData.tipoDespacho || DispatchType.AGENCIA),
-      agencia: isQuick ? undefined : formData.agencia
+      tipoDespacho: finalTipoDespacho,
+      agencia: finalAgencia,
+      juntaCompra: formData.juntaCompra || 'DESPACHO INMEDIATO',
+      observaciones: formData.observaciones || ''
     };
 
     console.log("Final data to be saved:", finalData);
@@ -164,10 +201,22 @@ export default function RegistrarVenta() {
     playSound('success');
     
     setFormData({
-      cliente: '', vendedor: formData.vendedor, telefono: '', rut: '',
-      codigoFardo: '', esManual: true, variante: isQuick ? '' : 'Fardo', valorUnitario: 0, cantidad: 1,
-      direccion: '', estadoPago: 'Pendiente', tipoComision: CommissionType.FARDO_NORMAL,
-      juntaCompra: 'DESPACHO INMEDIATO', observaciones: '', tipoDespacho: undefined
+      cliente: '', 
+      vendedor: formData.vendedor, 
+      telefono: '', 
+      rut: '',
+      codigoFardo: '', 
+      esManual: true, 
+      variante: isQuick ? '' : 'FARDO', 
+      valorUnitario: 0, 
+      cantidad: 1,
+      direccion: '', 
+      estadoPago: 'Pendiente', 
+      tipoComision: CommissionType.FARDO_NORMAL,
+      juntaCompra: 'DESPACHO INMEDIATO', 
+      observaciones: '', 
+      tipoDespacho: undefined,
+      agencia: ''
     });
     setItems([]);
     setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
@@ -177,6 +226,7 @@ export default function RegistrarVenta() {
 
   const selectedStockItem = formData.codigoFardo ? stock.find(s => s.codigo === formData.codigoFardo.trim().toUpperCase()) : null;
   const selectedNewItemStock = newItem.codigoFardo ? stock.find(s => s.codigo === newItem.codigoFardo.trim().toUpperCase()) : null;
+  const isJuntaSelected = formData.juntaCompra === 'JUNTA COMPRA';
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -217,26 +267,27 @@ export default function RegistrarVenta() {
         </div>
       )}
 
-      <div className={`bg-white rounded-[48px] border-2 transition-all shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] overflow-hidden ${mode === 'QUICK' ? 'border-emerald-100' : 'border-blue-100'}`}>
-        <div className={`p-8 border-b flex items-center justify-between ${mode === 'QUICK' ? 'bg-emerald-50/30 border-emerald-100' : 'bg-blue-50/30 border-blue-100'}`}>
+      <div className={`bg-white rounded-[48px] border-2 transition-all shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] overflow-hidden ${mode === 'QUICK' ? 'border-emerald-100' : mode === 'NOTA_VENTA' ? 'border-amber-100' : 'border-blue-100'}`}>
+        <div className={`p-8 border-b flex items-center justify-between ${mode === 'QUICK' ? 'bg-emerald-50/30 border-emerald-100' : mode === 'NOTA_VENTA' ? 'bg-amber-50/30 border-amber-100' : 'bg-blue-50/30 border-blue-100'}`}>
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${mode === 'QUICK' ? 'bg-emerald-500' : 'bg-blue-600'}`}>
-              {mode === 'QUICK' ? <Zap size={24} /> : <FileText size={24} />}
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${mode === 'QUICK' ? 'bg-emerald-500' : mode === 'NOTA_VENTA' ? 'bg-amber-600' : 'bg-blue-600'}`}>
+              {mode === 'QUICK' ? <Zap size={24} /> : mode === 'NOTA_VENTA' ? <FileText size={24} /> : <ClipboardList size={24} />}
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 uppercase">{mode === 'QUICK' ? 'Captura Rápida TikTok' : 'Venta con Detalle Completo'}</h3>
-              <p className="text-slate-500 text-xs font-medium italic">{mode === 'QUICK' ? 'Campos mínimos para fluidez del Live' : 'Información completa para logística y facturación'}</p>
+              <h3 className="text-xl font-black text-slate-900 uppercase">{mode === 'QUICK' ? 'Captura Rápida TikTok' : mode === 'NOTA_VENTA' ? 'Nota de Venta Múltiple' : 'Venta con Detalle Completo'}</h3>
+              <p className="text-slate-500 text-xs font-medium italic">{mode === 'QUICK' ? 'Campos optimizados para fluidez del Live' : 'Información completa para logística y facturación'}</p>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-10 space-y-10">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <form onSubmit={handleSubmit} className="p-8 sm:p-10 space-y-8">
+          {/* Cliente, WhatsApp, Vendedor */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
             <div className="md:col-span-1">
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">
                 <User size={14} className="text-blue-500" /> Cliente
               </label>
-              <input ref={quickNameRef} required list="customers-suggestions" type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="NOMBRE" value={formData.cliente} onChange={(e) => handleClientChange(e.target.value)}/>
+              <input ref={quickNameRef} required list="customers-suggestions" type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="NOMBRE CLIENTE" value={formData.cliente} onChange={(e) => handleClientChange(e.target.value)}/>
               <datalist id="customers-suggestions">
                   {customers.map(c => <option key={c.id} value={c.nombre} />)}
               </datalist>
@@ -244,34 +295,160 @@ export default function RegistrarVenta() {
             
             <div className="md:col-span-1">
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">
-                <Phone size={14} className="text-emerald-500" /> WhatsApp
+                <Phone size={14} className="text-emerald-500" /> WhatsApp / Teléfono
               </label>
               <input required type="tel" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-emerald-500 outline-none transition-all" placeholder="+569..." value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})}/>
             </div>
 
             <div className="md:col-span-1">
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">Vendedor</label>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">Vendedora Asignada</label>
               <select required className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-lg font-black focus:border-slate-900 outline-none transition-all appearance-none" value={formData.vendedor} onChange={(e) => setFormData({...formData, vendedor: e.target.value})}>
-                <option value="">ELEGIR...</option>
+                <option value="">ELEGIR VENDEDORA...</option>
                 {vendedores.map(v => ( <option key={v.id} value={v.nombre}>{v.nombre}</option> ))}
               </select>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* RUT y Dirección */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
             <div className="md:col-span-1">
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><CreditCard size={14} className="text-blue-500" /> RUT Cliente</label>
-              <input required type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" placeholder="12.345.678-9" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})}/>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><CreditCard size={14} className="text-blue-500" /> RUT Cliente {mode === 'QUICK' ? '(Opcional en Live)' : ''}</label>
+              <input required={mode !== 'QUICK'} type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" placeholder="12.345.678-9" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})}/>
             </div>
             <div className="md:col-span-1">
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><MapPin size={14} className="text-blue-500" /> Dirección Despacho</label>
-              <textarea required className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase resize-none h-24" placeholder="CALLE, NÚMERO, DEPTO/OFICINA, COMUNA, CIUDAD" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value.toUpperCase()})}/>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><MapPin size={14} className="text-blue-500" /> Dirección Despacho {mode === 'QUICK' ? '(Opcional en Live)' : ''}</label>
+              <textarea required={mode !== 'QUICK'} className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase resize-none h-24" placeholder="CALLE, NÚMERO, COMUNA, CIUDAD" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value.toUpperCase()})}/>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Selector de Modalidad: JUNTA COMPRA / DESPACHO INMEDIATO / RETIRO */}
+          <div className={`p-6 sm:p-7 rounded-[32px] border-2 transition-all ${isJuntaSelected ? 'bg-indigo-50/70 border-indigo-200 shadow-md' : 'bg-slate-50 border-slate-100'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <Boxes size={20} className={isJuntaSelected ? 'text-indigo-600' : 'text-slate-600'} />
+                <div>
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Modalidad de Despacho & Junta Compra</span>
+                  <p className="text-[11px] text-slate-500 font-medium">¿La clienta despacha ahora o acumula sus compras de la semana?</p>
+                </div>
+              </div>
+              <span className={`self-start sm:self-auto px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                isJuntaSelected
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm animate-pulse'
+                  : 'bg-white text-slate-600 border-slate-200'
+              }`}>
+                {isJuntaSelected ? '📦 Modo Junta Compra Activo' : '🚚 Despacho Inmediato'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Opción 1: Despacho Inmediato */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({
+                    ...prev, 
+                    juntaCompra: 'DESPACHO INMEDIATO',
+                    tipoDespacho: prev.tipoDespacho === DispatchType.RETIRO ? DispatchType.AGENCIA : prev.tipoDespacho
+                  }));
+                  playSound('click');
+                }}
+                className={`p-4 rounded-[22px] font-black text-xs uppercase tracking-wider transition-all flex items-center gap-3 border-2 text-left ${
+                  formData.juntaCompra === 'DESPACHO INMEDIATO'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${formData.juntaCompra === 'DESPACHO INMEDIATO' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                  <Truck size={20} />
+                </div>
+                <div>
+                  <div className="font-black">Despacho Inmediato</div>
+                  <div className={`text-[10px] font-medium normal-case ${formData.juntaCompra === 'DESPACHO INMEDIATO' ? 'text-slate-200' : 'text-slate-500'}`}>
+                    Enviar a bodega para salida
+                  </div>
+                </div>
+              </button>
+
+              {/* Opción 2: JUNTA COMPRA */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({
+                    ...prev, 
+                    juntaCompra: 'JUNTA COMPRA'
+                  }));
+                  playSound('click');
+                }}
+                className={`p-4 rounded-[22px] font-black text-xs uppercase tracking-wider transition-all flex items-center gap-3 border-2 text-left relative overflow-hidden ${
+                  isJuntaSelected
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-600/30'
+                    : 'bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isJuntaSelected ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-700'}`}>
+                  <Boxes size={20} />
+                </div>
+                <div>
+                  <div className="font-black flex items-center gap-1.5">
+                    JUNTA COMPRA
+                    <span className="bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded text-[8px] font-black">
+                      SEMANAL
+                    </span>
+                  </div>
+                  <div className={`text-[10px] font-medium normal-case ${isJuntaSelected ? 'text-indigo-100' : 'text-slate-500'}`}>
+                    Custodiar y acumular en bodega
+                  </div>
+                </div>
+              </button>
+
+              {/* Opción 3: Retiro */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData(prev => ({
+                    ...prev, 
+                    juntaCompra: 'RETIRO BODEGA',
+                    tipoDespacho: DispatchType.RETIRO,
+                    agencia: 'RETIRO BODEGA'
+                  }));
+                  playSound('click');
+                }}
+                className={`p-4 rounded-[22px] font-black text-xs uppercase tracking-wider transition-all flex items-center gap-3 border-2 text-left ${
+                  formData.juntaCompra.includes('RETIRO')
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100/80 hover:border-slate-300'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${formData.juntaCompra.includes('RETIRO') ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                  <Package size={20} />
+                </div>
+                <div>
+                  <div className="font-black">Retiro en Bodega</div>
+                  <div className={`text-[10px] font-medium normal-case ${formData.juntaCompra.includes('RETIRO') ? 'text-slate-200' : 'text-slate-500'}`}>
+                    Cliente retira en bodega
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Banner explicativo Junta Compra */}
+            {isJuntaSelected && (
+              <div className="mt-4 p-4 bg-indigo-100/90 border border-indigo-300/80 rounded-2xl flex items-start gap-3 animate-in fade-in duration-300">
+                <Sparkles size={20} className="text-indigo-700 shrink-0 mt-0.5" />
+                <div className="text-xs text-indigo-950">
+                  <p className="font-black uppercase tracking-wide">📦 Opción Junta Compra Seleccionada:</p>
+                  <p className="mt-0.5 font-medium leading-relaxed">
+                    Esta venta quedará en <strong>Custodia Temporal en Bodega</strong>. Aparecerá en el indicador del <strong>Dashboard</strong> y en la pestaña <strong>Junta Compra</strong> de Despachos para consolidar todos los fardos que la clienta compre en la semana.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Productos y Códigos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
              <div className="relative">
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Package size={18} className="text-blue-500" /> {mode === 'NOTA_VENTA' ? 'Agregar Producto' : 'Código de Fardo'}</label>
+              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><Package size={18} className="text-blue-500" /> {mode === 'NOTA_VENTA' ? 'Agregar Producto a la Lista' : 'Código de Fardo'}</label>
               
               {mode === 'NOTA_VENTA' ? (
                 <div>
@@ -301,7 +478,7 @@ export default function RegistrarVenta() {
                               setItems([...items, newItem]);
                               setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
                           }
-                      }} className="bg-amber-600 text-white rounded-2xl px-4">+</button>
+                      }} className="bg-amber-600 text-white rounded-2xl px-4 font-black text-lg hover:bg-amber-700">+</button>
                   </div>
                   {selectedNewItemStock && (
                     <div className="mt-3 text-[10px] font-black uppercase tracking-wider">
@@ -353,65 +530,72 @@ export default function RegistrarVenta() {
             
             {mode === 'NOTA_VENTA' ? (
               <div className="max-h-40 overflow-y-auto bg-slate-50 border-2 border-slate-100 rounded-[28px] p-4">
-                {items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-xs font-bold p-1">
-                        <span>{item.cantidad} x {stock.find(s => s.codigo === item.codigoFardo)?.tipo || item.codigoFardo}</span>
-                        <span>${(item.valorUnitario * item.cantidad).toLocaleString()}</span>
-                    </div>
-                ))}
+                {items.length === 0 ? (
+                  <p className="text-xs text-slate-400 font-bold p-4 text-center">No hay productos agregados</p>
+                ) : (
+                  items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-xs font-bold p-1 border-b border-slate-100 last:border-0">
+                          <span>{item.cantidad} x {stock.find(s => s.codigo === item.codigoFardo)?.tipo || item.codigoFardo}</span>
+                          <span>${(item.valorUnitario * item.cantidad).toLocaleString()}</span>
+                      </div>
+                  ))
+                )}
                 <div className="border-t mt-2 pt-2 text-right font-black text-sm">
                     Total: ${calculatedTotal.toLocaleString()}
                 </div>
               </div>
             ) : (
-                <div />
+              <div className="flex flex-col justify-end">
+                <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">
+                  <MessageSquare size={14} className="text-indigo-500" /> Observaciones / Notas Vendedora (Opcional)
+                </label>
+                <input 
+                  type="text" 
+                  className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-bold text-sm outline-none focus:border-indigo-500 transition-all" 
+                  placeholder="Ej: Clienta junta fardos hasta el sábado, etc." 
+                  value={formData.observaciones} 
+                  onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
+                />
+              </div>
             )}
           </div>
 
+          {/* Opciones de Despacho Detalladas para NOTA DE VENTA */}
           {mode === 'NOTA_VENTA' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-amber-50/30 rounded-[40px] border-2 border-amber-100 animate-in fade-in slide-in-from-top duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8 sm:p-10 bg-amber-50/30 rounded-[40px] border-2 border-amber-100 animate-in fade-in slide-in-from-top duration-500">
               <div className="md:col-span-2 space-y-4">
-                <label className="flex items-center gap-2 text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3 ml-2"><Truck size={14} /> Opciones de Despacho</label>
+                <label className="flex items-center gap-2 text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3 ml-2"><Truck size={14} /> Tipo de Transporte Final</label>
                 <div className="flex bg-white p-1.5 rounded-[24px] border-2 border-amber-100 shadow-sm">
                   <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.AGENCIA, agencia: ''})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.AGENCIA ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400'}`}>Agencia</button>
                   <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.DOMICILIO, agencia: ''})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.DOMICILIO ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400'}`}>Domicilio</button>
                   <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.RETIRO, agencia: formData.agencia && formData.agencia.includes('RETIRO') ? formData.agencia : 'RETIRO BODEGA'})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.RETIRO ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400'}`}>Retiro</button>
                 </div>
-                {formData.tipoDespacho === DispatchType.AGENCIA && <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-amber-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={formData.agencia || ''} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>}
+                {formData.tipoDespacho === DispatchType.AGENCIA && <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-amber-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA (EJ: STARKEN, CHILEXPRESS)" value={formData.agencia || ''} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>}
                 {formData.tipoDespacho === DispatchType.RETIRO && (
-                  <div className="space-y-2 pt-2 animate-in fade-in duration-300">
-                    <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Lugar de Retiro</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, agencia: 'RETIRO LOCAL'})}
-                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
-                          formData.agencia === 'RETIRO LOCAL'
-                            ? 'bg-amber-600 text-white shadow-md'
-                            : 'bg-white border-2 border-amber-100 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Retiro Local
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, agencia: 'RETIRO BODEGA'})}
-                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
-                          formData.agencia === 'RETIRO BODEGA' || !formData.agencia
-                            ? 'bg-amber-600 text-white shadow-md'
-                            : 'bg-white border-2 border-amber-100 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Retiro Bodega
-                      </button>
-                    </div>
+                  <div className="p-3 bg-amber-100/70 border border-amber-300/80 rounded-2xl flex items-center gap-2.5 text-xs font-bold text-amber-900 animate-in fade-in duration-300">
+                    <Package size={16} className="text-amber-700 shrink-0" />
+                    <span>El cliente retirará directamente en Bodega Central</span>
                   </div>
                 )}
+                <div>
+                  <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-2">
+                    <MessageSquare size={14} className="text-amber-500" /> Observaciones / Notas
+                  </label>
+                  <input 
+                    type="text" 
+                    className="w-full px-7 py-4 bg-white border-2 border-amber-100 rounded-[24px] font-bold text-sm outline-none" 
+                    placeholder="Notas o indicaciones adicionales..." 
+                    value={formData.observaciones} 
+                    onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
+                  />
+                </div>
               </div>
             </div>
           )}
+
+          {/* Opciones de Despacho Detalladas para VENTA NORMAL */}
           {mode === 'NORMAL' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-blue-50/30 rounded-[40px] border-2 border-blue-100 animate-in fade-in slide-in-from-top duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8 sm:p-10 bg-blue-50/30 rounded-[40px] border-2 border-blue-100 animate-in fade-in slide-in-from-top duration-500">
                <div className="md:col-span-2">
                 <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Tag size={14} /> Variante</label>
                 <select required className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black text-lg" value={formData.variante} onChange={(e) => {
@@ -432,55 +616,47 @@ export default function RegistrarVenta() {
                 </select>
               </div>
               <div className="md:col-span-2 space-y-4">
-                <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Truck size={14} /> Opciones de Despacho</label>
+                <label className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 ml-2"><Truck size={14} /> Tipo de Transporte Final</label>
                 <div className="flex bg-white p-1.5 rounded-[24px] border-2 border-blue-100 shadow-sm">
                   <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.AGENCIA, agencia: ''})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.AGENCIA ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Agencia</button>
                   <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.DOMICILIO, agencia: ''})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.DOMICILIO ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Domicilio</button>
                   <button type="button" onClick={() => setFormData({...formData, tipoDespacho: DispatchType.RETIRO, agencia: formData.agencia && formData.agencia.includes('RETIRO') ? formData.agencia : 'RETIRO BODEGA'})} className={`flex-1 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest ${formData.tipoDespacho === DispatchType.RETIRO ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Retiro</button>
                 </div>
-                {formData.tipoDespacho === DispatchType.AGENCIA && <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA" value={formData.agencia || ''} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>}
+                {formData.tipoDespacho === DispatchType.AGENCIA && <input required type="text" className="w-full px-7 py-5 bg-white border-2 border-blue-100 rounded-[24px] font-black uppercase" placeholder="NOMBRE DE LA AGENCIA (EJ: STARKEN, CHILEXPRESS)" value={formData.agencia || ''} onChange={(e) => setFormData({...formData, agencia: e.target.value.toUpperCase()})}/>}
                 {formData.tipoDespacho === DispatchType.RETIRO && (
-                  <div className="space-y-2 pt-2 animate-in fade-in duration-300">
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Lugar de Retiro</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, agencia: 'RETIRO LOCAL'})}
-                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
-                          formData.agencia === 'RETIRO LOCAL'
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white border-2 border-blue-100 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Retiro Local
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormData({...formData, agencia: 'RETIRO BODEGA'})}
-                        className={`flex-1 py-3 px-4 rounded-xl font-black text-xs uppercase transition-all ${
-                          formData.agencia === 'RETIRO BODEGA' || !formData.agencia
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white border-2 border-blue-100 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        Retiro Bodega
-                      </button>
-                    </div>
+                  <div className="p-3 bg-blue-100/70 border border-blue-300/80 rounded-2xl flex items-center gap-2.5 text-xs font-bold text-blue-900 animate-in fade-in duration-300">
+                    <Package size={16} className="text-blue-700 shrink-0" />
+                    <span>El cliente retirará directamente en Bodega Central</span>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          <div className="bg-slate-900 p-10 rounded-[40px] text-white shadow-2xl">
-            <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-4"><DollarSign size={18} className="text-emerald-400" /> Valor Final Venta ($)</label>
-            <div className="w-full px-8 py-6 bg-slate-800 border-2 border-slate-700 rounded-[28px] text-5xl font-black text-emerald-400">
-               ${calculatedTotal.toLocaleString()}
+          {/* Valor Final Venta */}
+          <div className="bg-slate-900 p-8 sm:p-10 rounded-[40px] text-white shadow-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1"><DollarSign size={18} className="text-emerald-400" /> Valor Final Venta ($)</label>
+                <div className="text-4xl sm:text-5xl font-black text-emerald-400 tracking-tight">
+                   ${calculatedTotal.toLocaleString()}
+                </div>
+              </div>
+              {isJuntaSelected && (
+                <div className="bg-indigo-950/80 border border-indigo-500/40 p-4 rounded-2xl text-left max-w-sm">
+                  <div className="flex items-center gap-2 text-indigo-300 font-black text-xs uppercase">
+                    <Boxes size={16} /> Junta Compra Activada
+                  </div>
+                  <p className="text-[11px] text-indigo-200/80 mt-1 font-medium">
+                    El fardo se guardará en custodia hasta que la clienta ordene despachar el total de sus compras.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
-          <button type="submit" className={`group w-full py-8 rounded-[32px] text-white font-black text-3xl flex items-center justify-center gap-4 shadow-2xl transition-all active:scale-[0.97] ${mode === 'QUICK' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'}`}>
-            <Save size={32} /> {mode === 'QUICK' ? 'REGISTRAR LIVE' : 'REGISTRAR VENTA COMPLETA'}
+          <button type="submit" className={`group w-full py-7 sm:py-8 rounded-[32px] text-white font-black text-2xl sm:text-3xl flex items-center justify-center gap-4 shadow-2xl transition-all active:scale-[0.97] ${mode === 'QUICK' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : mode === 'NOTA_VENTA' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'}`}>
+            <Save size={32} /> {mode === 'QUICK' ? 'REGISTRAR LIVE' : mode === 'NOTA_VENTA' ? 'REGISTRAR NOTA DE VENTA' : 'REGISTRAR VENTA COMPLETA'}
             <ChevronRight size={28} className="group-hover:translate-x-2 transition-transform" />
           </button>
         </form>

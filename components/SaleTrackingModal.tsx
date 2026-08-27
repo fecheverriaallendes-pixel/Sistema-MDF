@@ -298,7 +298,7 @@ export function SaleTrackingModal({ sale, stock, onClose, onLiberarJuntaCompra }
                 )}
               </div>
               <p className="text-xs font-bold text-slate-800 uppercase leading-snug">
-                {sale.direccion || 'RETIRO EN BODEGA / TIENDA'}
+                {sale.direccion || 'RETIRO EN BODEGA'}
               </p>
               {sale.transportista && (
                 <p className="text-xs font-bold text-emerald-700 flex items-center gap-1 pt-1">
