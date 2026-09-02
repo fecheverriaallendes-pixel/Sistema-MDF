@@ -24,7 +24,9 @@ import {
   CheckCircle2,
   ExternalLink,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -77,6 +79,11 @@ export default function Dashboard() {
   const [juntaSearchTerm, setJuntaSearchTerm] = useState('');
   const [juntaViewMode, setJuntaViewMode] = useState<'clientes' | 'ventas'>('clientes');
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [isJuntaExpanded, setIsJuntaExpanded] = useState(false);
+  const [clientPage, setClientPage] = useState(1);
+  const [salePage, setSalePage] = useState(1);
+  const CLIENTS_PER_PAGE = 5;
+  const SALES_PER_PAGE = 6;
   
   const stats = getStats();
 
@@ -184,6 +191,30 @@ export default function Dashboard() {
       s.items?.some(it => it.codigoFardo?.toLowerCase().includes(term))
     );
   }, [juntaPendingSales, juntaSearchTerm]);
+
+  const totalClientPages = Math.max(1, Math.ceil(filteredJuntaCustomers.length / CLIENTS_PER_PAGE));
+  const paginatedJuntaCustomers = useMemo(() => {
+    const start = (clientPage - 1) * CLIENTS_PER_PAGE;
+    return filteredJuntaCustomers.slice(start, start + CLIENTS_PER_PAGE);
+  }, [filteredJuntaCustomers, clientPage]);
+
+  const totalSalePages = Math.max(1, Math.ceil(filteredJuntaSales.length / SALES_PER_PAGE));
+  const paginatedJuntaSales = useMemo(() => {
+    const start = (salePage - 1) * SALES_PER_PAGE;
+    return filteredJuntaSales.slice(start, start + SALES_PER_PAGE);
+  }, [filteredJuntaSales, salePage]);
+
+  const handleSearchChange = (val: string) => {
+    setJuntaSearchTerm(val);
+    setClientPage(1);
+    setSalePage(1);
+  };
+
+  const handleViewModeChange = (mode: 'clientes' | 'ventas') => {
+    setJuntaViewMode(mode);
+    setClientPage(1);
+    setSalePage(1);
+  };
 
   const pendingBySeller = useMemo(() => {
     const summary: Record<string, {
@@ -311,7 +342,7 @@ export default function Dashboard() {
           color="indigo" 
           subtitle={`${stats.juntaCompraProductos} productos/fardos en custodia`}
           trend={`$${(stats.juntaCompraMonto || 0).toLocaleString('es-CL')}`}
-          to="/despachos"
+          to="/despachos?tab=JUNTA_COMPRA"
         />
         <StatCard 
           title="Eficiencia TikTok" 
@@ -326,256 +357,374 @@ export default function Dashboard() {
         <StatCard title="Cupones Pendientes" value={pendingCoupons} icon={Ticket} color="emerald" subtitle="Cupones por canjear" />
       </div>
 
-      {/* SECCIÓN DEDICADA: CONTROL OPERATIVO DE JUNTA COMPRA */}
-      <div className="bg-white p-8 md:p-10 rounded-[48px] border-2 border-indigo-100 shadow-xl overflow-hidden relative">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-8 border-b border-indigo-50">
-          <div className="flex items-start gap-4">
-            <div className="p-4 bg-indigo-600 text-white rounded-3xl shadow-lg shadow-indigo-600/30">
-              <Boxes size={32} />
+      {/* SECCIÓN DEDICADA: CONTROL OPERATIVO DE JUNTA COMPRA (COMPACTA Y OPTIMIZADA) */}
+      <div className="bg-white p-6 md:p-8 rounded-[40px] border-2 border-indigo-100 shadow-xl overflow-hidden relative">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-indigo-50">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-600/30 shrink-0">
+              <Boxes size={28} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-black uppercase tracking-widest">
-                  Módulo de Custodia y Acumulación
+                <span className="px-3 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  Custodia y Acumulación
                 </span>
-                <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-[10px] font-black uppercase tracking-widest">
-                  Admin • Bodega • Despacho
+                <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest hidden sm:inline-block">
+                  Bodega • Despachos
                 </span>
               </div>
-              <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight mt-2">
+              <h3 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tight mt-1">
                 Control Operativo de <span className="text-indigo-600">JUNTA COMPRA</span>
               </h3>
-              <p className="text-slate-500 text-xs font-semibold mt-1">
-                Visualización centralizada de ventas y productos físicos retenidos en bodega para consolidación de envíos
+              <p className="text-slate-500 text-xs font-semibold">
+                {stats.juntaCompraVentas} ventas retenidas para consolidación física en bodega
               </p>
             </div>
           </div>
 
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-indigo-50/60 p-4 rounded-[28px] border border-indigo-100">
-            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ventas en Espera</p>
-              <p className="text-xl font-black text-indigo-600">{stats.juntaCompraVentas}</p>
+          {/* Quick Metrics Bar & Actions */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-indigo-50/70 p-2 rounded-2xl border border-indigo-100/80">
+              <div className="text-center px-2.5 py-1.5 bg-white rounded-xl shadow-xs">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Ventas</p>
+                <p className="text-sm font-black text-indigo-600">{stats.juntaCompraVentas}</p>
+              </div>
+              <div className="text-center px-2.5 py-1.5 bg-white rounded-xl shadow-xs">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Fardos</p>
+                <p className="text-sm font-black text-emerald-600">{stats.juntaCompraProductos} u.</p>
+              </div>
+              <div className="text-center px-2.5 py-1.5 bg-white rounded-xl shadow-xs">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Clientes</p>
+                <p className="text-sm font-black text-purple-600">{stats.juntaCompraClientes}</p>
+              </div>
+              <div className="text-center px-2.5 py-1.5 bg-white rounded-xl shadow-xs">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Monto</p>
+                <p className="text-xs font-black text-slate-900 font-mono">${(stats.juntaCompraMonto || 0).toLocaleString('es-CL')}</p>
+              </div>
             </div>
-            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fardos/Productos</p>
-              <p className="text-xl font-black text-emerald-600">{stats.juntaCompraProductos} u.</p>
-            </div>
-            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Clientes</p>
-              <p className="text-xl font-black text-purple-600">{stats.juntaCompraClientes}</p>
-            </div>
-            <div className="text-center px-3 py-2 bg-white rounded-2xl shadow-sm">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Custodia</p>
-              <p className="text-base font-black text-slate-900 font-mono">${(stats.juntaCompraMonto || 0).toLocaleString('es-CL')}</p>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsJuntaExpanded(!isJuntaExpanded)}
+                className={`px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 border ${
+                  isJuntaExpanded
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs'
+                }`}
+              >
+                {isJuntaExpanded ? (
+                  <>
+                    <ChevronUp size={16} /> Contraer Vista
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={16} /> Vista Rápida ({filteredJuntaCustomers.length})
+                  </>
+                )}
+              </button>
+
+              <Link 
+                to="/despachos?tab=JUNTA_COMPRA"
+                className="px-5 py-3 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 shadow-md shrink-0"
+              >
+                <Truck size={16} /> Módulo Despachos <ExternalLink size={14} />
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* Toolbar & Filters */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6 mb-6">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text"
-              placeholder="Buscar por cliente, fardo, # venta o vendedor..."
-              value={juntaSearchTerm}
-              onChange={(e) => setJuntaSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-indigo-500 uppercase transition-all"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
-              <button
-                onClick={() => setJuntaViewMode('clientes')}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${juntaViewMode === 'clientes' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                Agrupado por Cliente ({filteredJuntaCustomers.length})
-              </button>
-              <button
-                onClick={() => setJuntaViewMode('ventas')}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${juntaViewMode === 'ventas' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                Lista de Ventas ({filteredJuntaSales.length})
-              </button>
+        {/* MODO CONTRAÍDO: BANNER EJECUTIVO LIMPIO */}
+        {!isJuntaExpanded && (
+          <div className="mt-5 p-5 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-slate-50 rounded-2xl border border-indigo-100/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                <Package size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800">
+                  <span className="font-black text-indigo-600">{stats.juntaCompraVentas} ventas</span> retenidas para consolidación física ({stats.juntaCompraProductos} fardos distribuidos en {stats.juntaCompraClientes} clientes).
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  La vista rápida está acotada para mantener el Dashboard ligero. Puedes expandir una vista previa paginada o gestionar todo en el módulo dedicado de Despachos.
+                </p>
+              </div>
             </div>
-
-            <Link 
-              to="/despachos"
-              className="px-5 py-2.5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 shadow-md shrink-0"
-            >
-              <Truck size={16} /> Ir a Despachos <ExternalLink size={14} />
-            </Link>
-          </div>
-        </div>
-
-        {/* Content View */}
-        {juntaPendingSales.length === 0 ? (
-          <div className="py-16 text-center bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
-            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 size={32} />
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setIsJuntaExpanded(true)}
+                className="flex-1 sm:flex-initial px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-sm flex items-center justify-center gap-1.5"
+              >
+                <ChevronDown size={14} /> Ver Vista Rápida
+              </button>
+              <Link
+                to="/despachos?tab=JUNTA_COMPRA"
+                className="flex-1 sm:flex-initial px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-slate-100 transition-all flex items-center justify-center gap-1.5"
+              >
+                <ExternalLink size={14} /> Despachar
+              </Link>
             </div>
-            <h4 className="text-base font-black text-slate-800 uppercase">Sin Pedidos en Junta Compra</h4>
-            <p className="text-slate-400 text-xs mt-1 font-medium">Actualmente no hay ventas acumulándose en espera de consolidación.</p>
           </div>
-        ) : juntaViewMode === 'clientes' ? (
-          <div className="space-y-4">
-            {filteredJuntaCustomers.map((cust) => {
-              const isExpanded = expandedClient === cust.cliente;
-              return (
-                <div 
-                  key={cust.cliente}
-                  className="bg-slate-50/80 hover:bg-slate-50 rounded-[28px] border border-slate-200/80 p-5 transition-all overflow-hidden"
-                >
-                  <div 
-                    onClick={() => setExpandedClient(isExpanded ? null : cust.cliente)}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+        )}
+
+        {/* MODO EXPANDIDO: VISTA RÁPIDA CON BÚSQUEDA Y PAGINACIÓN LIMITADA */}
+        {isJuntaExpanded && (
+          <div className="mt-6 space-y-5 animate-in fade-in duration-300">
+            {/* Toolbar & Filters */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text"
+                  placeholder="Buscar por cliente, fardo, # venta o vendedor..."
+                  value={juntaSearchTerm}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-indigo-500 uppercase transition-all"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                  <button
+                    onClick={() => handleViewModeChange('clientes')}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${juntaViewMode === 'clientes' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-base shadow-md">
-                        {cust.totalFardos}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">{cust.cliente}</h4>
-                          {cust.totalFardos > 1 && (
-                            <span className="px-2.5 py-0.5 bg-amber-500 text-white rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm">
-                              {cust.totalFardos} Fardos Listos
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-bold uppercase mt-0.5">
-                          {cust.ventas.length} {cust.ventas.length === 1 ? 'Venta' : 'Ventas'} • {cust.telefono || 'Sin Teléfono'} • Vendedor: {cust.vendedores.join(', ')}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 self-end sm:self-auto">
-                      <div className="text-right">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Total Acumulado</span>
-                        <span className="text-lg font-black text-slate-900 font-mono">${cust.montoTotal.toLocaleString('es-CL')}</span>
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700">
-                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expanded sale items */}
-                  {isExpanded && (
-                    <div className="mt-5 pt-5 border-t border-slate-200 space-y-3 animate-in fade-in duration-300">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detalle de Ventas y Fardos Acumulados:</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {cust.ventas.map((v) => (
-                          <div key={v.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="px-2.5 py-1 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg">
-                                Venta #{v.numeroVenta}
-                              </span>
-                              <span className={`px-2 py-0.5 text-[9px] font-black rounded-full uppercase ${v.estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                {v.estadoPago || 'Pendiente'}
-                              </span>
-                            </div>
-
-                            {v.items && v.items.length > 0 ? (
-                              <div className="space-y-1">
-                                {v.items.map((it, idx) => {
-                                  const stockInfo = stock.find(st => st.codigo === it.codigoFardo);
-                                  return (
-                                    <div key={idx} className="flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-50 p-2 rounded-xl">
-                                      <span className="font-mono text-indigo-600">{it.cantidad}x [{it.codigoFardo}] {stockInfo?.tipo || 'Fardo'}</span>
-                                      <span className="font-mono text-slate-500">${(it.valorUnitario * it.cantidad).toLocaleString('es-CL')}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="flex justify-between items-center text-xs font-bold text-slate-700 bg-slate-50 p-2 rounded-xl">
-                                <span className="font-mono text-indigo-600">{v.cantidad || 1}x [{v.codigoFardo}] {v.variante || 'Fardo'}</span>
-                                <span className="font-mono text-slate-500">${(v.total || 0).toLocaleString('es-CL')}</span>
-                              </div>
-                            )}
-
-                            <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase pt-1">
-                              <span>Fecha: {v.fecha}</span>
-                              <span className="text-slate-600">Vendedor: {v.vendedor}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    Clientes ({filteredJuntaCustomers.length})
+                  </button>
+                  <button
+                    onClick={() => handleViewModeChange('ventas')}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${juntaViewMode === 'ventas' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    Ventas ({filteredJuntaSales.length})
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse font-sans">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest"># Venta</th>
-                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Productos / Fardos</th>
-                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Cantidad</th>
-                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendedor</th>
-                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado Pago</th>
-                  <th className="pb-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredJuntaSales.map((s) => {
-                  const qty = s.items && s.items.length > 0
-                    ? s.items.reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0)
-                    : (Number(s.cantidad) || 1);
-                  return (
-                    <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-4">
-                        <span className="px-2.5 py-1 bg-slate-900 text-white rounded-lg font-mono font-black text-xs">
-                          #{s.numeroVenta}
-                        </span>
-                      </td>
-                      <td className="py-4">
-                        <p className="font-black text-slate-900 uppercase text-xs">{s.cliente}</p>
-                        <p className="text-[10px] text-slate-400 font-bold">{s.telefono || 'Sin contacto'}</p>
-                      </td>
-                      <td className="py-4">
-                        {s.items && s.items.length > 0 ? (
-                          <div className="space-y-1">
-                            {s.items.map((it, idx) => (
-                              <span key={idx} className="inline-block mr-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black font-mono">
-                                {it.cantidad}x {it.codigoFardo}
-                              </span>
-                            ))}
+              </div>
+            </div>
+
+            {/* Content View delimitada con max-height */}
+            <div className="max-h-[440px] overflow-y-auto pr-1">
+              {juntaPendingSales.length === 0 ? (
+                <div className="py-12 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <h4 className="text-sm font-black text-slate-800 uppercase">Sin Pedidos en Junta Compra</h4>
+                  <p className="text-slate-400 text-xs mt-1 font-medium">Actualmente no hay ventas acumulándose en espera de consolidación.</p>
+                </div>
+              ) : juntaViewMode === 'clientes' ? (
+                <div className="space-y-3">
+                  {paginatedJuntaCustomers.map((cust) => {
+                    const isExpanded = expandedClient === cust.cliente;
+                    return (
+                      <div 
+                        key={cust.cliente}
+                        className="bg-slate-50/80 hover:bg-slate-50 rounded-2xl border border-slate-200/80 p-4 transition-all overflow-hidden"
+                      >
+                        <div 
+                          onClick={() => setExpandedClient(isExpanded ? null : cust.cliente)}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
+                              {cust.totalFardos}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{cust.cliente}</h4>
+                                {cust.totalFardos > 1 && (
+                                  <span className="px-2 py-0.5 bg-amber-500 text-white rounded-full text-[8px] font-black uppercase tracking-wider shadow-xs">
+                                    {cust.totalFardos} Fardos
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                                {cust.ventas.length} {cust.ventas.length === 1 ? 'Venta' : 'Ventas'} • {cust.telefono || 'Sin Teléfono'} • Vendedor: {cust.vendedores.join(', ')}
+                              </p>
+                            </div>
                           </div>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black font-mono">
-                            {s.cantidad || 1}x {s.codigoFardo || 'S/C'} ({s.variante || 'FARDO'})
-                          </span>
+
+                          <div className="flex items-center gap-3 self-end sm:self-auto">
+                            <div className="text-right">
+                              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Acumulado</span>
+                              <span className="text-sm font-black text-slate-900 font-mono">${cust.montoTotal.toLocaleString('es-CL')}</span>
+                            </div>
+                            <div className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700">
+                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Expanded sale items */}
+                        {isExpanded && (
+                          <div className="mt-4 pt-4 border-t border-slate-200 space-y-2 animate-in fade-in duration-300">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Detalle de Ventas:</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {cust.ventas.map((v) => (
+                                <div key={v.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs space-y-1.5">
+                                  <div className="flex justify-between items-center">
+                                    <span className="px-2 py-0.5 bg-slate-900 text-white text-[9px] font-black uppercase rounded-md">
+                                      Venta #{v.numeroVenta}
+                                    </span>
+                                    <span className={`px-2 py-0.5 text-[8px] font-black rounded-full uppercase ${v.estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                      {v.estadoPago || 'Pendiente'}
+                                    </span>
+                                  </div>
+
+                                  {v.items && v.items.length > 0 ? (
+                                    <div className="space-y-1">
+                                      {v.items.map((it, idx) => {
+                                        const stockInfo = stock.find(st => st.codigo === it.codigoFardo);
+                                        return (
+                                          <div key={idx} className="flex justify-between items-center text-[11px] font-bold text-slate-700 bg-slate-50 p-1.5 rounded-lg">
+                                            <span className="font-mono text-indigo-600">{it.cantidad}x [{it.codigoFardo}] {stockInfo?.tipo || 'Fardo'}</span>
+                                            <span className="font-mono text-slate-500">${(it.valorUnitario * it.cantidad).toLocaleString('es-CL')}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <div className="flex justify-between items-center text-[11px] font-bold text-slate-700 bg-slate-50 p-1.5 rounded-lg">
+                                      <span className="font-mono text-indigo-600">{v.cantidad || 1}x [{v.codigoFardo}] {v.variante || 'Fardo'}</span>
+                                      <span className="font-mono text-slate-500">${(v.total || 0).toLocaleString('es-CL')}</span>
+                                    </div>
+                                  )}
+
+                                  <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase pt-0.5">
+                                    <span>{v.fecha}</span>
+                                    <span className="text-slate-600">{v.vendedor}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
-                      </td>
-                      <td className="py-4 text-center">
-                        <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-black text-xs font-mono">
-                          {qty} u.
-                        </span>
-                      </td>
-                      <td className="py-4 text-xs font-black uppercase text-slate-700">
-                        {s.vendedor}
-                      </td>
-                      <td className="py-4 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${s.estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {s.estadoPago || 'Pendiente'}
-                        </span>
-                      </td>
-                      <td className="py-4 text-right font-black text-slate-900 text-sm font-mono">
-                        ${(s.total || 0).toLocaleString('es-CL')}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="overflow-x-auto bg-slate-50/50 rounded-2xl border border-slate-200/80">
+                  <table className="w-full text-left border-collapse font-sans">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-100/70">
+                        <th className="py-2.5 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest"># Venta</th>
+                        <th className="py-2.5 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                        <th className="py-2.5 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Productos / Fardos</th>
+                        <th className="py-2.5 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Cant.</th>
+                        <th className="py-2.5 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Vendedor</th>
+                        <th className="py-2.5 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Pago</th>
+                        <th className="py-2.5 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {paginatedJuntaSales.map((s) => {
+                        const qty = s.items && s.items.length > 0
+                          ? s.items.reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0)
+                          : (Number(s.cantidad) || 1);
+                        return (
+                          <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-3">
+                              <span className="px-2 py-0.5 bg-slate-900 text-white rounded-md font-mono font-black text-[11px]">
+                                #{s.numeroVenta}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <p className="font-black text-slate-900 uppercase text-xs">{s.cliente}</p>
+                              <p className="text-[9px] text-slate-400 font-bold">{s.telefono || 'Sin contacto'}</p>
+                            </td>
+                            <td className="py-3 px-3">
+                              {s.items && s.items.length > 0 ? (
+                                <div className="space-y-0.5">
+                                  {s.items.map((it, idx) => (
+                                    <span key={idx} className="inline-block mr-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[9px] font-black font-mono">
+                                      {it.cantidad}x {it.codigoFardo}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[9px] font-black font-mono">
+                                  {s.cantidad || 1}x {s.codigoFardo || 'S/C'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-black text-[11px] font-mono">
+                                {qty}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-[11px] font-black uppercase text-slate-700">
+                              {s.vendedor}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${s.estadoPago === 'Pagado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {s.estadoPago || 'Pendiente'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right font-black text-slate-900 text-xs font-mono">
+                              ${(s.total || 0).toLocaleString('es-CL')}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Pagination Controls */}
+            {juntaViewMode === 'clientes' && filteredJuntaCustomers.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <p className="text-[11px] font-bold text-slate-500">
+                  Mostrando página <span className="font-black text-slate-900">{clientPage}</span> de <span className="font-black text-slate-900">{totalClientPages}</span> ({filteredJuntaCustomers.length} clientes en total)
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setClientPage(prev => Math.max(1, prev - 1))}
+                    disabled={clientPage <= 1}
+                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-black text-xs uppercase disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center gap-1 shadow-xs"
+                  >
+                    <ChevronLeft size={14} /> Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClientPage(prev => Math.min(totalClientPages, prev + 1))}
+                    disabled={clientPage >= totalClientPages}
+                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-black text-xs uppercase disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center gap-1 shadow-xs"
+                  >
+                    Siguiente <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {juntaViewMode === 'ventas' && filteredJuntaSales.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <p className="text-[11px] font-bold text-slate-500">
+                  Mostrando página <span className="font-black text-slate-900">{salePage}</span> de <span className="font-black text-slate-900">{totalSalePages}</span> ({filteredJuntaSales.length} ventas en total)
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSalePage(prev => Math.max(1, prev - 1))}
+                    disabled={salePage <= 1}
+                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-black text-xs uppercase disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center gap-1 shadow-xs"
+                  >
+                    <ChevronLeft size={14} /> Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSalePage(prev => Math.min(totalSalePages, prev + 1))}
+                    disabled={salePage >= totalSalePages}
+                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-black text-xs uppercase disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 flex items-center gap-1 shadow-xs"
+                  >
+                    Siguiente <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
