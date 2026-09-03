@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { ReportModal } from '../components/ReportModal';
+import { SupplierFjReport } from '../components/dashboard/SupplierFjReport';
 import { 
   TrendingUp, 
   Package, 
@@ -26,7 +27,8 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -73,7 +75,7 @@ const StatCard = ({ title, value, icon: Icon, color, subtitle, trend, to }: any)
 };
 
 export default function Dashboard() {
-  const { getStats, getReportData, syncWithCloud, isSyncing, settings, sales, stock, coupons } = useStore();
+  const { getStats, getReportData, syncWithCloud, isSyncing, settings, sales, stock, coupons, currentUser } = useStore();
   const [reportState, setReportState] = React.useState<{isOpen: boolean, type: 'weekly' | 'monthly' | 'custom', sales: Sale[]}>({isOpen: false, type: 'weekly', sales: []});
   const [dateRange, setDateRange] = React.useState({ start: '', end: '' });
   const [juntaSearchTerm, setJuntaSearchTerm] = useState('');
@@ -304,6 +306,13 @@ export default function Dashboard() {
               <RefreshCw className={isSyncing ? 'animate-spin text-blue-500' : 'text-slate-400'} size={18} /> 
               {isSyncing ? 'Actualizando...' : 'Refrescar'}
             </button>
+
+            <a 
+              href="#supplier-fj-dashboard-section"
+              className="flex items-center gap-2.5 px-6 py-4 bg-emerald-950 text-emerald-300 border-2 border-emerald-800 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-emerald-900 transition-all shadow-md active:scale-95"
+            >
+              <ShieldCheck size={18} className="text-emerald-400" /> Informe Proveedor FJ
+            </a>
           </div>
           
           {stats.stockCritico > 0 && (
@@ -356,6 +365,9 @@ export default function Dashboard() {
         <StatCard title="Falta Despachar" value={stats.faltaDespachar} icon={Truck} color="blue" subtitle="Pedidos listos para salir" to="/despachos" />
         <StatCard title="Cupones Pendientes" value={pendingCoupons} icon={Ticket} color="emerald" subtitle="Cupones por canjear" />
       </div>
+
+      {/* SECCIÓN ESPECIAL ADMINISTRADOR: INFORME INTEGRAL DE FARDOS Y VENTAS PROVEEDOR FJ */}
+      <SupplierFjReport sales={sales} stock={stock} currentUser={currentUser} />
 
       {/* SECCIÓN DEDICADA: CONTROL OPERATIVO DE JUNTA COMPRA (COMPACTA Y OPTIMIZADA) */}
       <div className="bg-white p-6 md:p-8 rounded-[40px] border-2 border-indigo-100 shadow-xl overflow-hidden relative">
