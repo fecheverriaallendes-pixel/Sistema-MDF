@@ -297,8 +297,22 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
   if (savedVale) {
     return (
       <>
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[44px] shadow-2xl max-w-xl w-full p-8 sm:p-10 text-center animate-in zoom-in duration-300">
+        <div 
+          className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <div className="bg-white rounded-[44px] shadow-2xl max-w-xl w-full p-8 sm:p-10 text-center animate-in zoom-in duration-300 relative border border-slate-100">
+            {/* Botón X de salida rápida */}
+            <button 
+              onClick={onClose}
+              className="absolute top-6 right-6 p-3 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 rounded-2xl transition-all cursor-pointer"
+              title="Cerrar ventana y salir"
+            >
+              <X size={20} />
+            </button>
+
             <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner animate-bounce">
               <CheckCircle2 size={48} />
             </div>
@@ -337,9 +351,9 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={() => setShowPrintModal(true)}
-                className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer"
               >
-                <Printer size={16} /> Imprimir Comprobante
+                <Printer size={16} /> Ver e Imprimir Comprobante
               </button>
               <button
                 onClick={() => {
@@ -349,13 +363,13 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
                   setObservaciones('');
                   setNumeroContenedor('');
                 }}
-                className="py-4 px-6 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                className="py-4 px-6 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
               >
                 + Otro Vale
               </button>
               <button
                 onClick={onClose}
-                className="py-4 px-6 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                className="py-4 px-6 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
               >
                 Listo / Salir
               </button>
