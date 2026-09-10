@@ -107,17 +107,12 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
         </div>
 
         {/* Caja Destacada para el RUT con tipografía anti-confusión 0 vs 8 */}
-        <div className="border-2 border-black rounded p-1.5 bg-white flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-1.5">
-            <span className="bg-black text-white text-[11px] font-black uppercase px-2 py-0.5 rounded tracking-wider">
-              RUT
-            </span>
-            <span className="text-[10px] font-extrabold uppercase text-black tracking-wider">
-              DESTINATARIO:
-            </span>
-          </div>
+        <div className="border-2 border-black rounded p-1.5 bg-white flex items-center justify-between">
+          <span className="bg-black text-white text-[12px] font-black uppercase px-2.5 py-0.5 rounded tracking-wider">
+            RUT
+          </span>
           <span 
-            className="thermal-num text-[21px] font-black tracking-[0.12em] text-black leading-none"
+            className="thermal-num text-[23px] font-black tracking-[0.12em] text-black leading-none"
             style={{ 
               fontFamily: "'JetBrains Mono', monospace",
               fontVariantNumeric: 'slashed-zero tabular-nums',
