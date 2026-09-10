@@ -47,8 +47,8 @@ export default function Etiquetas() {
 
   // Fix: Added missing tipoComision property to satisfy the Sale interface
   const demoSale: Sale = {
-    id: 'demo', numeroVenta: 9999, tipoVenta: SaleType.NORMAL, cliente: 'CLIENTE DE PRUEBA',
-    telefono: '+569 1234 5678', rut: '12.345.678-9', codigoFardo: 'F-DEMO',
+    id: 'demo', numeroVenta: 8080, tipoVenta: SaleType.NORMAL, cliente: 'CLIENTE DE PRUEBA',
+    telefono: '+569 8808 0880', rut: '18.080.808-0', codigoFardo: 'F-8080',
     direccion: 'AVENIDA CENTRAL 123, SANTIAGO', variante: 'FARDO PREMIUM',
     total: 150000, datosCompletos: true, enviado: false, status: SaleStatus.PENDIENTE,
     fecha: new Date().toLocaleDateString(), hora: '12:00', vendedor: 'ADMIN',

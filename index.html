@@ -21,10 +21,18 @@
     <link rel="apple-touch-icon" href="https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png">
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
         
+        .thermal-num {
+            font-family: 'JetBrains Mono', monospace !important;
+            font-variant-numeric: slashed-zero tabular-nums !important;
+            font-feature-settings: "zero" 1, "tnum" 1 !important;
+        }
+
         @keyframes gradient {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -40,6 +48,10 @@
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
 
         /* Custom Scrollbar */
