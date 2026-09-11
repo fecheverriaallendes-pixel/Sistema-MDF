@@ -69,8 +69,8 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
           <div className="flex flex-col">
             <span className="text-[9px] font-black uppercase tracking-wider text-black leading-none">N° ENVÍO / VENTA</span>
             <span 
-              className="thermal-num text-3xl font-black tracking-tight text-black leading-none mt-1"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              className="thermal-num text-3xl font-extrabold tracking-tight text-black leading-none mt-1"
+              style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
             >
               #{sale.numeroVenta}
             </span>
@@ -86,8 +86,8 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
           <div className="border-t border-black pt-1 mt-1 text-right">
             <span className="text-[9px] font-black uppercase tracking-wider text-black block">TELÉFONO</span>
             <span 
-              className="thermal-num text-[17px] font-black leading-none tracking-wider text-black"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              className="thermal-num text-[17px] font-extrabold leading-none tracking-wider text-black"
+              style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
             >
               {sale.telefono || 'SIN TELÉFONO'}
             </span>
@@ -95,7 +95,7 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
         </div>
       </div>
 
-      {/* 2. Destinatario y RUT (MÁXIMA LEGIBILIDAD) */}
+      {/* 2. Destinatario y RUT (MÁXIMA LEGIBILIDAD: Cero 100% hueco y abierto, sin punto ni barra) */}
       <div className="border-2 border-black rounded-md p-2 bg-white flex flex-col gap-1.5">
         <div>
           <span className="text-[10px] font-black uppercase tracking-wider text-black block mb-0.5">
@@ -106,17 +106,17 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
           </p>
         </div>
 
-        {/* Caja Destacada para el RUT con tipografía anti-confusión 0 vs 8 */}
+        {/* Caja Destacada para el RUT con tipografía clara anti-confusión 0 vs 8 */}
         <div className="border-2 border-black rounded p-1.5 bg-white flex items-center justify-between">
           <span className="bg-black text-white text-[12px] font-black uppercase px-2.5 py-0.5 rounded tracking-wider">
             RUT
           </span>
           <span 
-            className="thermal-num text-[23px] font-black tracking-[0.12em] text-black leading-none"
+            className="thermal-num text-[24px] font-extrabold tracking-[0.14em] text-black leading-none"
             style={{ 
-              fontFamily: "'JetBrains Mono', monospace",
-              fontVariantNumeric: 'slashed-zero tabular-nums',
-              fontFeatureSettings: '"zero" 1, "tnum" 1'
+              fontFamily: "Arial, Helvetica, 'Inter', sans-serif",
+              fontVariantNumeric: 'normal tabular-nums',
+              fontFeatureSettings: '"zero" 0, "tnum" 1'
             }}
           >
             {formatRut(sale.rut)}
@@ -162,8 +162,8 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
               <div className="text-right border-2 border-black px-2.5 py-1 rounded bg-white">
                 <span className="text-[9px] font-black uppercase tracking-wider text-black block leading-none">PESO</span>
                 <span 
-                  className="thermal-num text-[17px] font-black text-black leading-none"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="thermal-num text-[17px] font-extrabold text-black leading-none"
+                  style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
                 >
                   {stockItem.peso} KG
                 </span>
@@ -187,8 +187,8 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
             })()}
           </p>
           <span 
-            className="thermal-num text-[12px] font-black tracking-wider text-black border border-black px-1.5 py-0.5 rounded bg-white inline-block mt-1 leading-none"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            className="thermal-num text-[13px] font-extrabold tracking-wider text-black border border-black px-1.5 py-0.5 rounded bg-white inline-block mt-1 leading-none"
+            style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
           >
             {displayItem.codigoFardo || 'N/A'}
           </span>
@@ -198,8 +198,8 @@ export const Label = ({ sale, stock, item }: { sale: Sale, stock: any[], item?: 
             CANTIDAD
           </span>
           <p 
-            className="thermal-num text-[19px] font-black leading-none uppercase text-black"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            className="thermal-num text-[19px] font-extrabold leading-none uppercase text-black"
+            style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
           >
             x{displayItem.cantidad || 1} {sale.variante || ''}
           </p>
