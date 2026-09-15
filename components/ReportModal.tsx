@@ -27,7 +27,7 @@ export const ReportModal = ({ isOpen, onClose, title, sales, stats }: ReportProp
         const finalTipo = tipo || (codigo.startsWith('L') ? CommissionType.LOTE : CommissionType.FARDO_NORMAL);
         
         const isLote = finalTipo === CommissionType.LOTE;
-        const isPromo = finalTipo === CommissionType.FARDO_PROMO;
+        const isPromo = finalTipo === CommissionType.FARDO_PROMO || finalTipo === CommissionType.MAYORISTA;
         
         if (isLote) {
           vendedores[s.vendedor].lotes += qty;

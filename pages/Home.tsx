@@ -109,6 +109,7 @@ export default function Home() {
       [CommissionType.FARDO_PROMO]: 1500,
       [CommissionType.MEDIO_FARDO]: 1500,
       [CommissionType.LOTE]: 1000,
+      [CommissionType.MAYORISTA]: 1500,
     };
 
     userSales.forEach(s => {
@@ -117,7 +118,9 @@ export default function Home() {
           const uppercaseCode = (codigo || '').toUpperCase();
           const variantUpper = (saleVariante || '').toUpperCase();
 
-          if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
+          if (s.esMayorista || tipo === CommissionType.MAYORISTA) {
+             finalTipo = CommissionType.MAYORISTA;
+          } else if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
              finalTipo = CommissionType.LOTE;
           } else if (variantUpper.includes('MEDIO')) {
              finalTipo = CommissionType.MEDIO_FARDO;

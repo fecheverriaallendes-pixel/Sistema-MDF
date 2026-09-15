@@ -611,7 +611,8 @@ const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   'Fardo Normal ($3.000)': 3000,
   'Fardo Promoción ($1.500)': 1500,
   'Medio Fardo ($1.500)': 1500,
-  'Lote ($1.000)': 1000
+  'Lote ($1.000)': 1000,
+  'Mayorista ($1.500)': 1500
 };
 const DEFAULT_PAGO_REENFARDADO = 4000;
 
@@ -621,7 +622,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [commissionValues, setCommissionValues] = useState<Record<string, number>>(() => {
     const saved = safeLocalStorage.getItem('mdf_commission_values');
-    return saved ? JSON.parse(saved) : DEFAULT_COMMISSION_VALUES;
+    if (saved) {
+      try {
+        return { ...DEFAULT_COMMISSION_VALUES, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_COMMISSION_VALUES;
+      }
+    }
+    return DEFAULT_COMMISSION_VALUES;
   });
   const [pagoReenfardado, setPagoReenfardado] = useState<number>(() => {
     const saved = safeLocalStorage.getItem('mdf_pago_reenfardado');
@@ -883,7 +891,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubAppValues = onSnapshot(doc(db, 'config', 'app_values'), (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data.comisiones) setCommissionValues(data.comisiones);
+            if (data.comisiones) setCommissionValues({ ...DEFAULT_COMMISSION_VALUES, ...data.comisiones });
             if (typeof data.pagoReenfardado === 'number') setPagoReenfardado(data.pagoReenfardado);
           }
         });
@@ -997,15 +1005,26 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   const addSale = async (saleData: Partial<Sale>) => {
     const now = new Date();
-    const items = saleData.items || [];
+    const isMayorista = saleData.esMayorista === true;
+    const rawItems = saleData.items || [];
+    const items = rawItems.map(item => ({
+      ...item,
+      tipoComision: isMayorista ? CommissionType.MAYORISTA : (item.tipoComision || CommissionType.FARDO_NORMAL)
+    }));
     
     // Calculate total
     const total = saleData.tipoVenta === SaleType.NOTA_VENTA 
        ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0)
        : (saleData.valorUnitario || 0) * (saleData.cantidad || 0);
 
+    const defaultCommission = isMayorista 
+      ? CommissionType.MAYORISTA 
+      : (saleData.codigoFardo ? calculateCommission(saleData.codigoFardo) : CommissionType.FARDO_NORMAL);
+
     const newSale: Sale = {
       ...saleData,
+      esMayorista: isMayorista,
+      items: saleData.tipoVenta === SaleType.NOTA_VENTA ? items : saleData.items,
       total,
       id: Math.random().toString(36).substr(2, 9),
       numeroVenta: sales.length > 0 ? Math.max(...sales.map(s => s.numeroVenta || 0)) + 1 : 2000,
@@ -1018,7 +1037,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       itemsDespachados: 0,
       tipoDespacho: saleData.tipoDespacho || '',
       timestamp: now.toISOString(),
-      tipoComision: saleData.tipoComision || (saleData.codigoFardo ? calculateCommission(saleData.codigoFardo) : CommissionType.FARDO_NORMAL)
+      tipoComision: isMayorista ? CommissionType.MAYORISTA : (saleData.tipoComision || defaultCommission)
     } as Sale;
     
     // Remove undefined values to prevent Firestore errors

@@ -241,8 +241,10 @@ export const DevolucionModal: React.FC<DevolucionModalProps> = ({
         productName = matchingStock?.tipo || fardoCode || 'Fardo de Ropa';
 
         // Calcular comisión por tipo de item
-        if (firstItem.tipoComision) {
-          if (firstItem.tipoComision === CommissionType.FARDO_PROMO) {
+        if (firstItem.tipoComision || firstItem.esMayorista || found.esMayorista) {
+          if (firstItem.tipoComision === CommissionType.MAYORISTA || firstItem.esMayorista || found.esMayorista) {
+            calculatedComm = (commissionValues as any)?.mayorista || 1500;
+          } else if (firstItem.tipoComision === CommissionType.FARDO_PROMO) {
             calculatedComm = commissionValues?.fardoPromo || 1500;
           } else if (firstItem.tipoComision === CommissionType.MEDIO_FARDO) {
             calculatedComm = commissionValues?.medioFardo || 1500;
@@ -257,8 +259,10 @@ export const DevolucionModal: React.FC<DevolucionModalProps> = ({
         const matchingStock = stock.find(st => st.codigo === fardoCode);
         productName = matchingStock?.tipo || found.variante || fardoCode;
         
-        if (found.tipoComision) {
-          if (found.tipoComision === CommissionType.FARDO_PROMO) {
+        if (found.tipoComision || found.esMayorista) {
+          if (found.tipoComision === CommissionType.MAYORISTA || found.esMayorista) {
+            calculatedComm = (commissionValues as any)?.mayorista || 1500;
+          } else if (found.tipoComision === CommissionType.FARDO_PROMO) {
             calculatedComm = commissionValues?.fardoPromo || 1500;
           } else if (found.tipoComision === CommissionType.MEDIO_FARDO) {
             calculatedComm = commissionValues?.medioFardo || 1500;

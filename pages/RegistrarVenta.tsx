@@ -24,7 +24,9 @@ import {
   MessageSquare, 
   Clock, 
   Info,
-  Check
+  Check,
+  Store,
+  Trash2
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '../types';
@@ -33,10 +35,24 @@ export default function RegistrarVenta() {
   const { stock, staff, customers, addSale, playSound } = useStore();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'QUICK' | 'NORMAL' | 'NOTA_VENTA'>('QUICK');
+  const [esMayorista, setEsMayorista] = useState(false);
   const [success, setSuccess] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
-  const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number, esManual?: boolean, tipoComision?: CommissionType}[]>([]);
+  const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number, esManual?: boolean, tipoComision?: CommissionType, esMayorista?: boolean}[]>([]);
   const [newItem, setNewItem] = useState({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
+
+  const toggleMayorista = (active: boolean) => {
+    setEsMayorista(active);
+    playSound('click');
+    if (active) {
+      setNewItem(prev => ({ ...prev, tipoComision: CommissionType.MAYORISTA }));
+      setItems(prev => prev.map(it => ({ ...it, tipoComision: CommissionType.MAYORISTA, esMayorista: true })));
+      setFormData(prev => ({ ...prev, tipoComision: CommissionType.MAYORISTA }));
+    } else {
+      setNewItem(prev => ({ ...prev, tipoComision: CommissionType.FARDO_NORMAL }));
+      setFormData(prev => ({ ...prev, tipoComision: CommissionType.FARDO_NORMAL }));
+    }
+  };
   
   const vendedores = staff.filter(m => m.rol === StaffRole.VENDEDOR);
   const quickNameRef = useRef<HTMLInputElement>(null);
@@ -98,7 +114,9 @@ export default function RegistrarVenta() {
     
     // Determine commission type correctly
     let newCommissionType = CommissionType.FARDO_NORMAL;
-    if (foundItem) {
+    if (esMayorista) {
+        newCommissionType = CommissionType.MAYORISTA;
+    } else if (foundItem) {
         if (foundItem.categoria === 'LOTE' || foundItem.unidad === 'LOTE') {
             newCommissionType = CommissionType.LOTE;
         } else if (foundItem.unidad === 'MEDIO FARDO') {
@@ -182,7 +200,13 @@ export default function RegistrarVenta() {
     const finalData = {
       ...formData,
       tipoVenta: isQuick ? SaleType.LIVE : isNotaVenta ? SaleType.NOTA_VENTA : SaleType.NORMAL,
-      items: isNotaVenta ? items : undefined,
+      esMayorista: !isQuick && esMayorista,
+      tipoComision: (!isQuick && esMayorista) ? CommissionType.MAYORISTA : formData.tipoComision,
+      items: isNotaVenta ? items.map(item => ({
+        ...item,
+        tipoComision: esMayorista ? CommissionType.MAYORISTA : (item.tipoComision || CommissionType.FARDO_NORMAL),
+        esMayorista
+      })) : undefined,
       total: isNotaVenta ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0) : formData.valorUnitario * (formData.cantidad || 1),
       status: SaleStatus.PENDIENTE,
       datosCompletos: !isQuick,
@@ -209,7 +233,7 @@ export default function RegistrarVenta() {
       esManual: true, 
       variante: isQuick ? '' : 'FARDO', 
       valorUnitario: 0, 
-      cantidad: 1,
+      cantidad: 1, 
       direccion: '', 
       estadoPago: 'Pendiente', 
       tipoComision: CommissionType.FARDO_NORMAL,
@@ -219,6 +243,7 @@ export default function RegistrarVenta() {
       agencia: ''
     });
     setItems([]);
+    setEsMayorista(false);
     setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
     
     setTimeout(() => setSuccess(false), 2000);
@@ -445,6 +470,54 @@ export default function RegistrarVenta() {
             )}
           </div>
 
+          {/* Opción Venta Mayorista (Automática a $1.500) */}
+          {(mode === 'NOTA_VENTA' || mode === 'NORMAL') && (
+            <div className={`p-5 rounded-[32px] border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+              esMayorista 
+                ? 'bg-purple-50/80 border-purple-300 shadow-md shadow-purple-500/10' 
+                : 'bg-slate-50/70 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-3.5">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all ${
+                  esMayorista ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30' : 'bg-slate-200 text-slate-500'
+                }`}>
+                  <Store size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black uppercase text-slate-800 tracking-tight">Venta Mayorista</span>
+                    {esMayorista ? (
+                      <span className="px-2.5 py-0.5 bg-purple-600 text-white text-[10px] font-black rounded-full uppercase tracking-wider animate-pulse">
+                        Activada • Comisión $1.500 c/u
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-[9px] font-black rounded-full uppercase tracking-wider">
+                        Estándar
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {esMayorista 
+                      ? 'Todos los productos agregados calcularán automáticamente una comisión de $1.500 por unidad/fardo.'
+                      : 'Activa esta opción cuando bajes precios por volumen para que la comisión se ajuste automáticamente a $1.500.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleMayorista(!esMayorista)}
+                className={`px-5 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shrink-0 ${
+                  esMayorista 
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-600/30' 
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-2 border-slate-200'
+                }`}
+              >
+                {esMayorista && <Check size={16} />}
+                {esMayorista ? 'Mayorista Activado ($1.500)' : 'Activar Venta Mayorista'}
+              </button>
+            </div>
+          )}
+
           {/* Productos y Códigos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
              <div className="relative">
@@ -457,10 +530,11 @@ export default function RegistrarVenta() {
                       <input type="number" className="w-16 px-2 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CANT" value={newItem.cantidad} onChange={(e) => setNewItem({...newItem, cantidad: Number(e.target.value)})}/>
                       <input type="number" className="w-24 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="VALOR" value={newItem.valorUnitario} onChange={(e) => setNewItem({...newItem, valorUnitario: Number(e.target.value)})}/>
                       <select className="px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none text-[10px]" value={newItem.tipoComision} onChange={(e) => setNewItem({...newItem, tipoComision: e.target.value as CommissionType})}>
-                          <option value={CommissionType.FARDO_NORMAL}>FARDO</option>
-                          <option value={CommissionType.FARDO_PROMO}>PROMO</option>
-                          <option value={CommissionType.MEDIO_FARDO}>MEDIO</option>
-                          <option value={CommissionType.LOTE}>LOTE</option>
+                          <option value={CommissionType.FARDO_NORMAL}>FARDO ($3.000)</option>
+                          <option value={CommissionType.FARDO_PROMO}>PROMO ($1.500)</option>
+                          <option value={CommissionType.MEDIO_FARDO}>MEDIO ($1.500)</option>
+                          <option value={CommissionType.LOTE}>LOTE ($1.000)</option>
+                          <option value={CommissionType.MAYORISTA}>MAYORISTA ($1.500)</option>
                       </select>
                       <button type="button" onClick={() => { 
                           if(newItem.codigoFardo && newItem.cantidad > 0 && newItem.valorUnitario > 0) {
@@ -475,8 +549,8 @@ export default function RegistrarVenta() {
                                       return;
                                   }
                               }
-                              setItems([...items, newItem]);
-                              setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
+                              setItems([...items, { ...newItem, tipoComision: esMayorista ? CommissionType.MAYORISTA : newItem.tipoComision, esMayorista }]);
+                              setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: esMayorista ? CommissionType.MAYORISTA : CommissionType.FARDO_NORMAL});
                           }
                       }} className="bg-amber-600 text-white rounded-2xl px-4 font-black text-lg hover:bg-amber-700">+</button>
                   </div>
@@ -529,14 +603,32 @@ export default function RegistrarVenta() {
             </div>
             
             {mode === 'NOTA_VENTA' ? (
-              <div className="max-h-40 overflow-y-auto bg-slate-50 border-2 border-slate-100 rounded-[28px] p-4">
+              <div className="max-h-48 overflow-y-auto bg-slate-50 border-2 border-slate-100 rounded-[28px] p-4">
                 {items.length === 0 ? (
                   <p className="text-xs text-slate-400 font-bold p-4 text-center">No hay productos agregados</p>
                 ) : (
                   items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-xs font-bold p-1 border-b border-slate-100 last:border-0">
-                          <span>{item.cantidad} x {stock.find(s => s.codigo === item.codigoFardo)?.tipo || item.codigoFardo}</span>
-                          <span>${(item.valorUnitario * item.cantidad).toLocaleString()}</span>
+                      <div key={idx} className="flex justify-between items-center text-xs font-bold p-1.5 border-b border-slate-100 last:border-0 hover:bg-white/80 rounded-lg transition-colors">
+                          <div className="flex items-center gap-2">
+                            <span>{item.cantidad} x {stock.find(s => s.codigo === item.codigoFardo)?.tipo || item.codigoFardo}</span>
+                            {(item.tipoComision === CommissionType.MAYORISTA || item.esMayorista) && (
+                              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-black rounded uppercase">Mayorista ($1.500)</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span>${(item.valorUnitario * item.cantidad).toLocaleString()}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setItems(items.filter((_, i) => i !== idx));
+                                playSound('click');
+                              }}
+                              className="text-slate-400 hover:text-red-500 p-1 transition-colors"
+                              title="Eliminar producto"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                       </div>
                   ))
                 )}

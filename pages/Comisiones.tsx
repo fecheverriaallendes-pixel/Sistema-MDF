@@ -24,6 +24,7 @@ const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.FARDO_PROMO]: 1500,
   [CommissionType.MEDIO_FARDO]: 1500,
   [CommissionType.LOTE]: 1000,
+  [CommissionType.MAYORISTA]: 1500,
 };
 
 export default function Comisiones() {
@@ -164,7 +165,9 @@ export default function Comisiones() {
           const variantUpper = (saleVariante || '').toUpperCase();
 
           // Force correct type if detection is certain, regardless of saved tipoComision
-          if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
+          if (s.esMayorista || tipo === CommissionType.MAYORISTA) {
+             finalTipo = CommissionType.MAYORISTA;
+          } else if (uppercaseCode.startsWith('L') || variantUpper.includes('LOTE')) {
              finalTipo = CommissionType.LOTE;
           } else if (variantUpper.includes('MEDIO')) {
              finalTipo = CommissionType.MEDIO_FARDO;
@@ -420,6 +423,9 @@ export default function Comisiones() {
                                {entry.source === 'Nota de Venta' && (
                                  <span className="px-2 py-0.5 bg-amber-100 text-amber-600 text-[8px] font-black rounded-md uppercase tracking-tighter">Nota</span>
                                )}
+                               {entry.tipo === CommissionType.MAYORISTA && (
+                                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[8px] font-black rounded-md uppercase tracking-tighter">Mayorista</span>
+                               )}
                                {entry.esManual ? (
                                  <span className="px-2 py-0.5 bg-red-50 text-red-400 text-[8px] font-black rounded-md uppercase tracking-tighter">Manual</span>
                                ) : (
@@ -483,7 +489,7 @@ export default function Comisiones() {
                       <td className="py-2 font-bold uppercase">
                         {stock.find(item => item.codigo === entry.codigo)?.tipo || entry.codigo}
                         <span className="ml-2 text-[7px] text-slate-400">
-                           ({entry.source === 'Nota de Venta' ? 'NOTA' : 'REG'}) · {entry.esManual ? 'MANUAL' : 'STOCK'}
+                           ({entry.source === 'Nota de Venta' ? 'NOTA' : 'REG'}) · {entry.tipo === CommissionType.MAYORISTA ? 'MAYORISTA' : (entry.esManual ? 'MANUAL' : 'STOCK')}
                         </span>
                       </td>
                        <td className="py-2 text-right font-black">

@@ -45,20 +45,23 @@ export interface SaleItem {
   valorUnitario: number;
   tipoComision?: CommissionType;
   esManual?: boolean;
+  esMayorista?: boolean;
 }
 
 export enum CommissionType {
   FARDO_NORMAL = 'Fardo Normal ($3.000)',
   FARDO_PROMO = 'Fardo Promoción ($1.500)',
   MEDIO_FARDO = 'Medio Fardo ($1.500)',
-  LOTE = 'Lote ($1.000)'
+  LOTE = 'Lote ($1.000)',
+  MAYORISTA = 'Mayorista ($1.500)'
 }
 
 export const COMMISSION_VALUES: Record<CommissionType, number> = {
   [CommissionType.FARDO_NORMAL]: 3000,
   [CommissionType.FARDO_PROMO]: 1500,
   [CommissionType.MEDIO_FARDO]: 1500,
-  [CommissionType.LOTE]: 1000
+  [CommissionType.LOTE]: 1000,
+  [CommissionType.MAYORISTA]: 1500
 };
 
 export enum StaffRole {
@@ -433,6 +436,7 @@ export interface Sale {
   impresa?: boolean;
   etiquetador?: string;
   esManual?: boolean;
+  esMayorista?: boolean;
 }
 
 export interface CommissionAdjustment {
