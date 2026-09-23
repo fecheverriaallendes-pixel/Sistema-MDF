@@ -36,7 +36,8 @@ import {
   Copy,
   Check,
   Eye,
-  User
+  User,
+  RefreshCw
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus, StaffRole } from '../types';
@@ -119,7 +120,9 @@ function formatDisplayDateTime(dateStr?: string | null): string {
 }
 
 export default function Despachos() {
-  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser } = useStore();
+  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales } = useStore();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as any) || 'AGENCIA';
   const [searchTerm, setSearchTerm] = useState('');
@@ -136,6 +139,42 @@ export default function Despachos() {
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
   const [selectedTrackingSale, setSelectedTrackingSale] = useState<Sale | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    refreshSales().then(() => {
+      setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    }).catch(() => {});
+
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        refreshSales().then(() => {
+          setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [refreshSales]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    playSound('click');
+    try {
+      await refreshSales();
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastRefreshedAt(timeStr);
+      playSound('success');
+    } catch (error) {
+      console.error("Error al actualizar despachos:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleCopyStatus = (sale: Sale) => {
     const text = generateWhatsAppTrackingMessage(sale, stock);
@@ -163,10 +202,13 @@ export default function Despachos() {
   
   // Categorize sales into tabs
   const isJunta = (s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
+  const isDomicilio = (s: Sale) => s.tipoDespacho === DispatchType.DOMICILIO || (Boolean(s.tipoDespacho) && s.tipoDespacho.toUpperCase().includes('DOMICILIO'));
+  const isRetiro = (s: Sale) => s.tipoDespacho === DispatchType.RETIRO || (Boolean(s.tipoDespacho) && s.tipoDespacho.toUpperCase().includes('RETIRO'));
+
   const allJuntaCompraSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && isJunta(s));
-  const allAgencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.AGENCIA && !isJunta(s));
-  const allHomeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.DOMICILIO && !isJunta(s));
-  const allWithdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && s.tipoDespacho === DispatchType.RETIRO && !isJunta(s));
+  const allHomeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && isDomicilio(s));
+  const allWithdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && isRetiro(s));
+  const allAgencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && !isDomicilio(s) && !isRetiro(s));
   const allHistorySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
 
   const juntaTotalProducts = allJuntaCompraSales.reduce((acc, s) => {
@@ -225,6 +267,7 @@ export default function Despachos() {
         s.cliente.toLowerCase().includes(search) || 
         s.numeroVenta.toString().includes(search) ||
         (s.codigoFardo?.toLowerCase().includes(search) ?? false) ||
+        (s.vendedor?.toLowerCase().includes(search) ?? false) ||
         productTypeName.includes(search) ||
         itemsMatch ||
         (s.transportista?.toLowerCase().includes(search) ?? false) ||
@@ -288,6 +331,7 @@ export default function Despachos() {
     import('xlsx').then(XLSX => {
       const data = currentList.map(s => ({
         "N_Venta": s.numeroVenta,
+        "Vendedor": s.vendedor || 'N/A',
         "Fecha_Venta": s.fecha,
         "Fecha_Despacho": s.fechaDespacho ? new Date(s.fechaDespacho).toLocaleString('es-CL') : (s.conductorFecha || 'N/A'),
         "Cliente": s.cliente,
@@ -357,12 +401,31 @@ export default function Despachos() {
           <p className="text-slate-500 italic ml-16 font-medium">Gestión de envíos, verificación de carga, transportistas y tracking de historial.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 border border-emerald-200/80 rounded-2xl text-[11px] font-bold text-emerald-800 shadow-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span>En vivo</span>
+            <span className="text-emerald-600 font-mono text-[10px]">({lastRefreshedAt})</span>
+          </div>
+
+          <button 
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-60"
+            title="Sincronizar y actualizar inmediatamente"
+          >
+            <RefreshCw size={15} className={`text-amber-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+          </button>
+
           <button 
             onClick={handleExportExcel}
-            className="flex items-center gap-3 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
+            className="flex items-center gap-2.5 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
           >
-            <FileSpreadsheet size={18} /> Exportar Lista ({currentList.length})
+            <FileSpreadsheet size={17} /> Exportar Lista ({currentList.length})
           </button>
           
           <div className="flex bg-slate-200 p-1 rounded-[20px] shadow-inner">
@@ -371,14 +434,14 @@ export default function Despachos() {
               className={`p-3 rounded-[16px] transition-all ${viewMode === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
               title="Vista en Cuadrícula"
             >
-              <LayoutGrid size={20} />
+              <LayoutGrid size={18} />
             </button>
             <button 
               onClick={() => { setViewMode('list'); playSound('click'); }}
               className={`p-3 rounded-[16px] transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
               title="Vista en Tabla"
             >
-              <List size={20} />
+              <List size={18} />
             </button>
           </div>
         </div>
@@ -688,55 +751,59 @@ export default function Despachos() {
               
               {/* Card Header */}
               <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block px-3 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-black mb-1.5">#{sale.numeroVenta}</span>
+                <div className="flex-1 min-w-0 pr-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-block px-3 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-black mb-1">#{sale.numeroVenta}</span>
                     {sale.comprobante && (
-                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 mb-1.5 hover:scale-110 transition-transform" title="Ver Comprobante">
+                      <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 mb-1 hover:scale-110 transition-transform" title="Ver Comprobante">
                         <Camera size={16} />
                       </a>
                     )}
                     {sale.tipoDespacho && (
-                      <span className="inline-block px-2.5 py-0.5 bg-slate-200 text-slate-700 rounded-md text-[9px] font-black uppercase mb-1.5">
+                      <span className="inline-block px-2.5 py-0.5 bg-slate-200 text-slate-700 rounded-md text-[9px] font-black uppercase mb-1">
                         {sale.tipoDespacho}
                       </span>
                     )}
                     {isJunta(sale) && (
-                      <span className="inline-block px-2.5 py-0.5 bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-md text-[9px] font-black uppercase mb-1.5 shadow-sm">
+                      <span className="inline-block px-2.5 py-0.5 bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-md text-[9px] font-black uppercase mb-1 shadow-sm">
                         📦 Junta Compra
                       </span>
                     )}
                   </div>
                   
-                  {/* Dates Display */}
-                  <div className="space-y-0.5 mt-1">
+                  {/* Dates Display & Vendor */}
+                  <div className="space-y-1 mt-1.5">
                     {sale.fechaDespacho && (
-                      <p className="text-xs font-black text-emerald-700 flex items-center gap-1">
-                        <Truck size={13} className="text-emerald-600" /> 
+                      <p className="text-xs font-black text-emerald-700 flex items-center gap-1.5">
+                        <Truck size={13} className="text-emerald-600 shrink-0" /> 
                         <span>Despacho: {formatDisplayDateTime(sale.fechaDespacho)}</span>
                       </p>
                     )}
-                    <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-                      <Calendar size={12} className="text-slate-400" />
+                    <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+                      <Calendar size={12} className="text-slate-400 shrink-0" />
                       <span>Venta: {formatDisplayDate(sale.fecha)} {sale.hora ? `(${sale.hora})` : ''}</span>
+                    </p>
+                    <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+                      <User size={12} className="text-violet-500 shrink-0" />
+                      <span>Vendedor: <strong className="text-slate-700 font-bold">{sale.vendedor || 'No asignado'}</strong></span>
                     </p>
                   </div>
                 </div>
 
-                <div className="text-right flex flex-col items-end gap-2">
+                <div className="text-right flex flex-col items-end gap-2.5 shrink-0">
                   <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                     {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
                   </span>
                   <button 
                     onClick={() => {
-                        if(confirm("¿Estás seguro de que quieres eliminar este despacho?")) {
+                        if(confirm(`¿Estás seguro de que quieres eliminar la venta/despacho #${sale.numeroVenta} (${sale.cliente})?`)) {
                             deleteSale(sale.id);
                         }
                     }}
-                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/90 rounded-xl transition-all shadow-sm hover:shadow"
                     title="Eliminar despacho"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={16} className="text-rose-600" />
                   </button>
                 </div>
               </div>
@@ -745,9 +812,9 @@ export default function Despachos() {
               <div className="p-6 flex-1 space-y-5">
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</p>
-                  <p className="text-lg font-black text-slate-900 uppercase leading-tight truncate">{sale.cliente}</p>
+                  <p className="text-lg font-black text-slate-900 uppercase leading-snug break-words">{sale.cliente}</p>
                   <p className="text-xs font-medium text-slate-500 flex items-center gap-1 mt-1">
-                    <Phone size={12} /> {sale.telefono || 'Sin teléfono'} {sale.rut ? `• RUT: ${sale.rut}` : ''}
+                    <Phone size={12} className="shrink-0" /> {sale.telefono || 'Sin teléfono'} {sale.rut ? `• RUT: ${sale.rut}` : ''}
                   </p>
                 </div>
 
@@ -992,6 +1059,7 @@ export default function Despachos() {
                 <tr>
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Venta</th>
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                  <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vendedor</th>
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Destino / Tipo</th>
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Producto(s)</th>
                   <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -1013,6 +1081,12 @@ export default function Despachos() {
                     <td className="px-6 py-5">
                       <p className="font-bold text-slate-900 text-sm">{sale.cliente}</p>
                       <p className="text-xs text-slate-400">{sale.telefono}</p>
+                    </td>
+                    <td className="px-6 py-5">
+                      <span className="inline-flex items-center gap-1.5 bg-violet-50 text-violet-800 border border-violet-100 px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap">
+                        <User size={12} className="text-violet-600 shrink-0" />
+                        {sale.vendedor || <span className="text-slate-400 font-normal italic">Sin asignar</span>}
+                      </span>
                     </td>
                     <td className="px-6 py-5">
                       <p className="text-xs text-slate-700 uppercase font-medium max-w-xs truncate">{sale.direccion || 'Retiro en Bodega'}</p>
@@ -1090,6 +1164,17 @@ export default function Despachos() {
                           title="Ver tracking"
                         >
                           <Eye size={13} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if(confirm(`¿Estás seguro de que quieres eliminar la venta/despacho #${sale.numeroVenta} (${sale.cliente})?`)) {
+                              deleteSale(sale.id);
+                            }
+                          }}
+                          className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 rounded-lg transition-all"
+                          title="Eliminar despacho"
+                        >
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </td>

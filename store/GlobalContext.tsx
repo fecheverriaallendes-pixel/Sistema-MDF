@@ -452,6 +452,8 @@ interface StoreContextType {
   updateDispatchStatus: (saleId: string, status: DispatchStatus) => void;
   updateDispatchItems: (saleId: string, quantity: number) => void;
   assignCarrier: (saleId: string, carrier: string) => void;
+  assignAgency: (saleId: string, agency: string) => void;
+  refreshSales: () => Promise<Sale[]>;
   addCarrier: (name: string) => void;
   removeCarrier: (name: string) => void;
   coupons: Coupon[];
@@ -814,6 +816,43 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
 
+  const refreshSales = useCallback(async (): Promise<Sale[]> => {
+    setIsSyncing(true);
+    try {
+      const snap = await getDocs(collection(db, 'sales'));
+      const freshSales = snap.docs.map(d => d.data() as Sale);
+      setSales(freshSales);
+      safeLocalStorage.setItem('mdf_sales', JSON.stringify(freshSales));
+      const now = new Date();
+      const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      updateSettings({ dbConnected: true, lastSync: timeString, lastError: null });
+      return freshSales;
+    } catch (err: any) {
+      console.error("Error al refrescar ventas desde Firestore:", err);
+      updateSettings({ lastError: err.message });
+      throw err;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshSales().catch(() => {});
+      }
+    };
+    const handleOnline = () => {
+      refreshSales().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [refreshSales]);
+
   const syncWithCloud = async (silent = false) => {
     return true;
   };
@@ -852,8 +891,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       try {
         unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
           const salesData = snap.docs.map(d => d.data() as Sale);
-          console.log("DEBUG: Retrived sales numbers:", salesData.map(s => s.numeroVenta));
           setSales(salesData);
+          safeLocalStorage.setItem('mdf_sales', JSON.stringify(salesData));
+          const now = new Date();
+          const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          updateSettings({ dbConnected: true, lastSync: timeString, lastError: null });
+        }, (error) => {
+          console.error("Error en listener de sales:", error);
+          updateSettings({ dbConnected: false, lastError: error.message });
         });
         unsubStock = onSnapshot(collection(db, 'stock'), (snap) => {
           setStock(snap.docs.map(d => d.data() as StockItem));
@@ -1068,6 +1113,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
       await batch.commit();
       console.log("Sale and stock updates committed successfully.");
+      setSales(prev => [newSale, ...prev.filter(s => s.id !== newSale.id)]);
     } catch(error) {
         console.error("Error adding sale:", error);
         alert("Error al registrar venta. Revisa la consola.");
@@ -1118,7 +1164,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         alert("Solo el administrador puede editar el precio de una venta completada.");
         return;
       }
-      setDoc(doc(db, 'sales', id), { ...sale, ...updatedData });
+      const updatedSale = { ...sale, ...updatedData };
+      setSales(prev => prev.map(s => s.id === id ? updatedSale : s));
+      setDoc(doc(db, 'sales', id), cleanUndefined(updatedSale)).catch(err => {
+        console.error("Error al actualizar venta en Firestore:", err);
+        setSales(prev => prev.map(s => s.id === id ? sale : s));
+      });
     }
   };
 
@@ -1126,39 +1177,68 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
       const isLocal = sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO');
-      setDoc(doc(db, 'sales', saleId), { 
+      const updatedSale: Sale = { 
         ...sale, 
         status: SaleStatus.ENVIADO, 
         enviado: true, 
         fechaDespacho: new Date().toISOString(), 
         estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA 
-      });
+      };
+      setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
       playSound('success');
+      setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale)).catch(err => {
+        console.error("Error al marcar como enviado en Firestore:", err);
+        setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+      });
     }
   };
 
   const updateDispatchStatus = (saleId: string, status: DispatchStatus) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
-      const updatedData: Partial<Sale> = { estadoDespacho: status };
-      
-      setDoc(doc(db, 'sales', saleId), { ...sale, ...updatedData });
+      const updatedSale: Sale = { ...sale, estadoDespacho: status };
+      setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+      setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale)).catch(err => {
+        console.error("Error al actualizar estado de despacho:", err);
+        setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+      });
     }
   };
 
   const updateDispatchItems = (saleId: string, quantity: number) => {
     const sale = sales.find(s => s.id === saleId);
-    if (sale) setDoc(doc(db, 'sales', saleId), { ...sale, itemsDespachados: quantity });
+    if (sale) {
+      const updatedSale: Sale = { ...sale, itemsDespachados: quantity };
+      setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+      setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale)).catch(err => {
+        console.error("Error al actualizar items despachados:", err);
+        setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+      });
+    }
   };
 
   const assignCarrier = (saleId: string, carrier: string) => {
     const sale = sales.find(s => s.id === saleId);
-    if (sale) setDoc(doc(db, 'sales', saleId), { ...sale, transportista: carrier });
+    if (sale) {
+      const updatedSale: Sale = { ...sale, transportista: carrier };
+      setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+      setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale)).catch(err => {
+        console.error("Error al asignar transportista:", err);
+        setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+      });
+    }
   };
 
   const assignAgency = (saleId: string, agency: string) => {
     const sale = sales.find(s => s.id === saleId);
-    if (sale) setDoc(doc(db, 'sales', saleId), { ...sale, agencia: agency });
+    if (sale) {
+      const updatedSale: Sale = { ...sale, agencia: agency };
+      setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+      setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale)).catch(err => {
+        console.error("Error al asignar agencia:", err);
+        setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+      });
+    }
   };
 
   const addCarrier = (name: string) => {
@@ -1972,8 +2052,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       alert(`No tienes permisos para borrar ventas. Solo el administrador puede hacerlo.`);
       return;
     }
+    const saleToDelete = sales.find(s => s.id === saleId);
+    setSales(prev => prev.filter(s => s.id !== saleId));
     try {
-      const saleToDelete = sales.find(s => s.id === saleId);
       const batch = writeBatch(db);
       
       batch.delete(doc(db, 'sales', saleId));
@@ -3029,7 +3110,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       incidents, addIncident, updateIncident, addIncidentHistoryEvent, addIncidentComment, addIncidentAttachment, deleteIncident,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, updatePurchase, removePurchase, addAbono, updateAbono, removeAbono,
