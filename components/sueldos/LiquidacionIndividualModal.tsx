@@ -388,18 +388,23 @@ export default function LiquidacionIndividualModal({
                   )}
 
                   {/* Otros Descuentos */}
-                  {record.otrosDescuentosTotal > 0 && (
+                  {record.otrosDescuentosTotal > 0 ? (
                     <div className="py-1.5 border-b border-slate-100">
                       <div className="flex justify-between items-center font-medium text-slate-700 mb-1">
-                        <span>Otros Ajustes / Descuentos</span>
+                        <span>Descuentos Manuales / Ajustes</span>
                         <span className="font-black text-red-600">-${record.otrosDescuentosTotal.toLocaleString('es-CL')}</span>
                       </div>
-                      {record.otrosDescuentosDetalle && record.otrosDescuentosDetalle.map((o, i) => (
+                      {record.otrosDescuentosDetalle && record.otrosDescuentosDetalle.map((o: any, i: number) => (
                         <div key={i} className="flex justify-between items-center text-[10px] text-slate-500 pl-3">
-                          <span>• {o.motivo}</span>
-                          <span className="text-red-500">-${o.monto.toLocaleString('es-CL')}</span>
+                          <span>• {o.fecha ? `${o.fecha}: ` : ''}{o.motivo}</span>
+                          <span className="text-red-500 font-bold">-${o.monto.toLocaleString('es-CL')}</span>
                         </div>
                       ))}
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 text-slate-400">
+                      <span>Descuentos Manuales</span>
+                      <span>$0</span>
                     </div>
                   )}
 

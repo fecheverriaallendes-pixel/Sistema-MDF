@@ -186,6 +186,21 @@ export interface SalaryAdvance {
   createdAt?: string;
 }
 
+export interface SalaryDeduction {
+  id: string;
+  workerId: string;
+  workerName: string;
+  fecha: string; // YYYY-MM-DD
+  monto: number;
+  motivo: string; // Ej: "Ropa/Mercadería fiada", "Daño o merma de mercadería", "Faltante en caja", "Multa o infracción", "Ajuste manual", "Otro"
+  observacion?: string;
+  comprobante?: string;
+  semanaPago?: string; // Fecha del sábado
+  descontado?: boolean;
+  registradoPor?: string;
+  createdAt?: string;
+}
+
 export interface LoanPayment {
   id: string;
   fecha: string;

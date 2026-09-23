@@ -56,6 +56,7 @@ export default function NominaConsolidadaModal({
   const totalHaberes = items.reduce((acc, i) => acc + (i.totalHaberes || 0), 0);
   const totalAdelantos = items.reduce((acc, i) => acc + (i.adelantosTotal || 0), 0);
   const totalPrestamos = items.reduce((acc, i) => acc + (i.cuotaPrestamoTotal || 0), 0);
+  const totalOtrosDescuentos = items.reduce((acc, i) => acc + (i.otrosDescuentosTotal || 0), 0);
   const totalDescuentos = items.reduce((acc, i) => acc + (i.totalDescuentos || 0), 0);
   const totalLiquido = items.reduce((acc, i) => acc + (i.liquidoPagar || 0), 0);
 
@@ -122,6 +123,7 @@ export default function NominaConsolidadaModal({
                     <th className="py-2.5 px-3 text-right bg-emerald-50 text-emerald-900">Total Haberes</th>
                     <th className="py-2.5 px-3 text-right text-red-600">Adelantos</th>
                     <th className="py-2.5 px-3 text-right text-red-600">Préstamo</th>
+                    <th className="py-2.5 px-3 text-right text-rose-600 bg-rose-50/40">Dsctos Manuales</th>
                     <th className="py-2.5 px-3 text-right bg-red-50 text-red-900">Total Dscto</th>
                     <th className="py-2.5 px-3 text-right bg-slate-900 text-white">Líquido a Pagar</th>
                     <th className="py-2.5 px-3 text-center print:table-cell">Firma Conforme</th>
@@ -165,6 +167,7 @@ export default function NominaConsolidadaModal({
                       <td className="py-2.5 px-3 text-right font-black text-emerald-700 bg-emerald-50/50">${item.totalHaberes.toLocaleString('es-CL')}</td>
                       <td className="py-2.5 px-3 text-right font-medium text-red-600">{item.adelantosTotal > 0 ? `-$${item.adelantosTotal.toLocaleString('es-CL')}` : '$0'}</td>
                       <td className="py-2.5 px-3 text-right font-medium text-red-600">{item.cuotaPrestamoTotal > 0 ? `-$${item.cuotaPrestamoTotal.toLocaleString('es-CL')}` : '$0'}</td>
+                      <td className="py-2.5 px-3 text-right font-medium text-rose-600 bg-rose-50/30">{item.otrosDescuentosTotal > 0 ? `-$${item.otrosDescuentosTotal.toLocaleString('es-CL')}` : '$0'}</td>
                       <td className="py-2.5 px-3 text-right font-black text-red-700 bg-red-50/50">-${item.totalDescuentos.toLocaleString('es-CL')}</td>
                       <td className="py-2.5 px-3 text-right font-black text-slate-900 bg-slate-100 text-xs">${item.liquidoPagar.toLocaleString('es-CL')}</td>
                       <td className="py-2.5 px-3 text-center border-l border-slate-200">
@@ -183,6 +186,7 @@ export default function NominaConsolidadaModal({
                     <td className="py-3 px-3 text-right text-emerald-400">${totalHaberes.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right text-red-300">-${totalAdelantos.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right text-red-300">-${totalPrestamos.toLocaleString('es-CL')}</td>
+                    <td className="py-3 px-3 text-right text-rose-300">-${totalOtrosDescuentos.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right text-red-300">-${totalDescuentos.toLocaleString('es-CL')}</td>
                     <td className="py-3 px-3 text-right text-emerald-300 text-sm">${totalLiquido.toLocaleString('es-CL')}</td>
                     <td></td>

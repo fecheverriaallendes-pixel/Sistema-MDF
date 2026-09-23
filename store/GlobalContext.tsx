@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord, ValeEntrada, ValeEntradaItem } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, SalaryDeduction, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord, ValeEntrada, ValeEntradaItem } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
@@ -517,6 +517,11 @@ interface StoreContextType {
   updateSalaryAdvance: (id: string, updated: Partial<SalaryAdvance>) => Promise<void>;
   deleteSalaryAdvance: (id: string) => Promise<void>;
 
+  salaryDeductions: SalaryDeduction[];
+  addSalaryDeduction: (deduction: Omit<SalaryDeduction, 'id' | 'createdAt'>) => Promise<SalaryDeduction>;
+  updateSalaryDeduction: (id: string, updated: Partial<SalaryDeduction>) => Promise<void>;
+  deleteSalaryDeduction: (id: string) => Promise<void>;
+
   employeeLoans: EmployeeLoan[];
   addEmployeeLoan: (loan: Omit<EmployeeLoan, 'id' | 'saldoPendiente' | 'cuotasPagadas' | 'historialPagos' | 'createdAt' | 'updatedAt'>) => Promise<EmployeeLoan>;
   updateEmployeeLoan: (id: string, updated: Partial<EmployeeLoan>) => Promise<void>;
@@ -701,6 +706,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const saved = safeLocalStorage.getItem('mdf_salary_advances');
     return saved ? JSON.parse(saved) : [];
   });
+  const [salaryDeductions, setSalaryDeductions] = useState<SalaryDeduction[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_salary_deductions');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [employeeLoans, setEmployeeLoans] = useState<EmployeeLoan[]>(() => {
     const saved = safeLocalStorage.getItem('mdf_employee_loans');
     return saved ? JSON.parse(saved) : [];
@@ -873,6 +882,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubCustomers: any;
     let unsubStockHistory: any;
     let unsubSalaryAdvances: any;
+    let unsubSalaryDeductions: any;
     let unsubEmployeeLoans: any;
     let unsubWorkExtras: any;
     let unsubPayrollRecords: any;
@@ -949,6 +959,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubSalaryAdvances = onSnapshot(collection(db, 'salary_advances'), (snap) => {
           setSalaryAdvances(snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryAdvance)));
         });
+        unsubSalaryDeductions = onSnapshot(collection(db, 'salary_deductions'), (snap) => {
+          const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryDeduction));
+          setSalaryDeductions(list);
+          safeLocalStorage.setItem('mdf_salary_deductions', JSON.stringify(list));
+        });
         unsubEmployeeLoans = onSnapshot(collection(db, 'employee_loans'), (snap) => {
           setEmployeeLoans(snap.docs.map(d => ({ ...d.data(), id: d.id } as EmployeeLoan)));
         });
@@ -993,6 +1008,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubCustomers) unsubCustomers();
       if (unsubStockHistory) unsubStockHistory();
       if (unsubSalaryAdvances) unsubSalaryAdvances();
+      if (unsubSalaryDeductions) unsubSalaryDeductions();
       if (unsubEmployeeLoans) unsubEmployeeLoans();
       if (unsubWorkExtras) unsubWorkExtras();
       if (unsubPayrollRecords) unsubPayrollRecords();
@@ -2578,6 +2594,37 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('click');
   };
 
+  const addSalaryDeduction = async (deduction: Omit<SalaryDeduction, 'id' | 'createdAt'>): Promise<SalaryDeduction> => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const newDeduction: SalaryDeduction = {
+      ...deduction,
+      id,
+      monto: Number(deduction.monto) || 0,
+      descontado: deduction.descontado ?? false,
+      createdAt: now
+    };
+    await setDoc(doc(db, 'salary_deductions', id), cleanUndefined(newDeduction));
+    playSound('success');
+    return newDeduction;
+  };
+
+  const updateSalaryDeduction = async (id: string, updated: Partial<SalaryDeduction>): Promise<void> => {
+    const current = salaryDeductions.find(d => d.id === id);
+    if (!current) return;
+    const merged = { ...current, ...updated };
+    if (updated.monto !== undefined) {
+      merged.monto = Number(updated.monto) || 0;
+    }
+    await setDoc(doc(db, 'salary_deductions', id), cleanUndefined(merged));
+    playSound('click');
+  };
+
+  const deleteSalaryDeduction = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'salary_deductions', id));
+    playSound('click');
+  };
+
   const addEmployeeLoan = async (loan: Omit<EmployeeLoan, 'id' | 'saldoPendiente' | 'cuotasPagadas' | 'historialPagos' | 'createdAt' | 'updatedAt'>): Promise<EmployeeLoan> => {
     const id = Math.random().toString(36).substr(2, 9);
     const now = new Date().toISOString();
@@ -3121,6 +3168,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       stockHistory, addStockHistoryEvent,
       archiveSalesBeforeDate, fetchArchivedSales, restoreArchivedSales, deleteArchivedSales,
       salaryAdvances, addSalaryAdvance, updateSalaryAdvance, deleteSalaryAdvance,
+      salaryDeductions, addSalaryDeduction, updateSalaryDeduction, deleteSalaryDeduction,
       employeeLoans, addEmployeeLoan, updateEmployeeLoan, deleteEmployeeLoan, addLoanPayment,
       workExtras, addWorkExtra, bulkAddWorkExtras, updateWorkExtra, deleteWorkExtra,
       payrollRecords, savePayrollRecord, updatePayrollRecord, deletePayrollRecord,

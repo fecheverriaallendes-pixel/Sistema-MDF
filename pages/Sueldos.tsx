@@ -31,7 +31,8 @@ import {
   Video,
   Moon,
   Smartphone,
-  Sparkles
+  Sparkles,
+  Scissors
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import {
@@ -39,6 +40,7 @@ import {
   StaffRole,
   CommissionType,
   SalaryAdvance,
+  SalaryDeduction,
   EmployeeLoan,
   WorkExtra,
   WeeklyPayrollRecord,
@@ -49,6 +51,7 @@ import LiquidacionIndividualModal from '../components/sueldos/LiquidacionIndivid
 import NominaConsolidadaModal from '../components/sueldos/NominaConsolidadaModal';
 import TransferListModal from '../components/sueldos/TransferListModal';
 import AdelantoModal from '../components/sueldos/AdelantoModal';
+import DescuentoModal from '../components/sueldos/DescuentoModal';
 import PrestamoModal from '../components/sueldos/PrestamoModal';
 import TrabajoExtraModal from '../components/sueldos/TrabajoExtraModal';
 import TikTokLiveModal from '../components/sueldos/TikTokLiveModal';
@@ -63,7 +66,7 @@ const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.MAYORISTA]: 1500,
 };
 
-type ActiveTab = 'liquidaciones' | 'asistencia' | 'adelantos' | 'prestamos' | 'extras' | 'tiktok' | 'personal' | 'historial';
+type ActiveTab = 'liquidaciones' | 'asistencia' | 'adelantos' | 'prestamos' | 'descuentos' | 'extras' | 'tiktok' | 'personal' | 'historial';
 
 export default function Sueldos() {
   const {
@@ -77,6 +80,10 @@ export default function Sueldos() {
     addSalaryAdvance,
     updateSalaryAdvance,
     deleteSalaryAdvance,
+    salaryDeductions,
+    addSalaryDeduction,
+    updateSalaryDeduction,
+    deleteSalaryDeduction,
     employeeLoans,
     addEmployeeLoan,
     updateEmployeeLoan,
@@ -125,6 +132,12 @@ export default function Sueldos() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   const [isAdelantoModalOpen, setIsAdelantoModalOpen] = useState(false);
+  const [selectedAdvanceWorkerId, setSelectedAdvanceWorkerId] = useState<string | undefined>();
+  const [isDeductionModalOpen, setIsDeductionModalOpen] = useState(false);
+  const [selectedDeductionWorkerId, setSelectedDeductionWorkerId] = useState<string | undefined>();
+  const [editingDeduction, setEditingDeduction] = useState<SalaryDeduction | null>(null);
+  const [searchDeductions, setSearchDeductions] = useState('');
+  const [selectedWorkerDeductionFilter, setSelectedWorkerDeductionFilter] = useState('ALL');
   const [isPrestamoModalOpen, setIsPrestamoModalOpen] = useState(false);
   const [isExtraModalOpen, setIsExtraModalOpen] = useState(false);
   const [isTikTokModalOpen, setIsTikTokModalOpen] = useState(false);
@@ -370,6 +383,20 @@ export default function Sueldos() {
   }, [adjustments, weekRange]);
 
   // ----------------------------------------------------
+  // WEEKLY SALARY DEDUCTIONS (Descuentos Manuales)
+  // ----------------------------------------------------
+  const weeklySalaryDeductions = useMemo(() => {
+    if (!Array.isArray(salaryDeductions)) return [];
+    return salaryDeductions.filter(d => {
+      if (d.semanaPago && d.semanaPago === weekRange.saturdayStr) return true;
+      if (!d.fecha) return false;
+      const dDate = parseDateSafely(d.fecha);
+      if (!dDate) return false;
+      return dDate >= weekRange.start && dDate <= weekRange.end;
+    });
+  }, [salaryDeductions, weekRange]);
+
+  // ----------------------------------------------------
   // WEEKLY ATTENDANCE FOR CURRENT WEEK
   // ----------------------------------------------------
   const currentWeekAttendance = useMemo(() => {
@@ -451,9 +478,32 @@ export default function Sueldos() {
       });
       const cuotaPrestamoTotal = prestamosDetalle.reduce((acc, p) => acc + p.montoCuota, 0);
 
-      // 8. Otros descuentos negativos desde adjustments
+      // 8. Descuentos Manuales y otros descuentos negativos desde adjustments
+      const workerSalaryDeductions = weeklySalaryDeductions.filter(
+        d => d.workerId === member.id || d.workerName.trim().toLowerCase() === member.nombre.trim().toLowerCase()
+      );
+      const salaryDeductionsSum = workerSalaryDeductions.reduce((acc, d) => acc + (Number(d.monto) || 0), 0);
+
       const workerNegativeAdj = weeklyAdjustments.filter(a => a.vendedor === member.nombre && a.monto < 0);
-      const otrosDescuentosTotal = Math.abs(workerNegativeAdj.reduce((acc, a) => acc + a.monto, 0));
+      const negativeAdjSum = Math.abs(workerNegativeAdj.reduce((acc, a) => acc + a.monto, 0));
+
+      const otrosDescuentosTotal = salaryDeductionsSum + negativeAdjSum;
+      const otrosDescuentosDetalle = [
+        ...workerSalaryDeductions.map(d => ({
+          id: d.id,
+          fecha: d.fecha,
+          motivo: d.motivo + (d.observacion ? ` (${d.observacion})` : ''),
+          monto: Number(d.monto) || 0,
+          isManualDeduction: true
+        })),
+        ...workerNegativeAdj.map(a => ({
+          id: a.id,
+          fecha: a.fecha,
+          motivo: a.motivo,
+          monto: Math.abs(a.monto),
+          isManualDeduction: false
+        }))
+      ];
 
       // TOTAL DESCUENTOS
       const totalDescuentos = adelantosTotal + cuotaPrestamoTotal + otrosDescuentosTotal;
@@ -504,10 +554,11 @@ export default function Sueldos() {
         totalHaberes,
         adelantosTotal,
         workerAdvances,
+        workerDeductions: workerSalaryDeductions,
         cuotaPrestamoTotal,
         prestamosDetalle,
         otrosDescuentosTotal,
-        otrosDescuentosDetalle: workerNegativeAdj.map(a => ({ motivo: a.motivo, monto: Math.abs(a.monto) })),
+        otrosDescuentosDetalle,
         totalDescuentos,
         liquidoPagar,
         estado,
@@ -523,6 +574,7 @@ export default function Sueldos() {
     weeklyWorkExtras,
     weeklyTikTokLives,
     weeklyAdvances,
+    weeklySalaryDeductions,
     weeklyAdjustments,
     employeeLoans,
     payrollRecords,
@@ -553,6 +605,7 @@ export default function Sueldos() {
       totalNochesTikTok: calculatedPayrollList.reduce((acc, i) => acc + (i.tiktokLivesCount || 0), 0),
       totalExtras: calculatedPayrollList.reduce((acc, i) => acc + i.extrasTotal, 0),
       totalDescuentos: calculatedPayrollList.reduce((acc, i) => acc + i.totalDescuentos, 0),
+      totalDescuentosManuales: calculatedPayrollList.reduce((acc, i) => acc + i.otrosDescuentosTotal, 0),
       totalAdelantos: calculatedPayrollList.reduce((acc, i) => acc + i.adelantosTotal, 0),
       totalPrestamos: calculatedPayrollList.reduce((acc, i) => acc + i.cuotaPrestamoTotal, 0),
       pagadosCount: calculatedPayrollList.filter(i => i.estado === 'PAGADO' || i.estado === 'TRANSFERIDO').length,
@@ -742,6 +795,19 @@ export default function Sueldos() {
     playSound('click');
   };
 
+  const handleOpenQuickDescuento = (workerId?: string) => {
+    setSelectedDeductionWorkerId(workerId);
+    setEditingDeduction(null);
+    setIsDeductionModalOpen(true);
+    playSound('click');
+  };
+
+  const handleOpenQuickAdelanto = (workerId?: string) => {
+    setSelectedAdvanceWorkerId(workerId);
+    setIsAdelantoModalOpen(true);
+    playSound('click');
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-[1440px] mx-auto pb-24">
       
@@ -804,6 +870,15 @@ export default function Sueldos() {
           </div>
 
           {/* Botones de Nómina y Transferencias */}
+          <button
+            onClick={() => handleOpenQuickDescuento()}
+            className="flex items-center gap-2 px-5 py-3.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-sm active:scale-95"
+            title="Registrar Descuento Manual a un trabajador"
+          >
+            <Scissors size={16} className="text-rose-600" />
+            <span className="hidden sm:inline">Nuevo</span> Descuento
+          </button>
+
           <button
             onClick={() => {
               setIsTransferModalOpen(true);
@@ -892,6 +967,23 @@ export default function Sueldos() {
           {employeeLoans.filter(l => l.estado === 'ACTIVO').length > 0 && (
             <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-blue-500/20 text-blue-400">
               {employeeLoans.filter(l => l.estado === 'ACTIVO').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('descuentos'); playSound('click'); }}
+          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap ${
+            activeTab === 'descuentos'
+              ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Scissors size={16} className={activeTab === 'descuentos' ? 'text-rose-400' : 'text-slate-400'} />
+          Descuentos Manuales
+          {weeklySalaryDeductions.length > 0 && (
+            <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-400 font-bold">
+              {weeklySalaryDeductions.length}
             </span>
           )}
         </button>
@@ -1385,13 +1477,42 @@ export default function Sueldos() {
                         </div>
                       )}
 
-                      {/* Otros Descuentos */}
-                      {item.otrosDescuentosTotal > 0 && (
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-600 font-medium">Otros Descuentos / Ajustes:</span>
-                          <span className="font-bold text-red-600">-${item.otrosDescuentosTotal.toLocaleString('es-CL')}</span>
+                      {/* Otros Descuentos / Descuentos Manuales */}
+                      {item.otrosDescuentosTotal > 0 ? (
+                        <div className="text-xs space-y-1">
+                          <div className="flex items-center justify-between font-medium text-slate-700">
+                            <span>Descuentos Manuales:</span>
+                            <span className="font-bold text-red-600">-${item.otrosDescuentosTotal.toLocaleString('es-CL')}</span>
+                          </div>
+                          {item.otrosDescuentosDetalle && item.otrosDescuentosDetalle.map((d: any, idx: number) => (
+                            <div key={d.id || idx} className="flex items-center justify-between text-[10px] text-slate-500 pl-2">
+                              <span>• {d.fecha ? `${d.fecha}: ` : ''}{d.motivo}</span>
+                              <span className="text-red-500 font-bold">-${d.monto.toLocaleString('es-CL')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-xs text-slate-400">
+                          <span>Descuentos Manuales:</span>
+                          <span>$0</span>
                         </div>
                       )}
+
+                      {/* Botones rápidos de Descuentos para este trabajador */}
+                      <div className="grid grid-cols-2 gap-2 mt-2 pt-1 border-t border-slate-100">
+                        <button
+                          onClick={() => handleOpenQuickAdelanto(item.workerId)}
+                          className="py-1.5 px-2 text-center text-[10px] font-black text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors border border-dashed border-amber-300 flex items-center justify-center gap-1"
+                        >
+                          <DollarSign size={11} /> + Adelanto
+                        </button>
+                        <button
+                          onClick={() => handleOpenQuickDescuento(item.workerId)}
+                          className="py-1.5 px-2 text-center text-[10px] font-black text-rose-700 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors border border-dashed border-rose-300 flex items-center justify-center gap-1"
+                        >
+                          <Scissors size={11} /> + Descuento
+                        </button>
+                      </div>
                     </div>
 
                   </div>
@@ -1831,6 +1952,269 @@ export default function Sueldos() {
       )}
 
       {/* ========================================================================= */}
+      {/* PESTAÑA: DESCUENTOS MANUALES (Merma, Ropa, Multas, Ajustes) */}
+      {/* ========================================================================= */}
+      {activeTab === 'descuentos' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                <h2 className="text-xl font-black text-slate-900 uppercase">Descuentos Manuales de Nómina</h2>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Registra deducciones por ropa retirada, daño o merma de fardos, faltantes de caja, multas o arreglos pactados. Se descontarán automáticamente el sábado en la liquidación.
+              </p>
+            </div>
+
+            <button
+              onClick={() => handleOpenQuickDescuento()}
+              className="flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-rose-600/20 active:scale-95 whitespace-nowrap"
+            >
+              <Scissors size={16} /> + Registrar Descuento
+            </button>
+          </div>
+
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Descontado (Semana)</p>
+                <p className="text-2xl font-black text-rose-600 mt-1">
+                  -${weeklySalaryDeductions.reduce((acc, d) => acc + (Number(d.monto) || 0), 0).toLocaleString('es-CL')}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">Sábado: {weekRange.saturdayStr}</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                <Scissors size={24} />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Registros de Descuento</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  {weeklySalaryDeductions.length}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">En la semana actual</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                <FileSpreadsheet size={24} />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Personal Afectado</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  {new Set(weeklySalaryDeductions.map(d => d.workerId || d.workerName)).size}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">Colaboradores con rebajas</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Users size={24} />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Mayor Descuento</p>
+                <p className="text-2xl font-black text-rose-700 mt-1">
+                  -${(weeklySalaryDeductions.length > 0 
+                      ? Math.max(...weeklySalaryDeductions.map(d => Number(d.monto) || 0)) 
+                      : 0).toLocaleString('es-CL')}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">Monto máximo puntual</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+                <DollarSign size={24} />
+              </div>
+            </div>
+          </div>
+
+          {/* Filtros y Búsqueda */}
+          <div className="bg-white p-4 rounded-[24px] border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="relative w-full md:w-96">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por colaborador, motivo u observación..."
+                value={searchDeductions}
+                onChange={e => setSearchDeductions(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-rose-500 outline-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <Filter size={16} className="text-slate-400 shrink-0" />
+              <select
+                value={selectedWorkerDeductionFilter}
+                onChange={e => setSelectedWorkerDeductionFilter(e.target.value)}
+                className="w-full md:w-auto px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:bg-white focus:border-rose-500 outline-none cursor-pointer"
+              >
+                <option value="ALL">Todos los colaboradores</option>
+                {staff.map(s => (
+                  <option key={s.id} value={s.id}>{s.nombre} ({s.rol})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tabla de Descuentos */}
+          {(() => {
+            const filteredDeductions = weeklySalaryDeductions.filter(d => {
+              const matchWorker = selectedWorkerDeductionFilter === 'ALL' || d.workerId === selectedWorkerDeductionFilter;
+              const term = searchDeductions.toLowerCase().trim();
+              const matchTerm = !term || 
+                d.workerName.toLowerCase().includes(term) ||
+                d.motivo.toLowerCase().includes(term) ||
+                (d.observacion && d.observacion.toLowerCase().includes(term)) ||
+                (d.comprobante && d.comprobante.toLowerCase().includes(term));
+              return matchWorker && matchTerm;
+            });
+
+            if (filteredDeductions.length === 0) {
+              return (
+                <div className="bg-white rounded-[28px] border border-slate-200 p-12 text-center shadow-sm">
+                  <div className="w-16 h-16 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-4">
+                    <Scissors size={28} />
+                  </div>
+                  <h3 className="text-base font-black text-slate-800 uppercase">Sin descuentos manuales esta semana</h3>
+                  <p className="text-xs text-slate-500 font-medium max-w-md mx-auto mt-1 mb-6">
+                    {searchDeductions || selectedWorkerDeductionFilter !== 'ALL'
+                      ? 'No hay registros que coincidan con los filtros seleccionados.'
+                      : 'No se han ingresado descuentos manuales para el periodo actual. Puedes registrar descuentos por ropa, mermas o multas en cualquier momento.'}
+                  </p>
+                  <button
+                    onClick={() => handleOpenQuickDescuento()}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-rose-600/20"
+                  >
+                    <Scissors size={14} /> Registrar Primer Descuento
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="bg-white rounded-[28px] border border-slate-200 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-black uppercase text-[10px] tracking-wider text-left">
+                        <th className="py-3 px-4">Fecha</th>
+                        <th className="py-3 px-4">Colaborador</th>
+                        <th className="py-3 px-4">Motivo / Categoría</th>
+                        <th className="py-3 px-4">Detalle / Observación</th>
+                        <th className="py-3 px-4">N° Ref / Comp</th>
+                        <th className="py-3 px-4 text-right">Monto Descontado</th>
+                        <th className="py-3 px-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredDeductions.map(deduction => {
+                        const targetStaff = staff.find(s => s.id === deduction.workerId);
+                        return (
+                          <tr key={deduction.id} className="hover:bg-slate-50/70 transition-colors">
+                            {/* Fecha */}
+                            <td className="py-3.5 px-4 font-mono text-slate-600 whitespace-nowrap">
+                              {deduction.fecha}
+                            </td>
+
+                            {/* Colaborador */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-xl bg-slate-900 text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                                  {deduction.workerName.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-black text-slate-900 uppercase leading-none">
+                                    {deduction.workerName}
+                                  </p>
+                                  <span className="text-[10px] text-slate-400 font-medium">
+                                    {targetStaff?.rol || 'Personal'}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Motivo */}
+                            <td className="py-3.5 px-4">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200/60 uppercase">
+                                <Scissors size={10} />
+                                {deduction.motivo}
+                              </span>
+                            </td>
+
+                            {/* Observación */}
+                            <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">
+                              {deduction.observacion || <span className="text-slate-300 italic">Sin observaciones</span>}
+                            </td>
+
+                            {/* Comprobante */}
+                            <td className="py-3.5 px-4 font-mono text-slate-500">
+                              {deduction.comprobante || '-'}
+                            </td>
+
+                            {/* Monto */}
+                            <td className="py-3.5 px-4 text-right font-black text-rose-600 whitespace-nowrap text-sm">
+                              -${(Number(deduction.monto) || 0).toLocaleString('es-CL')}
+                            </td>
+
+                            {/* Acciones */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingDeduction(deduction);
+                                    setSelectedDeductionWorkerId(deduction.workerId);
+                                    setIsDeductionModalOpen(true);
+                                    playSound('click');
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                                  title="Editar descuento"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (confirm(`¿Estás seguro de eliminar el descuento de $${Number(deduction.monto).toLocaleString('es-CL')} a ${deduction.workerName}?`)) {
+                                      await deleteSalaryDeduction(deduction.id);
+                                    }
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                  title="Eliminar descuento"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-900 text-white font-black uppercase text-xs">
+                        <td colSpan={5} className="py-3 px-4">
+                          Total Descuentos en Pantalla ({filteredDeductions.length} Registros)
+                        </td>
+                        <td className="py-3 px-4 text-right text-rose-400 text-sm">
+                          -${filteredDeductions.reduce((acc, d) => acc + (Number(d.monto) || 0), 0).toLocaleString('es-CL')}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* PESTAÑA 4: CARGAS, DESCARGAS & PAGOS EXTRAS */}
       {/* ========================================================================= */}
       {activeTab === 'extras' && (
@@ -2235,11 +2619,37 @@ export default function Sueldos() {
       {isAdelantoModalOpen && (
         <AdelantoModal
           isOpen={isAdelantoModalOpen}
-          onClose={() => setIsAdelantoModalOpen(false)}
+          onClose={() => {
+            setIsAdelantoModalOpen(false);
+            setSelectedAdvanceWorkerId(undefined);
+          }}
           staffList={staff}
+          defaultWorkerId={selectedAdvanceWorkerId}
           defaultSemanaPago={weekRange.saturdayStr}
           onSave={async advance => {
             await addSalaryAdvance(advance);
+          }}
+        />
+      )}
+
+      {/* Modal Registrar / Editar Descuento Manual */}
+      {isDeductionModalOpen && (
+        <DescuentoModal
+          isOpen={isDeductionModalOpen}
+          onClose={() => {
+            setIsDeductionModalOpen(false);
+            setSelectedDeductionWorkerId(undefined);
+            setEditingDeduction(null);
+          }}
+          staffList={staff}
+          defaultWorkerId={selectedDeductionWorkerId}
+          defaultSemanaPago={weekRange.saturdayStr}
+          editingDeduction={editingDeduction}
+          onSave={async deduction => {
+            await addSalaryDeduction(deduction);
+          }}
+          onUpdate={async (id, updated) => {
+            await updateSalaryDeduction(id, updated);
           }}
         />
       )}
