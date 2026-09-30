@@ -8,6 +8,8 @@ import { Label } from '../components/Label';
 import { Invoice } from '../components/Invoice';
 import { VentasArchiveModal } from '../components/VentasArchiveModal';
 import { SaleTrackingModal, formatShippingStatus, generateWhatsAppTrackingMessage } from '../components/SaleTrackingModal';
+import { PrintLabelsModal } from '../components/PrintLabelsModal';
+import { getTotalBultos, generateIndividualLabels } from '../utils/labelUtils';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -39,6 +41,7 @@ export default function Ventas() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [shippingFilter, setShippingFilter] = useState<'ALL' | 'PREP' | 'EN_RUTA' | 'JUNTA' | 'RETIRO' | 'ENTREGADO'>('ALL');
   const [trackingSale, setTrackingSale] = useState<Sale | null>(null);
+  const [labelModalSale, setLabelModalSale] = useState<Sale | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
@@ -141,8 +144,8 @@ export default function Ventas() {
           </div>
         )}
         {printSale && printType === 'ETIQUETAS' && (
-          (printSale.items && printSale.items.length > 0 ? printSale.items : [{codigoFardo: printSale.codigoFardo || 'N/A', cantidad: printSale.cantidad || 1}]).map((item, idx) => (
-            <div key={idx} className="label-container"><Label sale={printSale} stock={stock} item={item} /></div>
+          generateIndividualLabels(printSale, stock).map((lbl, idx) => (
+            <div key={`${printSale.id}-${idx}`} className="label-container"><Label sale={printSale} stock={stock} item={lbl.item} /></div>
           ))
         )}
       </div>
@@ -366,9 +369,18 @@ export default function Ventas() {
                         </button>
                       </div>
                       {(sale.datosCompletos || sale.tipoVenta === SaleType.NOTA_VENTA) && (
-                        <div className="flex gap-2 justify-center text-xs font-bold">
+                        <div className="flex gap-2 justify-center text-xs font-bold items-center">
                           <button onClick={() => { handlePrint(sale, 'FACTURA'); }} className="text-blue-500 hover:text-blue-700">Factura</button>
-                          <button onClick={() => { handlePrint(sale, 'ETIQUETAS'); }} className="text-emerald-500 hover:text-emerald-700">Etiquetas</button>
+                          <button 
+                            onClick={() => { setLabelModalSale(sale); playSound('click'); }} 
+                            className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg transition-colors font-black"
+                            title="Imprimir etiquetas de bultos / fardos"
+                          >
+                            Etiquetas {(() => {
+                              const b = getTotalBultos(sale);
+                              return b > 1 ? `(${b})` : '';
+                            })()}
+                          </button>
                         </div>
                       )}
                       {isAdmin && (
@@ -547,6 +559,16 @@ export default function Ventas() {
             playSound('success');
             setTrackingSale(null);
           }}
+        />
+      )}
+
+      {/* Modal de Impresión de Etiquetas Térmicas (Individuales por Bulto / Agrupadas) */}
+      {labelModalSale && (
+        <PrintLabelsModal 
+          isOpen={Boolean(labelModalSale)}
+          sale={labelModalSale}
+          stock={stock}
+          onClose={() => setLabelModalSale(null)}
         />
       )}
     </div>
