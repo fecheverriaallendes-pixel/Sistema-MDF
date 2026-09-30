@@ -151,10 +151,19 @@ export default function Ventas() {
       </div>
       <style>{`
           @media print {
-            body { background: white !important; }
+            body { 
+              background: white !important; 
+              -webkit-print-color-adjust: exact !important; 
+              print-color-adjust: exact !important; 
+            }
             .no-print { display: none !important; }
-            .print-only, .print-only * { display: block !important; visibility: visible !important; }
-            .print-only { position: absolute; left: 0; top: 0; width: 100%; }
+            .print-only { 
+              display: block !important; 
+              position: static !important; 
+              width: 100% !important; 
+              margin: 0 !important; 
+              padding: 0 !important; 
+            }
             
             /* Reset body limits to allow printing full content without cutoff */
             body, html {
@@ -168,7 +177,27 @@ export default function Ventas() {
               padding: 0 !important;
             }
             
-            .label-container { width: 100mm; height: 150mm; page-break-after: always; overflow: hidden; }
+            .label-container { 
+              width: 100mm !important; 
+              height: 150mm !important; 
+              max-height: 150mm !important;
+              margin: 0 !important;
+              padding: 2mm 2mm 5mm 2mm !important;
+              box-sizing: border-box !important;
+              page-break-after: always !important; 
+              page-break-inside: avoid !important;
+              break-after: page !important;
+              break-inside: avoid !important;
+              display: flex !important;
+              flex-direction: column !important;
+              align-items: center !important;
+              justify-content: center !important;
+              overflow: hidden !important; 
+            }
+            .label-container:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
             .invoice-container { 
               width: 100%; 
               padding: 15mm 20mm; 

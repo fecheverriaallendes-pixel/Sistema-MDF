@@ -657,6 +657,64 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
           </div>
         ))}
       </div>
+
+      <style>{`
+        @media print {
+          @page {
+            size: 100mm 150mm portrait;
+            margin: 0mm !important;
+          }
+          
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100mm !important;
+            height: 150mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          
+          .no-print {
+            display: none !important;
+          }
+          
+          .print-only {
+            display: block !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            z-index: 99999 !important;
+          }
+          
+          .label-container {
+            width: 100mm !important;
+            height: 150mm !important;
+            max-height: 150mm !important;
+            margin: 0 !important;
+            padding: 2mm 2mm 5mm 2mm !important;
+            box-sizing: border-box !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            break-after: page !important;
+            break-inside: avoid !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            overflow: hidden !important;
+          }
+          
+          .label-container:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
+        }
+      `}</style>
     </>
   );
 };
