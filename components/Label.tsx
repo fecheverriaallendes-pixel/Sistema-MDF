@@ -139,7 +139,7 @@ export const Label = ({
           <span className="text-[8px] font-black uppercase tracking-wider text-black block leading-none mb-0.5">
             DESTINATARIO
           </span>
-          <p className="text-[15px] font-black uppercase leading-tight text-black tracking-tight line-clamp-1">
+          <p className="text-[14.5px] font-black uppercase leading-snug text-black tracking-tight break-words">
             {sale.cliente}
           </p>
         </div>
@@ -185,7 +185,7 @@ export const Label = ({
           <span className="text-[7.5px] font-black uppercase tracking-wider text-black block leading-none mb-0.5">
             DESTINO / TIPO DESPACHO
           </span>
-          <span className="text-[13px] font-black uppercase tracking-wide px-2 py-0.2 rounded inline-block bg-black text-white leading-tight">
+          <span className="text-[13px] font-black uppercase tracking-wide px-2 py-0.2 rounded inline-block bg-black text-white leading-tight break-words">
             {destinoText}
           </span>
         </div>
@@ -209,26 +209,44 @@ export const Label = ({
       </div>
 
       {/* 5. Producto / SKU y Cantidad */}
-      <div className="border-2 border-black rounded p-1 bg-white grid grid-cols-2 gap-1.5">
-        <div>
-          <span className="text-[7.5px] font-black uppercase tracking-wider text-black block leading-none mb-0.5">
-            PRODUCTO / SKU
-          </span>
-          <p className="text-[11.5px] font-black uppercase leading-tight text-black line-clamp-1">
-            { (() => {
-              if (displayItem.descripcionProducto) return displayItem.descripcionProducto;
-              const stockItem = stock.find(i => i.codigo === displayItem.codigoFardo);
-              return stockItem ? stockItem.tipo : (displayItem.codigoFardo || 'SIN CÓDIGO');
+      <div className="border-2 border-black rounded p-1.5 bg-white flex items-stretch justify-between gap-2">
+        <div className="flex-1 min-w-0 pr-1 flex flex-col justify-between">
+          <div>
+            <span className="text-[7.5px] font-black uppercase tracking-wider text-black block leading-none mb-0.5">
+              PRODUCTO / SKU
+            </span>
+            {(() => {
+              const prodName = (() => {
+                if (displayItem.descripcionProducto) return displayItem.descripcionProducto;
+                const stockItem = stock.find(i => i.codigo === displayItem.codigoFardo);
+                return stockItem ? stockItem.tipo : (displayItem.codigoFardo || 'SIN CÓDIGO');
+              })();
+              
+              const textSizeClass = prodName.length > 35 
+                ? 'text-[10.5px]' 
+                : prodName.length > 22 
+                ? 'text-[11.5px]' 
+                : 'text-[12.5px]';
+
+              return (
+                <p className={`${textSizeClass} font-black uppercase leading-tight text-black break-words`}>
+                  {prodName}
+                </p>
+              );
             })()}
-          </p>
-          <span 
-            className="thermal-num text-[11px] font-extrabold tracking-wider text-black border border-black px-1 py-0.2 rounded bg-white inline-block mt-0.5 leading-none"
-            style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
-          >
-            {displayItem.codigoFardo || 'N/A'}
-          </span>
+          </div>
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[7px] font-bold uppercase text-slate-600">CÓD:</span>
+            <span 
+              className="thermal-num text-[11px] font-extrabold tracking-wider text-black border border-black px-1.5 py-0.2 rounded bg-white inline-block leading-none"
+              style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
+            >
+              {displayItem.codigoFardo || 'N/A'}
+            </span>
+          </div>
         </div>
-        <div className="text-right flex flex-col justify-between items-end">
+        
+        <div className="text-right flex flex-col justify-between items-end shrink-0 border-l border-black/30 pl-2 min-w-[70px]">
           <span className="text-[7.5px] font-black uppercase tracking-wider text-black block leading-none">
             {isIndividualBulto ? 'ESTE FARDO' : 'CANTIDAD'}
           </span>
