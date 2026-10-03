@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { 
   Send, 
   CheckCircle2, 
@@ -39,7 +39,8 @@ import {
   User,
   RefreshCw,
   RotateCcw,
-  Smartphone
+  Smartphone,
+  Globe
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus, StaffRole } from '../types';
@@ -128,8 +129,12 @@ function formatDisplayDateTime(dateStr?: string | null): string {
 }
 
 export default function Despachos() {
-  const { sales, stock, markAsSent, revertDispatchToPending, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales, settings, updateSettings } = useStore();
+  const { sales, stock, markAsSent, revertDispatchToPending, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales, settings, updateSettings, triggerDispatchWebhook, markDepartureNotificationAsSent } = useStore();
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
+  const isBodegaUser = currentUser?.rol === StaffRole.BODEGA || currentUser?.rol === StaffRole.DESPACHO;
+  const bodegaInteracts = settings.bodegaInteractsWithWhatsApp === true;
+  const isBodegaMode = isBodegaUser || !bodegaInteracts;
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string>(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [searchParams] = useSearchParams();
@@ -152,6 +157,12 @@ export default function Despachos() {
     sale: Sale;
     message: string;
     wasAutoOpened: boolean;
+  } | null>(null);
+  const [dispatchToast, setDispatchToast] = useState<{
+    title: string;
+    message: string;
+    type: 'success' | 'info';
+    sale?: Sale;
   } | null>(null);
 
   const handleRevertDispatchToPending = async (sale: Sale) => {
@@ -399,7 +410,7 @@ export default function Despachos() {
     }
   };
 
-  const handleConfirmDispatch = (sale: Sale) => {
+  const handleConfirmDispatch = async (sale: Sale) => {
     const requiredQty = sale.cantidad || 1;
     if ((sale.itemsDespachados || 0) !== requiredQty) {
       alert(`Error: La cantidad verificada (${sale.itemsDespachados || 0}) no coincide con la venta (${requiredQty}).`);
@@ -410,7 +421,6 @@ export default function Despachos() {
       return;
     }
 
-    markAsSent(sale.id);
     setVerifyingSaleId(null);
 
     const isDomicilioOrAgencia = 
@@ -419,9 +429,13 @@ export default function Despachos() {
       (sale.tipoDespacho && sale.tipoDespacho.toUpperCase().includes('DOMICILIO')) ||
       (sale.tipoDespacho && sale.tipoDespacho.toUpperCase().includes('AGENCIA'));
 
+    let departureMessage = '';
+    let updatedSaleForNotification: Sale | null = null;
+    let sentViaWebhook = false;
+
     if (isDomicilioOrAgencia) {
       const isLocal = sale.tipoDespacho === DispatchType.RETIRO;
-      const updatedSaleForNotification: Sale = {
+      updatedSaleForNotification = {
         ...sale,
         status: SaleStatus.ENVIADO,
         enviado: true,
@@ -429,27 +443,68 @@ export default function Despachos() {
         estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA
       };
 
-      const departureMessage = generateDispatchDepartureWhatsAppMessage(updatedSaleForNotification, stock);
-      const autoOpen = settings.autoOpenWhatsAppOnDispatch !== false;
-      let wasAutoOpened = false;
+      departureMessage = generateDispatchDepartureWhatsAppMessage(updatedSaleForNotification, stock);
 
-      if (autoOpen && sale.telefono) {
-        const waUrl = formatChileanWhatsAppUrl(sale.telefono, departureMessage);
-        if (waUrl) {
-          try {
-            window.open(waUrl, '_blank');
-            wasAutoOpened = true;
-          } catch (e) {
-            console.warn("No se pudo abrir WhatsApp automáticamente:", e);
-          }
+      // Si hay webhook configurado, enviamos de forma automática y desatendida
+      if (settings.webhookSalidaDespachoUrl) {
+        try {
+          sentViaWebhook = await triggerDispatchWebhook(updatedSaleForNotification, departureMessage);
+        } catch (e) {
+          console.warn("No se pudo enviar vía webhook:", e);
         }
       }
+    }
 
-      setDepartureModalData({
-        sale: updatedSaleForNotification,
-        message: departureMessage,
-        wasAutoOpened
-      });
+    // Marcamos como enviado en base de datos registrando el mensaje y estado de aviso
+    markAsSent(sale.id, {
+      message: departureMessage,
+      pendiente: isDomicilioOrAgencia ? !sentViaWebhook : false
+    });
+
+    if (isDomicilioOrAgencia && updatedSaleForNotification) {
+      if (sentViaWebhook) {
+        // Envió 100% automático por Webhook / API
+        setDispatchToast({
+          title: `¡Salida Venta #${sale.numeroVenta} Confirmada!`,
+          message: `Mensaje de WhatsApp enviado automáticamente al cliente (${sale.cliente}) vía Webhook / API conectada.`,
+          type: 'success',
+          sale: updatedSaleForNotification
+        });
+        playSound('success');
+      } else if (isBodegaMode) {
+        // Modo Bodega Silencioso: El Jefe de Bodega no interactúa con WhatsApp
+        setDispatchToast({
+          title: `¡Salida de Bodega Confirmada (Venta #${sale.numeroVenta})!`,
+          message: `El pedido de ${sale.cliente} fue despachado. El aviso al cliente quedó derivado en la bandeja de ${sale.vendedor || 'la vendedora'} para su notificación sin interrumpirte en bodega.`,
+          type: 'info',
+          sale: updatedSaleForNotification
+        });
+        playSound('success');
+      } else {
+        // Modo Administrador / Operador con interacción directa de WhatsApp
+        const autoOpen = settings.autoOpenWhatsAppOnDispatch !== false;
+        let wasAutoOpened = false;
+
+        if (autoOpen && sale.telefono) {
+          const waUrl = formatChileanWhatsAppUrl(sale.telefono, departureMessage);
+          if (waUrl) {
+            try {
+              window.open(waUrl, '_blank');
+              wasAutoOpened = true;
+            } catch (e) {
+              console.warn("No se pudo abrir WhatsApp automáticamente:", e);
+            }
+          }
+        }
+
+        setDepartureModalData({
+          sale: updatedSaleForNotification,
+          message: departureMessage,
+          wasAutoOpened
+        });
+      }
+    } else {
+      playSound('success');
     }
   };
 
@@ -532,6 +587,71 @@ export default function Despachos() {
           </div>
         </div>
       </div>
+
+      {/* Toast de Confirmación de Despacho */}
+      {dispatchToast && (
+        <div className="bg-white border-2 border-emerald-500 rounded-3xl p-5 shadow-2xl animate-in slide-in-from-top-4 duration-300 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+              dispatchToast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white'
+            }`}>
+              {dispatchToast.type === 'success' ? <CheckCircle2 size={24} /> : <Truck size={24} />}
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-black text-slate-900 text-base uppercase">{dispatchToast.title}</h4>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-2xl">{dispatchToast.message}</p>
+              {dispatchToast.sale && (
+                <div className="flex items-center gap-2 pt-1 text-[11px] font-bold text-slate-500">
+                  <span>Cliente: <strong className="text-slate-800 uppercase">{dispatchToast.sale.cliente}</strong></span>
+                  <span>•</span>
+                  <span>Destino: <strong className="text-amber-600 uppercase">{dispatchToast.sale.agencia || dispatchToast.sale.direccion || 'Domicilio'}</strong></span>
+                </div>
+              )}
+            </div>
+          </div>
+          <button 
+            onClick={() => setDispatchToast(null)} 
+            className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-xl transition-all"
+            title="Cerrar notificación"
+          >
+            <Minus size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* Banner Informativo Modo Jefe de Bodega */}
+      {isBodegaMode && (
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-5 rounded-[28px] border border-slate-800 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-500/20 text-blue-300 rounded-2xl flex items-center justify-center border border-blue-400/30 shrink-0">
+              <Truck size={24} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-black text-xs uppercase tracking-wider text-white">
+                  Modo Bodega Silencioso Activo
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                  settings.webhookSalidaDespachoUrl ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30' : 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
+                }`}>
+                  {settings.webhookSalidaDespachoUrl ? 'Webhook Automático Conectado' : 'Derivación a Vendedora'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 font-medium mt-1 leading-relaxed">
+                Confirmas las salidas de bodega libremente sin ventanas ni interrupciones de WhatsApp. {settings.webhookSalidaDespachoUrl ? 'El cliente recibe el mensaje de salida en tiempo real vía Webhook.' : 'Los avisos se derivan a la bandeja de cada vendedora para que mantengan la comunicación con sus clientes.'}
+              </p>
+            </div>
+          </div>
+          {isAdmin && (
+            <Link 
+              to="/configuracion"
+              className="text-[10px] font-black uppercase tracking-wider bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-xl transition-all shrink-0 border border-white/10"
+            >
+              Configurar WhatsApp / Webhook
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex flex-wrap p-1.5 bg-slate-200 rounded-[24px] w-full max-w-6xl mx-auto shadow-inner gap-1">
@@ -1359,6 +1479,7 @@ export default function Despachos() {
           autoOpenPreference={settings.autoOpenWhatsAppOnDispatch !== false}
           onToggleAutoOpenPreference={(enabled) => updateSettings({ autoOpenWhatsAppOnDispatch: enabled })}
           onClose={() => setDepartureModalData(null)}
+          onMarkAsSent={() => markDepartureNotificationAsSent(departureModalData.sale.id)}
         />
       )}
     </div>

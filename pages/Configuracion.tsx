@@ -20,13 +20,38 @@ export default function Configuracion() {
     isSyncing, lastSync, staff, addStaff, updateStaff, removeStaff, sales, stock, purchases,
     clearAllSales, resetToMasterStock, addCarrier, carriers, removeCarrier,
     fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, deleteAllSales,
-    commissionValues, pagoReenfardado, updateAppValues, currentUser
+    commissionValues, pagoReenfardado, updateAppValues, currentUser,
+    testDispatchWebhook
   } = useStore();
   
   const [activeTab, setActiveTab] = useState<'RED' | 'STAFF' | 'DB' | 'SISTEMA' | 'CARRIERS' | 'VALORES' | 'ARCHIVE'>('RED');
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [apiUrl, setApiUrl] = useState(settings.cloudUrl);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState('569');
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTestWebhook = async () => {
+    if (!settings.webhookSalidaDespachoUrl) {
+      alert("Por favor ingresa primero la URL del Webhook.");
+      return;
+    }
+    setTestLoading(true);
+    setTestResult(null);
+    playSound('click');
+    try {
+      const res = await testDispatchWebhook(testPhone);
+      setTestResult(res);
+      if (res.success) {
+        playSound('success');
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, message: err?.message || 'Error de red o conexión' });
+    } finally {
+      setTestLoading(false);
+    }
+  };
 
   const [formComisiones, setFormComisiones] = useState<Record<string, number>>({});
   const [formReenfardado, setFormReenfardado] = useState<number>(0);
@@ -492,6 +517,116 @@ export default function Configuracion() {
                   >
                     <div className={`w-8 h-8 bg-white rounded-full shadow-md transition-all transform ${settings.autoOpenWhatsAppOnDispatch !== false ? 'translate-x-10' : 'translate-x-0'}`}></div>
                   </button>
+                </div>
+
+                {/* Modo Jefe de Bodega: Sin interacción de WhatsApp */}
+                <div className="flex items-center justify-between p-8 bg-blue-50/60 rounded-[32px] border border-blue-100">
+                  <div className="flex items-center gap-5">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${settings.bodegaInteractsWithWhatsApp !== true ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                      <Truck size={24} />
+                    </div>
+                    <div>
+                      <p className="font-black text-slate-900 uppercase text-xs">Modo Jefe de Bodega (Sin WhatsApp)</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight max-w-lg">
+                        El Jefe de Bodega solo confirma la salida física sin interrupciones ni ventanas de WhatsApp. Los avisos se derivan en vivo a la vendedora asignada o al webhook.
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const current = settings.bodegaInteractsWithWhatsApp === true;
+                      updateSettings({ bodegaInteractsWithWhatsApp: !current });
+                      playSound('click');
+                    }}
+                    className={`w-20 h-10 rounded-full p-1 transition-all ${settings.bodegaInteractsWithWhatsApp !== true ? 'bg-blue-600' : 'bg-slate-300'}`}
+                  >
+                    <div className={`w-8 h-8 bg-white rounded-full shadow-md transition-all transform ${settings.bodegaInteractsWithWhatsApp !== true ? 'translate-x-10' : 'translate-x-0'}`}></div>
+                  </button>
+                </div>
+
+                {/* Webhook para Envío 100% Automático Desatendido */}
+                <div className="p-8 bg-slate-50 rounded-[32px] border border-slate-100 space-y-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-purple-100 text-purple-700 rounded-2xl flex items-center justify-center shrink-0">
+                        <Globe size={24} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-900 uppercase text-xs">Webhook para Envío 100% Automático de WhatsApp</h4>
+                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed max-w-xl">
+                          Ideal para cuando el <strong>Jefe de Bodega</strong> confirma la salida física: el sistema dispara este Webhook en segundo plano para que el cliente reciba su WhatsApp de inmediato sin que el personal de bodega deba tocar WhatsApp.
+                        </p>
+                      </div>
+                    </div>
+                    {settings.webhookSalidaDespachoUrl && (
+                      <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-black uppercase flex items-center gap-1 shrink-0">
+                        <CheckCircle2 size={12} /> Activo
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">URL de Webhook POST</label>
+                      <input 
+                        type="url"
+                        placeholder="https://hook.make.com/... o https://api.ultramsg.com/... o Evolution API"
+                        defaultValue={settings.webhookSalidaDespachoUrl || ''}
+                        onBlur={(e) => updateSettings({ webhookSalidaDespachoUrl: e.target.value.trim() })}
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-purple-500 shadow-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Token de Autorización (Bearer Token Opcional)</label>
+                      <input 
+                        type="text"
+                        placeholder="Token, API Key o Bearer..."
+                        defaultValue={settings.webhookSalidaDespachoToken || ''}
+                        onBlur={(e) => updateSettings({ webhookSalidaDespachoToken: e.target.value.trim() })}
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-purple-500 shadow-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Herramienta de Prueba de Webhook en Vivo */}
+                  <div className="p-5 bg-white rounded-2xl border border-slate-200/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                        <Smartphone size={14} className="text-purple-600" /> Probar Conexión de Webhook en Vivo
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-bold">Envía un paquete de prueba al servidor</span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <div className="w-full sm:flex-1">
+                        <input
+                          type="text"
+                          value={testPhone}
+                          onChange={(e) => setTestPhone(e.target.value)}
+                          placeholder="Número WhatsApp de prueba: 569..."
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleTestWebhook}
+                        disabled={testLoading || !settings.webhookSalidaDespachoUrl}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm active:scale-95 flex items-center justify-center gap-2 shrink-0"
+                      >
+                        <RefreshCw size={13} className={testLoading ? 'animate-spin' : ''} />
+                        <span>{testLoading ? 'Probando...' : 'Probar Envío Webhook'}</span>
+                      </button>
+                    </div>
+
+                    {testResult && (
+                      <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                        testResult.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'
+                      }`}>
+                        {testResult.success ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertTriangle size={16} className="text-red-600 shrink-0" />}
+                        <span>{testResult.message}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Zona de Peligro: Limpieza */}

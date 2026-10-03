@@ -15,20 +15,28 @@ import {
   Building2, 
   Home, 
   Sparkles, 
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  Filter,
-  Eye,
-  Calendar,
-  AlertCircle,
-  LayoutGrid,
-  List,
-  ExternalLink
+  ChevronRight, 
+  ChevronDown, 
+  ChevronUp, 
+  ChevronLeft, 
+  Filter, 
+  Eye, 
+  Calendar, 
+  AlertCircle, 
+  LayoutGrid, 
+  List, 
+  ExternalLink,
+  Send
 } from 'lucide-react';
+import { useStore } from '../store/GlobalContext';
 import { Sale, SaleStatus, DispatchType, StockItem } from '../types';
-import { SaleTrackingModal, formatShippingStatus, generateWhatsAppTrackingMessage } from './SaleTrackingModal';
+import { 
+  SaleTrackingModal, 
+  formatShippingStatus, 
+  generateWhatsAppTrackingMessage,
+  generateDispatchDepartureWhatsAppMessage,
+  formatChileanWhatsAppUrl
+} from './SaleTrackingModal';
 
 interface VendedoraShippingTrackerProps {
   sales: Sale[];
@@ -49,10 +57,11 @@ export function VendedoraShippingTracker({
   onRevertToPending,
   playSound = () => {}
 }: VendedoraShippingTrackerProps) {
+  const { markDepartureNotificationAsSent } = useStore();
   const [isExpanded, setIsExpanded] = useState(false);
   const [viewLayout, setViewLayout] = useState<'cards' | 'table'>('cards');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusTab, setStatusTab] = useState<'PENDIENTES' | 'ALL' | 'PREPARACION' | 'EN_RUTA' | 'JUNTA' | 'RETIRO' | 'ENTREGADO'>('PENDIENTES');
+  const [statusTab, setStatusTab] = useState<'PENDIENTES' | 'ALL' | 'PREPARACION' | 'EN_RUTA' | 'JUNTA' | 'RETIRO' | 'ENTREGADO' | 'AVISOS_SALIDA'>('PENDIENTES');
   const [timeFilter, setTimeFilter] = useState<'ALL' | '30DAYS' | '7DAYS'>('30DAYS');
   const [selectedSaleForModal, setSelectedSaleForModal] = useState<Sale | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -79,8 +88,13 @@ export function VendedoraShippingTracker({
     let retiro = 0;
     let entregados = 0;
     let pendientes = 0;
+    let avisosPendientes = 0;
 
     mySales.forEach(s => {
+      if (s.notificacionSalidaPendiente) {
+        avisosPendientes++;
+      }
+
       const isJunta = Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA') && s.status === SaleStatus.PENDIENTE);
       const isRetiro = s.tipoDespacho === DispatchType.RETIRO;
       const isEnviado = s.status === SaleStatus.ENVIADO;
@@ -104,7 +118,8 @@ export function VendedoraShippingTracker({
       enRuta,
       junta,
       retiro,
-      entregados
+      entregados,
+      avisosPendientes
     };
   }, [mySales]);
 
@@ -154,6 +169,7 @@ export function VendedoraShippingTracker({
       if (statusTab === 'JUNTA' && !isJunta) return false;
       if (statusTab === 'RETIRO' && (!isRetiro || isEnviado)) return false;
       if (statusTab === 'ENTREGADO' && !isEnviado) return false;
+      if (statusTab === 'AVISOS_SALIDA' && !s.notificacionSalidaPendiente) return false;
 
       // Text Search
       if (searchTerm.trim()) {
@@ -216,6 +232,24 @@ export function VendedoraShippingTracker({
     const text = generateWhatsAppTrackingMessage(sale, stock);
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
+  };
+
+  const handleSendDepartureNotice = (sale: Sale) => {
+    playSound('click');
+    const phone = (sale.telefono || '').replace(/\D/g, '');
+    if (!phone) {
+      alert("El cliente no tiene teléfono registrado.");
+      return;
+    }
+    const message = sale.notificacionSalidaMensaje || generateDispatchDepartureWhatsAppMessage(sale, stock);
+    const waUrl = formatChileanWhatsAppUrl(phone, message);
+    if (!waUrl) {
+      alert("El número de teléfono no es válido.");
+      return;
+    }
+    window.open(waUrl, '_blank');
+    markDepartureNotificationAsSent(sale.id);
+    playSound('success');
   };
 
   const handleLiberarJunta = (sale: Sale) => {
@@ -417,6 +451,32 @@ export function VendedoraShippingTracker({
               </button>
             </div>
 
+            {/* Banner Alerta Salidas Confirmadas por Bodega */}
+            {counts.avisosPendientes > 0 && (
+              <div className="p-4 bg-gradient-to-r from-amber-50 via-amber-100/50 to-orange-50 border-2 border-amber-300 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-sm shrink-0">
+                    <Truck size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-amber-950 uppercase text-xs">
+                      {counts.avisosPendientes} {counts.avisosPendientes === 1 ? 'Salida de Bodega Confirmada por Avisar' : 'Salidas de Bodega Confirmadas por Avisar'}
+                    </h4>
+                    <p className="text-[11px] text-amber-800 font-medium">
+                      El Jefe de Bodega confirmó la salida física. Notifica a tus clientes con 1 solo clic.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('AVISOS_SALIDA')}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm shrink-0"
+                >
+                  Ver y Avisar Clientes ({counts.avisosPendientes})
+                </button>
+              </div>
+            )}
+
             {/* KPI Status Tabs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
               <button
@@ -429,6 +489,22 @@ export function VendedoraShippingTracker({
               >
                 <span className="text-[8px] font-black uppercase tracking-widest opacity-80 block">Pendientes</span>
                 <p className="text-lg font-black mt-0.5">{counts.pendientes}</p>
+              </button>
+
+              <button
+                onClick={() => handleTabChange('AVISOS_SALIDA')}
+                className={`p-2.5 rounded-2xl border text-left transition-all ${
+                  statusTab === 'AVISOS_SALIDA' 
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-300' 
+                    : counts.avisosPendientes > 0
+                      ? 'bg-amber-50 text-amber-950 border-amber-300 hover:border-amber-400 font-bold'
+                      : 'bg-white text-slate-800 border-slate-200 hover:border-amber-200'
+                }`}
+              >
+                <span className="text-[8px] font-black uppercase tracking-widest opacity-80 block flex items-center gap-1">
+                  <Truck size={10} className="text-amber-500" /> Salidas Bodega
+                </span>
+                <p className="text-lg font-black mt-0.5">{counts.avisosPendientes}</p>
               </button>
 
               <button
@@ -620,6 +696,26 @@ export function VendedoraShippingTracker({
                         </div>
                       </div>
 
+                      {/* Aviso Salida de Bodega Pendiente de Notificar */}
+                      {sale.notificacionSalidaPendiente && (
+                        <div className="mt-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl space-y-2 animate-pulse">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-amber-950 uppercase flex items-center gap-1.5">
+                              <Truck size={13} className="text-amber-600" /> Salida Bodega Confirmada
+                            </span>
+                            <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded-md text-[9px] font-black uppercase">
+                              Avisar Cliente
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleSendDepartureNotice(sale)}
+                            className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                          >
+                            <Send size={13} /> Enviar Aviso de Salida al Cliente
+                          </button>
+                        </div>
+                      )}
+
                       {/* Card Actions */}
                       <div className="mt-4 pt-3 border-t border-slate-100 flex gap-1.5">
                         <button
@@ -701,6 +797,15 @@ export function VendedoraShippingTracker({
                           </td>
                           <td className="py-3 px-3 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {sale.notificacionSalidaPendiente && (
+                                <button
+                                  onClick={() => handleSendDepartureNotice(sale)}
+                                  className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-1 shadow-xs animate-pulse"
+                                  title="Enviar aviso de confirmación de salida de bodega"
+                                >
+                                  <Send size={11} /> Avisar Salida
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleOpenWhatsApp(sale)}
                                 className="px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-1"

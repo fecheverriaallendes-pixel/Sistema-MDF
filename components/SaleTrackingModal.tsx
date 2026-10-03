@@ -21,6 +21,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Sale, SaleStatus, DispatchType, StockItem } from '../types';
+import { useStore } from '../store/GlobalContext';
 
 interface SaleTrackingModalProps {
   sale: Sale | null;
@@ -242,6 +243,7 @@ export function generateWhatsAppTrackingMessage(sale: Sale, stock?: StockItem[])
 }
 
 export function SaleTrackingModal({ sale, stock, isAdmin = false, onClose, onLiberarJuntaCompra, onRevertToPending }: SaleTrackingModalProps) {
+  const { markDepartureNotificationAsSent } = useStore();
   const [copied, setCopied] = useState(false);
 
   if (!sale) return null;
@@ -298,6 +300,39 @@ export function SaleTrackingModal({ sale, stock, isAdmin = false, onClose, onLib
 
         {/* Modal Body */}
         <div className="p-6 md:p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+          {/* Alerta de Notificación de Salida Pendiente */}
+          {sale.notificacionSalidaPendiente && (
+            <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-[28px] space-y-2 animate-pulse">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-950 uppercase flex items-center gap-1.5">
+                  <Truck size={15} className="text-amber-600" /> Salida de Bodega Confirmada por Avisar
+                </span>
+                <span className="px-2.5 py-0.5 bg-amber-200 text-amber-900 rounded-lg text-[9px] font-black uppercase">
+                  Pendiente
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 font-medium leading-relaxed">
+                El Jefe de Bodega ya confirmó la salida física de este pedido. Como en bodega no se interactúa con WhatsApp, puedes enviar el mensaje oficial de salida por WhatsApp al cliente a continuación:
+              </p>
+              <div className="pt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const departureMsg = sale.notificacionSalidaMensaje || generateDispatchDepartureWhatsAppMessage(sale, stock);
+                    const waUrl = formatChileanWhatsAppUrl(sale.telefono, departureMsg);
+                    if (waUrl) {
+                      window.open(waUrl, '_blank');
+                      markDepartureNotificationAsSent(sale.id);
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                >
+                  <Send size={13} /> Enviar Mensaje Oficial de Salida por WhatsApp
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Progress Timeline */}
           <div className="bg-slate-50 p-6 rounded-[28px] border border-slate-100">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Progreso del Pedido</p>

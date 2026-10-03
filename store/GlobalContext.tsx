@@ -448,9 +448,12 @@ interface StoreContextType {
   deleteIncident: (id: string) => Promise<void>;
   addSale: (saleData: Partial<Sale>) => Promise<Sale>;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
-  markAsSent: (saleId: string) => void;
+  markAsSent: (saleId: string, notificationData?: { message?: string; pendiente?: boolean }) => void;
   revertDispatchToPending: (saleId: string) => Promise<boolean>;
   setSaleDispatchStatus: (saleId: string, targetStatus: SaleStatus, targetDispatchStatus?: DispatchStatus) => Promise<boolean>;
+  markDepartureNotificationAsSent: (saleId: string) => Promise<void>;
+  triggerDispatchWebhook: (sale: Sale, message: string) => Promise<boolean>;
+  testDispatchWebhook: (testPhone: string, testMessage?: string) => Promise<{ success: boolean; message: string }>;
   updateDispatchStatus: (saleId: string, status: DispatchStatus) => void;
   updateDispatchItems: (saleId: string, quantity: number) => void;
   assignCarrier: (saleId: string, carrier: string) => void;
@@ -1208,16 +1211,20 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
 
-  const markAsSent = (saleId: string) => {
+  const markAsSent = (saleId: string, notificationData?: { message?: string; pendiente?: boolean }) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
       const isLocal = sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO');
+      const shouldNotify = notificationData?.pendiente !== undefined ? notificationData.pendiente : (!isLocal);
       const updatedSale: Sale = { 
         ...sale, 
         status: SaleStatus.ENVIADO, 
         enviado: true, 
         fechaDespacho: new Date().toISOString(), 
-        estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA 
+        estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA,
+        notificacionSalidaPendiente: shouldNotify,
+        notificacionSalidaFecha: new Date().toISOString(),
+        notificacionSalidaMensaje: notificationData?.message || sale.notificacionSalidaMensaje
       };
       setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
       playSound('success');
@@ -1225,6 +1232,123 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         console.error("Error al marcar como enviado en Firestore:", err);
         setSales(prev => prev.map(s => s.id === saleId ? sale : s));
       });
+    }
+  };
+
+  const markDepartureNotificationAsSent = async (saleId: string) => {
+    const sale = sales.find(s => s.id === saleId);
+    if (sale) {
+      const updatedSale: Sale = {
+        ...sale,
+        notificacionSalidaPendiente: false,
+        notificacionSalidaEnviada: true
+      };
+      setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+      try {
+        await setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale));
+      } catch (err) {
+        console.error("Error al marcar notificación como enviada en Firestore:", err);
+        setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+      }
+    }
+  };
+
+  const triggerDispatchWebhook = async (sale: Sale, message: string): Promise<boolean> => {
+    const url = settings.webhookSalidaDespachoUrl;
+    if (!url) return false;
+    try {
+      const payload = {
+        event: 'DISPATCH_DEPARTURE',
+        saleId: sale.id,
+        numeroVenta: sale.numeroVenta,
+        cliente: sale.cliente,
+        telefono: sale.telefono,
+        tipoDespacho: sale.tipoDespacho,
+        agencia: sale.agencia,
+        transportista: sale.transportista,
+        direccion: sale.direccion,
+        vendedor: sale.vendedor,
+        mensajeWhatsApp: message,
+        fechaSalida: new Date().toISOString()
+      };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (settings.webhookSalidaDespachoToken) {
+        headers['Authorization'] = `Bearer ${settings.webhookSalidaDespachoToken}`;
+      }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      return res.ok;
+    } catch (e) {
+      console.warn("Error enviando webhook de salida:", e);
+      return false;
+    }
+  };
+
+  const testDispatchWebhook = async (testPhone: string, testMessage?: string): Promise<{ success: boolean; message: string }> => {
+    const url = settings.webhookSalidaDespachoUrl;
+    if (!url) return { success: false, message: 'No hay URL de Webhook configurada en los ajustes.' };
+    try {
+      const dummySale: Sale = {
+        id: 'test-salida',
+        numeroVenta: 9999,
+        tipoVenta: SaleType.NORMAL,
+        fecha: new Date().toLocaleDateString('es-CL'),
+        hora: new Date().toLocaleTimeString('es-CL'),
+        vendedor: currentUser?.nombre || 'Prueba',
+        cliente: 'Cliente de Prueba MDF',
+        telefono: testPhone,
+        total: 100000,
+        estadoPago: 'PAGADO',
+        enviado: true,
+        tipoComision: CommissionType.FARDO_NORMAL,
+        status: SaleStatus.ENVIADO,
+        observaciones: 'Prueba de Webhook de Salida',
+        datosCompletos: true,
+        tipoDespacho: DispatchType.DOMICILIO,
+        transportista: 'Transporte Express Prueba',
+        direccion: 'Av. Providencia 1234, Santiago'
+      };
+      const msg = testMessage || `🚚💨 *PRUEBA DE SALIDA DE DESPACHO - CUADERNO MDF*\n\n¡Hola Cliente de Prueba! 👋 Este es un mensaje de prueba para verificar la integración automática de salida de bodega sin intervención del personal.`;
+
+      const payload = {
+        event: 'DISPATCH_DEPARTURE_TEST',
+        saleId: dummySale.id,
+        numeroVenta: dummySale.numeroVenta,
+        cliente: dummySale.cliente,
+        telefono: dummySale.telefono,
+        tipoDespacho: dummySale.tipoDespacho,
+        transportista: dummySale.transportista,
+        direccion: dummySale.direccion,
+        vendedor: dummySale.vendedor,
+        mensajeWhatsApp: msg,
+        fechaSalida: new Date().toISOString()
+      };
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (settings.webhookSalidaDespachoToken) {
+        headers['Authorization'] = `Bearer ${settings.webhookSalidaDespachoToken}`;
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        return { success: true, message: `Webhook respondió exitosamente (HTTP ${res.status}).` };
+      } else {
+        return { success: false, message: `El servidor del Webhook respondió con error HTTP ${res.status}: ${res.statusText}` };
+      }
+    } catch (e: any) {
+      return { success: false, message: `Error al conectar con la URL: ${e?.message || 'Error de red o CORS'}` };
     }
   };
 
@@ -1243,7 +1367,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       enviado: false, 
       fechaDespacho: undefined, 
       estadoDespacho: isRetiro ? DispatchStatus.LISTO_PARA_RETIRO : DispatchStatus.PREPARACION,
-      itemsDespachados: 0 
+      itemsDespachados: 0,
+      notificacionSalidaPendiente: false,
+      notificacionSalidaFecha: undefined,
+      notificacionSalidaMensaje: undefined,
+      notificacionSalidaEnviada: false
     };
 
     setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
@@ -3240,7 +3368,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, revertDispatchToPending, setSaleDispatchStatus, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, revertDispatchToPending, setSaleDispatchStatus, markDepartureNotificationAsSent, triggerDispatchWebhook, testDispatchWebhook, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       incidents, addIncident, updateIncident, addIncidentHistoryEvent, addIncidentComment, addIncidentAttachment, deleteIncident,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, updatePurchase, removePurchase, addAbono, updateAbono, removeAbono,

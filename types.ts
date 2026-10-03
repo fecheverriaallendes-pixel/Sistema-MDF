@@ -452,6 +452,12 @@ export interface Sale {
   etiquetador?: string;
   esManual?: boolean;
   esMayorista?: boolean;
+  
+  // Notificación de salida de bodega
+  notificacionSalidaPendiente?: boolean;
+  notificacionSalidaFecha?: string;
+  notificacionSalidaMensaje?: string;
+  notificacionSalidaEnviada?: boolean;
 }
 
 export interface CommissionAdjustment {

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive, RotateCcw } from 'lucide-react';
+import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive, RotateCcw, Send } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 import { smartTextMatch } from '../utils/search';
@@ -372,6 +372,18 @@ export default function Ventas() {
                       >
                         <Truck size={12} /> {statusInfo.badgeText}
                       </button>
+                      {sale.notificacionSalidaPendiente && (
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTrackingSale(sale);
+                          }}
+                          className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-[8px] font-black uppercase tracking-wider animate-pulse flex items-center gap-1 shadow-xs cursor-pointer"
+                          title="El Jefe de Bodega confirmó la salida. Haz clic para avisar al cliente"
+                        >
+                          <Send size={9} /> Salida Bodega
+                        </span>
+                      )}
                       <div className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[130px]">
                         {sale.tipoDespacho || 'Despacho'} {sale.transportista ? `• ${sale.transportista}` : ''}
                       </div>

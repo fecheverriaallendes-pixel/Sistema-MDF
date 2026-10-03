@@ -43,6 +43,7 @@ import PostVenta from './pages/PostVenta';
 import Produccion from './pages/Produccion';
 import Cheques from './pages/Cheques';
 import TransportistaView from './pages/TransportistaView';
+import { DepartureNotificationCenterModal } from './components/DepartureNotificationCenterModal';
 import Devoluciones from './pages/Devoluciones';
 import { useStore } from './store/GlobalContext';
 import { StaffRole } from './types';
@@ -128,34 +129,64 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
 };
 
 const Header = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
-  const { currentUser, settings } = useStore();
+  const { currentUser, settings, sales } = useStore();
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   if (!currentUser) return null;
 
+  const isVendedorOrAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
+  const pendingDepartureCount = isVendedorOrAdmin ? (sales || []).filter(s => {
+    if (!s.notificacionSalidaPendiente) return false;
+    if (currentUser.rol === StaffRole.VENDEDOR && s.vendedor && s.vendedor !== currentUser.nombre) {
+      return false;
+    }
+    return true;
+  }).length : 0;
+
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-30 no-print">
-      <div className="flex items-center gap-4">
-        <button onClick={toggleSidebar} className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
-          <Menu size={24} />
-        </button>
-        <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-full border border-slate-100">
-           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-             Firebase Activo
-             <Activity size={12} className="text-emerald-500" />
-           </span>
+    <>
+      <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-30 no-print">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <button onClick={toggleSidebar} className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+            <Menu size={24} />
+          </button>
+          <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-full border border-slate-100">
+             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+               Firebase Activo
+               <Activity size={12} className="text-emerald-500" />
+             </span>
+          </div>
+
+          {/* Botón de Salidas de Bodega por Notificar al Cliente */}
+          {pendingDepartureCount > 0 && (
+            <button
+              onClick={() => setShowNotificationsModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-full font-black text-[11px] uppercase tracking-wider transition-all shadow-xs active:scale-95 animate-pulse"
+              title="Haz clic para ver las salidas confirmadas por bodega y notificar a los clientes"
+            >
+              <Truck size={14} className="text-amber-600 shrink-0" />
+              <span>{pendingDepartureCount} {pendingDepartureCount === 1 ? 'Salida por Notificar' : 'Salidas por Notificar'}</span>
+            </button>
+          )}
         </div>
-      </div>
-      
-      <div className="flex items-center gap-4">
-        <div className="text-right hidden sm:block">
-          <p className="text-sm font-black text-slate-900 leading-none uppercase">{currentUser.nombre}</p>
-          <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-1">{currentUser.rol}</p>
+        
+        <div className="flex items-center gap-4">
+          <div className="text-right hidden sm:block">
+            <p className="text-sm font-black text-slate-900 leading-none uppercase">{currentUser.nombre}</p>
+            <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-1">{currentUser.rol}</p>
+          </div>
+          <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
+            <UserIcon size={18} />
+          </div>
         </div>
-        <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
-          <UserIcon size={18} />
-        </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Modal de Bandeja de Salidas Pendientes */}
+      <DepartureNotificationCenterModal
+        isOpen={showNotificationsModal}
+        onClose={() => setShowNotificationsModal(false)}
+      />
+    </>
   );
 };
 

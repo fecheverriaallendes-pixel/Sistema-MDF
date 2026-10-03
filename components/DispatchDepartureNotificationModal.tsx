@@ -24,6 +24,7 @@ interface DispatchDepartureNotificationModalProps {
   autoOpenPreference: boolean;
   onToggleAutoOpenPreference: (enabled: boolean) => void;
   onClose: () => void;
+  onMarkAsSent?: () => void;
 }
 
 export function DispatchDepartureNotificationModal({
@@ -32,7 +33,8 @@ export function DispatchDepartureNotificationModal({
   wasAutoOpened,
   autoOpenPreference,
   onToggleAutoOpenPreference,
-  onClose
+  onClose,
+  onMarkAsSent
 }: DispatchDepartureNotificationModalProps) {
   const [copied, setCopied] = useState(false);
   const [phone, setPhone] = useState(sale.telefono || '');
@@ -55,6 +57,9 @@ export function DispatchDepartureNotificationModal({
     }
     window.open(waUrl, '_blank');
     setOpenedOnce(true);
+    if (onMarkAsSent) {
+      onMarkAsSent();
+    }
   };
 
   return (
