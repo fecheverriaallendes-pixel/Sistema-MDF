@@ -36,6 +36,7 @@ interface VendedoraShippingTrackerProps {
   vendedoraName?: string;
   isAdmin?: boolean;
   onUpdateSale?: (id: string, data: Partial<Sale>) => void;
+  onRevertToPending?: (sale: Sale) => void;
   playSound?: (sound: string) => void;
 }
 
@@ -45,6 +46,7 @@ export function VendedoraShippingTracker({
   vendedoraName,
   isAdmin = false,
   onUpdateSale,
+  onRevertToPending,
   playSound = () => {}
 }: VendedoraShippingTrackerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -771,6 +773,8 @@ export function VendedoraShippingTracker({
         <SaleTrackingModal
           sale={selectedSaleForModal}
           stock={stock}
+          isAdmin={isAdmin}
+          onRevertToPending={onRevertToPending}
           onClose={() => setSelectedSaleForModal(null)}
           onLiberarJuntaCompra={handleLiberarJunta}
         />

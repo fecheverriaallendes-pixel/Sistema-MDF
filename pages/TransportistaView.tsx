@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Truck, CheckCircle2, AlertCircle, Trash2, Search } from 'lucide-react';
+import { Truck, CheckCircle2, AlertCircle, Trash2, Search, RotateCcw } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { DispatchStatus, Sale, StaffRole, DispatchType } from '../types';
 
 export default function TransportistaView() {
-  const { sales, updateDispatchStatus, currentUser, deleteSale } = useStore();
+  const { sales, updateDispatchStatus, revertDispatchToPending, currentUser, deleteSale } = useStore();
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [activeTab, setActiveTab] = useState<'PENDING' | 'FINISHED'>('PENDING');
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,6 +70,19 @@ export default function TransportistaView() {
               <h2 className="font-black text-lg">Venta #{sale.numeroVenta}</h2>
               <div className="flex items-center gap-2">
                 <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-3 py-1 rounded-full">{sale.estadoDespacho}</span>
+                {currentUser.rol === StaffRole.ADMIN && (
+                  <button
+                    onClick={() => {
+                      if (confirm(`¿Estás seguro de que deseas volver la Venta #${sale.numeroVenta} (${sale.cliente}) a status PENDIENTE de despacho?`)) {
+                        revertDispatchToPending(sale.id);
+                      }
+                    }}
+                    className="p-1.5 text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors"
+                    title="Potestad Administrador: Volver a Status Pendiente"
+                  >
+                    <RotateCcw size={15} />
+                  </button>
+                )}
                 <button 
                     onClick={() => {
                         if(confirm("¿Estás seguro de que quieres eliminar este despacho?")) {
@@ -149,6 +162,19 @@ export default function TransportistaView() {
               >
                 <AlertCircle size={16} /> ERROR ETIQUETADO
               </button>
+              {currentUser.rol === StaffRole.ADMIN && (
+                <button 
+                  onClick={async () => {
+                    if (confirm(`¿Estás seguro de que deseas volver la Venta #${selectedSale.numeroVenta} (${selectedSale.cliente}) a status PENDIENTE de despacho?`)) {
+                      await revertDispatchToPending(selectedSale.id);
+                      setSelectedSale(null);
+                    }
+                  }}
+                  className="col-span-2 flex items-center justify-center gap-2 p-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 rounded-xl font-black text-xs uppercase transition-all shadow-sm"
+                >
+                  <RotateCcw size={16} /> Volver a Status Pendiente (Admin)
+                </button>
+              )}
               <button 
                 onClick={() => setSelectedSale(null)}
                 className="col-span-2 p-3 bg-slate-200 text-slate-600 rounded-xl font-bold text-xs"

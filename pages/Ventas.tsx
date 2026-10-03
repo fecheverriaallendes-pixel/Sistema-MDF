@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive } from 'lucide-react';
+import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive, RotateCcw } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 import { smartTextMatch } from '../utils/search';
@@ -29,7 +29,7 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 export default function Ventas() {
-  const { sales, updateSale, playSound, deleteSale, deleteAllSales, currentUser, stock } = useStore();
+  const { sales, updateSale, revertDispatchToPending, playSound, deleteSale, deleteAllSales, currentUser, stock } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('PENDING');
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -412,6 +412,20 @@ export default function Ventas() {
                           </button>
                         </div>
                       )}
+                      {isAdmin && (sale.status === SaleStatus.ENVIADO || sale.enviado) && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Estás seguro de que deseas volver la Venta #${sale.numeroVenta} (${sale.cliente}) a status PENDIENTE de despacho?`)) {
+                              revertDispatchToPending(sale.id);
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black uppercase tracking-tight flex items-center justify-center gap-1 transition-all mx-auto shadow-sm active:scale-95"
+                          title="Potestad Administrador: Volver despacho a estado Pendiente"
+                        >
+                          <RotateCcw size={11} className="text-amber-700" />
+                          <span>Revertir Despacho</span>
+                        </button>
+                      )}
                       {isAdmin && (
                         <button
                           onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
@@ -582,6 +596,11 @@ export default function Ventas() {
         <SaleTrackingModal 
           sale={trackingSale}
           stock={stock}
+          isAdmin={isAdmin}
+          onRevertToPending={(s) => {
+            revertDispatchToPending(s.id);
+            setTrackingSale(null);
+          }}
           onClose={() => setTrackingSale(null)}
           onLiberarJuntaCompra={(s) => {
             updateSale(s.id, { juntaCompra: 'DESPACHO INMEDIATO' });

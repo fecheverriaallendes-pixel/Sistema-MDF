@@ -17,15 +17,18 @@ import {
   User, 
   Send,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import { Sale, SaleStatus, DispatchType, StockItem } from '../types';
 
 interface SaleTrackingModalProps {
   sale: Sale | null;
   stock?: StockItem[];
+  isAdmin?: boolean;
   onClose: () => void;
   onLiberarJuntaCompra?: (sale: Sale) => void;
+  onRevertToPending?: (sale: Sale) => void;
 }
 
 export function formatShippingStatus(sale: Sale): {
@@ -102,6 +105,83 @@ export function formatShippingStatus(sale: Sale): {
   };
 }
 
+export function formatChileanWhatsAppUrl(phoneStr: string, message: string): string {
+  const digits = (phoneStr || '').replace(/\D/g, '');
+  if (!digits) return '';
+  let cleanPhone = digits;
+  if (digits.length === 9 && digits.startsWith('9')) {
+    cleanPhone = `56${digits}`;
+  } else if (digits.length === 8) {
+    cleanPhone = `569${digits}`;
+  } else if (!digits.startsWith('56')) {
+    cleanPhone = `56${digits}`;
+  }
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+}
+
+export function generateDispatchDepartureWhatsAppMessage(sale: Sale, stock?: StockItem[]): string {
+  const isDomicilio = sale.tipoDespacho === DispatchType.DOMICILIO || (Boolean(sale.tipoDespacho) && sale.tipoDespacho.toUpperCase().includes('DOMICILIO'));
+  const isAgencia = sale.tipoDespacho === DispatchType.AGENCIA || (Boolean(sale.tipoDespacho) && sale.tipoDespacho.toUpperCase().includes('AGENCIA'));
+
+  let productsSummary = '';
+  if (sale.items && sale.items.length > 0) {
+    productsSummary = sale.items.map(it => {
+      const stockItem = stock?.find(s => s.codigo === it.codigoFardo);
+      const name = stockItem?.tipo || it.codigoFardo;
+      return `• ${it.cantidad}x ${name} (${it.codigoFardo})`;
+    }).join('\n');
+  } else {
+    const stockItem = stock?.find(s => s.codigo === sale.codigoFardo);
+    const name = stockItem?.tipo || sale.codigoFardo || 'Fardo';
+    productsSummary = `• ${sale.cantidad || 1}x ${name} (${sale.codigoFardo || 'MDF'})`;
+  }
+
+  const now = new Date();
+  const fechaHora = now.toLocaleDateString('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }) + ' a las ' + now.toLocaleTimeString('es-CL', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  if (isDomicilio) {
+    let msg = `🚚💨 *¡TU PEDIDO HA SALIDO A REPARTO! - CUADERNO MDF*\n\n`;
+    msg += `¡Hola *${sale.cliente}*! 👋 Te informamos que tu compra *Venta #${sale.numeroVenta}* acaba de confirmar su salida de bodega y se encuentra *EN RUTA A TU DOMICILIO* 📍.\n\n`;
+    msg += `📦 *DETALLE DE TU COMPRA:*\n${productsSummary}\n\n`;
+    msg += `🏠 *DIRECCIÓN DE ENTREGA:* ${sale.direccion || 'Domicilio registrado'}\n`;
+    if (sale.transportista) {
+      msg += `🚚 *TRANSPORTISTA / CHOFER:* ${sale.transportista}\n`;
+    }
+    msg += `🕒 *SALIDA REGISTRADA:* ${fechaHora} hrs\n\n`;
+    msg += `🔔 *IMPORTANTE:* Por favor mantente atento/a a tu teléfono para coordinar la entrega cuando el transportista se acerque a tu sector.\n\n`;
+    msg += `¡Muchas gracias por tu compra y confianza! Si necesitas algo adicional, estamos atentos por este canal ✨`;
+    return msg;
+  }
+
+  if (isAgencia) {
+    let msg = `🏢📦 *¡TU ENVÍO HA SALIDO A AGENCIA! - CUADERNO MDF*\n\n`;
+    msg += `¡Hola *${sale.cliente}*! 👋 Te informamos que tu compra *Venta #${sale.numeroVenta}* ha confirmado su salida de bodega rumbo a la *AGENCIA DE ENVÍOS* 🚚.\n\n`;
+    msg += `📦 *DETALLE DE TU COMPRA:*\n${productsSummary}\n\n`;
+    if (sale.agencia) {
+      msg += `🏢 *AGENCIA ASIGNADA:* ${sale.agencia}\n`;
+    }
+    if (sale.direccion) {
+      msg += `📍 *DESTINO / SUCURSAL:* ${sale.direccion}\n`;
+    }
+    if (sale.transportista) {
+      msg += `🚚 *TRANSPORTE A AGENCIA:* ${sale.transportista}\n`;
+    }
+    msg += `🕒 *SALIDA DE BODEGA:* ${fechaHora} hrs\n\n`;
+    msg += `ℹ️ *SEGUIMIENTO:* En cuanto el paquete sea recepcionado en la agencia y tengamos el número de orden / comprobante de flete, te lo compartiremos para que puedas rastrearlo en tiempo real.\n\n`;
+    msg += `¡Muchas gracias por tu compra y preferencia en Cuaderno MDF! ✨`;
+    return msg;
+  }
+
+  return generateWhatsAppTrackingMessage(sale, stock);
+}
+
 export function generateWhatsAppTrackingMessage(sale: Sale, stock?: StockItem[]): string {
   const isJunta = Boolean(sale.juntaCompra && sale.juntaCompra.trim().toUpperCase().includes('JUNTA') && sale.status === SaleStatus.PENDIENTE);
   const statusInfo = formatShippingStatus(sale);
@@ -161,7 +241,7 @@ export function generateWhatsAppTrackingMessage(sale: Sale, stock?: StockItem[])
   return message;
 }
 
-export function SaleTrackingModal({ sale, stock, onClose, onLiberarJuntaCompra }: SaleTrackingModalProps) {
+export function SaleTrackingModal({ sale, stock, isAdmin = false, onClose, onLiberarJuntaCompra, onRevertToPending }: SaleTrackingModalProps) {
   const [copied, setCopied] = useState(false);
 
   if (!sale) return null;
@@ -382,22 +462,65 @@ export function SaleTrackingModal({ sale, stock, onClose, onLiberarJuntaCompra }
               {waMessage}
             </div>
           </div>
+
+          {/* Admin dispatch status revert control */}
+          {isAdmin && sale.status === SaleStatus.ENVIADO && onRevertToPending && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 p-5 rounded-[28px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-sm">
+                  <RotateCcw size={18} />
+                </div>
+                <div>
+                  <h4 className="font-black text-amber-950 text-sm uppercase">Potestad Administrador: Revertir Despacho</h4>
+                  <p className="text-xs text-amber-800 font-medium">Este despacho se encuentra completado. Como administrador, tienes la potestad de volverlo atrás a estado PENDIENTE.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (confirm(`¿Estás seguro de que deseas volver la Venta #${sale.numeroVenta} (${sale.cliente}) a status PENDIENTE?\n\nEl despacho volverá a la lista activa para su preparación o verificación en bodega.`)) {
+                    onRevertToPending(sale);
+                    onClose();
+                  }
+                }}
+                className="px-5 py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md shrink-0"
+              >
+                <RotateCcw size={15} /> Volver a Status Pendiente
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Modal Actions Footer */}
         <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          {statusInfo.isJunta && onLiberarJuntaCompra && (
-            <button
-              onClick={() => {
-                if (confirm(`¿Liberar Venta #${sale.numeroVenta} (${sale.cliente}) para Despacho Inmediato?`)) {
-                  onLiberarJuntaCompra(sale);
-                }
-              }}
-              className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-md active:scale-95"
-            >
-              <Sparkles size={16} /> Liberar a Despacho Inmediato
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {statusInfo.isJunta && onLiberarJuntaCompra && (
+              <button
+                onClick={() => {
+                  if (confirm(`¿Liberar Venta #${sale.numeroVenta} (${sale.cliente}) para Despacho Inmediato?`)) {
+                    onLiberarJuntaCompra(sale);
+                  }
+                }}
+                className="px-5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-md active:scale-95"
+              >
+                <Sparkles size={16} /> Liberar a Despacho Inmediato
+              </button>
+            )}
+
+            {isAdmin && sale.status === SaleStatus.ENVIADO && onRevertToPending && (
+              <button
+                onClick={() => {
+                  if (confirm(`¿Estás seguro de que deseas volver la Venta #${sale.numeroVenta} (${sale.cliente}) a status PENDIENTE?`)) {
+                    onRevertToPending(sale);
+                    onClose();
+                  }
+                }}
+                className="px-5 py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-md"
+                title="Potestad Administrador: Volver a status Pendiente"
+              >
+                <RotateCcw size={16} /> Volver a Status Pendiente
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2 ml-auto">
             <button

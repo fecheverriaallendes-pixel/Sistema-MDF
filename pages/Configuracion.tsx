@@ -469,6 +469,31 @@ export default function Configuracion() {
                   </button>
                 </div>
 
+                {/* Notificación Automática por WhatsApp en Salida de Despachos */}
+                <div className="flex items-center justify-between p-8 bg-slate-50 rounded-[32px] border border-slate-100">
+                  <div className="flex items-center gap-5">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${settings.autoOpenWhatsAppOnDispatch !== false ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-400'}`}>
+                      <Smartphone size={24} />
+                    </div>
+                    <div>
+                      <p className="font-black text-slate-900 uppercase text-xs">WhatsApp Automático en Salidas de Despacho</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                        Abre y prepara WhatsApp automáticamente al confirmar salida a Domicilio y Agencia
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const next = !(settings.autoOpenWhatsAppOnDispatch !== false);
+                      updateSettings({ autoOpenWhatsAppOnDispatch: next });
+                      playSound('click');
+                    }}
+                    className={`w-20 h-10 rounded-full p-1 transition-all ${settings.autoOpenWhatsAppOnDispatch !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <div className={`w-8 h-8 bg-white rounded-full shadow-md transition-all transform ${settings.autoOpenWhatsAppOnDispatch !== false ? 'translate-x-10' : 'translate-x-0'}`}></div>
+                  </button>
+                </div>
+
                 {/* Zona de Peligro: Limpieza */}
                 <div className="p-8 border-2 border-dashed border-red-100 rounded-[32px] space-y-6">
                    <div className="flex items-center gap-4">

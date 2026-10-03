@@ -449,6 +449,8 @@ interface StoreContextType {
   addSale: (saleData: Partial<Sale>) => Promise<Sale>;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
   markAsSent: (saleId: string) => void;
+  revertDispatchToPending: (saleId: string) => Promise<boolean>;
+  setSaleDispatchStatus: (saleId: string, targetStatus: SaleStatus, targetDispatchStatus?: DispatchStatus) => Promise<boolean>;
   updateDispatchStatus: (saleId: string, status: DispatchStatus) => void;
   updateDispatchItems: (saleId: string, quantity: number) => void;
   assignCarrier: (saleId: string, carrier: string) => void;
@@ -644,7 +646,16 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   });
   const [settings, setSettings] = useState(() => {
     const saved = safeLocalStorage.getItem('mdf_settings');
-    return saved ? JSON.parse(saved) : { soundEnabled: true, cloudUrl: '', lastSync: null, dbConnected: false, lastError: null };
+    const parsed = saved ? JSON.parse(saved) : {};
+    return {
+      soundEnabled: true,
+      cloudUrl: '',
+      lastSync: null,
+      dbConnected: false,
+      lastError: null,
+      autoOpenWhatsAppOnDispatch: true,
+      ...parsed
+    };
   });
 
   const [sales, setSales] = useState<Sale[]>(() => {
@@ -1180,6 +1191,14 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         alert("Solo el administrador puede editar el precio de una venta completada.");
         return;
       }
+      if (
+        (sale.status === SaleStatus.ENVIADO || sale.enviado) && 
+        (updatedData.status === SaleStatus.PENDIENTE || updatedData.enviado === false) && 
+        currentUser?.rol !== StaffRole.ADMIN
+      ) {
+        alert("Solo la cuenta Administrador tiene la potestad de cambiar un despacho completado a estado Pendiente.");
+        return;
+      }
       const updatedSale = { ...sale, ...updatedData };
       setSales(prev => prev.map(s => s.id === id ? updatedSale : s));
       setDoc(doc(db, 'sales', id), cleanUndefined(updatedSale)).catch(err => {
@@ -1206,6 +1225,70 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         console.error("Error al marcar como enviado en Firestore:", err);
         setSales(prev => prev.map(s => s.id === saleId ? sale : s));
       });
+    }
+  };
+
+  const revertDispatchToPending = async (saleId: string): Promise<boolean> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo la cuenta Administrador tiene la potestad de revertir un despacho a estado Pendiente.");
+      return false;
+    }
+    const sale = sales.find(s => s.id === saleId);
+    if (!sale) return false;
+
+    const isRetiro = sale.tipoDespacho === DispatchType.RETIRO || (Boolean(sale.tipoDespacho) && sale.tipoDespacho.toUpperCase().includes('RETIRO'));
+    const updatedSale: Sale = { 
+      ...sale, 
+      status: SaleStatus.PENDIENTE, 
+      enviado: false, 
+      fechaDespacho: undefined, 
+      estadoDespacho: isRetiro ? DispatchStatus.LISTO_PARA_RETIRO : DispatchStatus.PREPARACION,
+      itemsDespachados: 0 
+    };
+
+    setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+    playSound('success');
+    try {
+      await setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale));
+      return true;
+    } catch (err) {
+      console.error("Error al revertir despacho a pendiente en Firestore:", err);
+      setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+      alert("Error al actualizar despacho en la base de datos.");
+      return false;
+    }
+  };
+
+  const setSaleDispatchStatus = async (saleId: string, targetStatus: SaleStatus, targetDispatchStatus?: DispatchStatus): Promise<boolean> => {
+    const sale = sales.find(s => s.id === saleId);
+    if (!sale) return false;
+
+    if ((sale.status === SaleStatus.ENVIADO || sale.enviado) && targetStatus === SaleStatus.PENDIENTE && currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo la cuenta Administrador tiene la potestad de cambiar el status de un despacho completado a Pendiente.");
+      return false;
+    }
+
+    if (targetStatus === SaleStatus.PENDIENTE) {
+      return revertDispatchToPending(saleId);
+    } else {
+      const isLocal = sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO');
+      const updatedSale: Sale = { 
+        ...sale, 
+        status: SaleStatus.ENVIADO, 
+        enviado: true, 
+        fechaDespacho: sale.fechaDespacho || new Date().toISOString(), 
+        estadoDespacho: targetDispatchStatus || (isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA)
+      };
+      setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+      playSound('success');
+      try {
+        await setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale));
+        return true;
+      } catch (err) {
+        console.error("Error al actualizar despacho en Firestore:", err);
+        setSales(prev => prev.map(s => s.id === saleId ? sale : s));
+        return false;
+      }
     }
   };
 
@@ -3157,7 +3240,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, revertDispatchToPending, setSaleDispatchStatus, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       incidents, addIncident, updateIncident, addIncidentHistoryEvent, addIncidentComment, addIncidentAttachment, deleteIncident,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, updatePurchase, removePurchase, addAbono, updateAbono, removeAbono,

@@ -42,7 +42,7 @@ import { VendedoraShippingTracker } from '../components/VendedoraShippingTracker
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 export default function Home() {
-  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing, sales, adjustments, commissionValues, updateSale } = useStore();
+  const { staff, stock, currentUser, login, playSound, settings, updateSettings, syncWithCloud, isSyncing, sales, adjustments, commissionValues, updateSale, revertDispatchToPending } = useStore();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ user: '', pin: '' });
@@ -533,6 +533,7 @@ export default function Home() {
           vendedoraName={currentUser?.nombre}
           isAdmin={currentUser?.rol === StaffRole.ADMIN}
           onUpdateSale={updateSale}
+          onRevertToPending={(s) => revertDispatchToPending(s.id)}
           playSound={playSound}
         />
       )}

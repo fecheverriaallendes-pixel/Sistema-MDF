@@ -37,11 +37,19 @@ import {
   Check,
   Eye,
   User,
-  RefreshCw
+  RefreshCw,
+  RotateCcw,
+  Smartphone
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus, StaffRole } from '../types';
-import { SaleTrackingModal, generateWhatsAppTrackingMessage } from '../components/SaleTrackingModal';
+import { 
+  SaleTrackingModal, 
+  generateWhatsAppTrackingMessage, 
+  generateDispatchDepartureWhatsAppMessage, 
+  formatChileanWhatsAppUrl 
+} from '../components/SaleTrackingModal';
+import { DispatchDepartureNotificationModal } from '../components/DispatchDepartureNotificationModal';
 
 function parseLocalDate(dateStr?: string | null): Date {
   if (!dateStr) return new Date();
@@ -120,7 +128,8 @@ function formatDisplayDateTime(dateStr?: string | null): string {
 }
 
 export default function Despachos() {
-  const { sales, stock, markAsSent, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales } = useStore();
+  const { sales, stock, markAsSent, revertDispatchToPending, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales, settings, updateSettings } = useStore();
+  const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string>(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [searchParams] = useSearchParams();
@@ -139,6 +148,23 @@ export default function Despachos() {
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
   const [selectedTrackingSale, setSelectedTrackingSale] = useState<Sale | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [departureModalData, setDepartureModalData] = useState<{
+    sale: Sale;
+    message: string;
+    wasAutoOpened: boolean;
+  } | null>(null);
+
+  const handleRevertDispatchToPending = async (sale: Sale) => {
+    if (!isAdmin) {
+      alert("Solo la cuenta Administrador tiene la potestad de volver este despacho a status Pendiente.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `¿Confirmas que deseas volver la Venta #${sale.numeroVenta} (${sale.cliente}) a status PENDIENTE?\n\nAl volver atrás, este despacho saldrá del Historial y volverá a estar disponible en la lista activa de despachos para su preparación.`
+    );
+    if (!confirmed) return;
+    await revertDispatchToPending(sale.id);
+  };
 
   React.useEffect(() => {
     refreshSales().then(() => {
@@ -383,8 +409,48 @@ export default function Despachos() {
       alert("Error: Debes asignar un transportista para este tipo de despacho.");
       return;
     }
+
     markAsSent(sale.id);
     setVerifyingSaleId(null);
+
+    const isDomicilioOrAgencia = 
+      sale.tipoDespacho === DispatchType.DOMICILIO || 
+      sale.tipoDespacho === DispatchType.AGENCIA ||
+      (sale.tipoDespacho && sale.tipoDespacho.toUpperCase().includes('DOMICILIO')) ||
+      (sale.tipoDespacho && sale.tipoDespacho.toUpperCase().includes('AGENCIA'));
+
+    if (isDomicilioOrAgencia) {
+      const isLocal = sale.tipoDespacho === DispatchType.RETIRO;
+      const updatedSaleForNotification: Sale = {
+        ...sale,
+        status: SaleStatus.ENVIADO,
+        enviado: true,
+        fechaDespacho: new Date().toISOString(),
+        estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA
+      };
+
+      const departureMessage = generateDispatchDepartureWhatsAppMessage(updatedSaleForNotification, stock);
+      const autoOpen = settings.autoOpenWhatsAppOnDispatch !== false;
+      let wasAutoOpened = false;
+
+      if (autoOpen && sale.telefono) {
+        const waUrl = formatChileanWhatsAppUrl(sale.telefono, departureMessage);
+        if (waUrl) {
+          try {
+            window.open(waUrl, '_blank');
+            wasAutoOpened = true;
+          } catch (e) {
+            console.warn("No se pudo abrir WhatsApp automáticamente:", e);
+          }
+        }
+      }
+
+      setDepartureModalData({
+        sale: updatedSaleForNotification,
+        message: departureMessage,
+        wasAutoOpened
+      });
+    }
   };
 
   return (
@@ -419,6 +485,26 @@ export default function Despachos() {
           >
             <RefreshCw size={15} className={`text-amber-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              const next = !(settings.autoOpenWhatsAppOnDispatch !== false);
+              updateSettings({ autoOpenWhatsAppOnDispatch: next });
+              playSound('click');
+            }}
+            className={`flex items-center gap-2 px-3.5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all border shadow-sm hover:shadow active:scale-95 ${
+              settings.autoOpenWhatsAppOnDispatch !== false 
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800' 
+                : 'bg-white border-slate-200 text-slate-500'
+            }`}
+            title="Activar o desactivar aviso automático por WhatsApp al confirmar salida a Domicilio y Agencia"
+          >
+            <Smartphone size={15} className={settings.autoOpenWhatsAppOnDispatch !== false ? 'text-emerald-600' : 'text-slate-400'} />
+            <span className="hidden sm:inline">Aviso Salida WhatsApp:</span>
+            <span className={settings.autoOpenWhatsAppOnDispatch !== false ? 'text-emerald-700' : 'text-slate-400'}>
+              {settings.autoOpenWhatsAppOnDispatch !== false ? 'AUTO' : 'MANUAL'}
+            </span>
           </button>
 
           <button 
@@ -790,10 +876,22 @@ export default function Despachos() {
                   </div>
                 </div>
 
-                <div className="text-right flex flex-col items-end gap-2.5 shrink-0">
-                  <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
-                  </span>
+                <div className="text-right flex flex-col items-end gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
+                    </span>
+                    {isAdmin && sale.status === SaleStatus.ENVIADO && (
+                      <button
+                        onClick={() => handleRevertDispatchToPending(sale)}
+                        className="px-2 py-0.5 text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg text-[9px] font-black uppercase tracking-tight flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                        title="Potestad Administrador: Volver a Status Pendiente"
+                      >
+                        <RotateCcw size={10} className="text-amber-700" />
+                        A Pendiente
+                      </button>
+                    )}
+                  </div>
                   <button 
                     onClick={() => {
                         if(confirm(`¿Estás seguro de que quieres eliminar la venta/despacho #${sale.numeroVenta} (${sale.cliente})?`)) {
@@ -1043,8 +1141,19 @@ export default function Despachos() {
                     </button>
                   )
                 ) : (
-                  <div className="w-full py-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-[24px] text-xs font-black flex items-center justify-center gap-2 uppercase tracking-widest">
-                    <CheckCircle2 size={16} /> Despacho Completado
+                  <div className="space-y-2">
+                    <div className="w-full py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-[22px] text-xs font-black flex items-center justify-center gap-2 uppercase tracking-widest">
+                      <CheckCircle2 size={16} /> Despacho Completado
+                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleRevertDispatchToPending(sale)}
+                        className="w-full py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-[22px] text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20"
+                        title="Potestad Administrador: Volver despacho a estado Pendiente"
+                      >
+                        <RotateCcw size={15} /> Volver a Status Pendiente
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1148,6 +1257,16 @@ export default function Despachos() {
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                           {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
                         </span>
+                        {isAdmin && sale.status === SaleStatus.ENVIADO && (
+                          <button
+                            onClick={() => handleRevertDispatchToPending(sale)}
+                            className="p-1.5 text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-all flex items-center gap-1 font-bold text-xs active:scale-95 shadow-sm"
+                            title="Potestad Administrador: Volver a Status Pendiente"
+                          >
+                            <RotateCcw size={13} className="text-amber-700" />
+                            <span className="hidden xl:inline text-[10px] font-black uppercase">A Pendiente</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleOpenWhatsApp(sale)}
                           className="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all"
@@ -1220,12 +1339,26 @@ export default function Despachos() {
         <SaleTrackingModal
           sale={selectedTrackingSale}
           stock={stock}
+          isAdmin={isAdmin}
+          onRevertToPending={handleRevertDispatchToPending}
           onClose={() => setSelectedTrackingSale(null)}
           onLiberarJuntaCompra={(s) => {
             updateSale(s.id, { juntaCompra: 'DESPACHO INMEDIATO' });
             playSound('success');
             setSelectedTrackingSale(null);
           }}
+        />
+      )}
+
+      {/* Modal de Notificación Automática de Salida de Despacho (Domicilio y Agencia) */}
+      {departureModalData && (
+        <DispatchDepartureNotificationModal
+          sale={departureModalData.sale}
+          message={departureModalData.message}
+          wasAutoOpened={departureModalData.wasAutoOpened}
+          autoOpenPreference={settings.autoOpenWhatsAppOnDispatch !== false}
+          onToggleAutoOpenPreference={(enabled) => updateSettings({ autoOpenWhatsAppOnDispatch: enabled })}
+          onClose={() => setDepartureModalData(null)}
         />
       )}
     </div>
