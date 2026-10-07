@@ -4,6 +4,7 @@ import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, 
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 import { smartTextMatch } from '../utils/search';
+import { matchRut, cleanRut, formatRut } from '../utils/rutUtils';
 import { Label } from '../components/Label';
 import { Invoice } from '../components/Invoice';
 import { VentasArchiveModal } from '../components/VentasArchiveModal';
@@ -78,8 +79,9 @@ export default function Ventas() {
       }
 
       const itemsText = (s.items || []).map(i => `${i.codigoFardo}`).join(' ');
-      const combined = `${s.cliente} ${s.codigoFardo || ''} ${s.numeroVenta} ${s.rut || ''} ${s.vendedor || ''} ${itemsText} ${s.transportista || ''} ${s.agencia || ''}`;
-      return smartTextMatch(combined, searchTerm);
+      const cleanRutVal = s.rut ? cleanRut(s.rut) : '';
+      const combined = `${s.cliente} ${s.codigoFardo || ''} ${s.numeroVenta} ${s.rut || ''} ${cleanRutVal} ${s.vendedor || ''} ${itemsText} ${s.transportista || ''} ${s.agencia || ''}`;
+      return smartTextMatch(combined, searchTerm) || Boolean(s.rut && matchRut(s.rut, searchTerm));
     })
     .sort((a, b) => {
       let comparison = 0;
@@ -250,7 +252,7 @@ export default function Ventas() {
         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-900 transition-colors" size={28} />
         <input 
           type="text" 
-          placeholder="Buscar por cliente, fardo o número de venta..."
+          placeholder="Buscar por cliente, RUT (ej: 12.345.678-9), fardo o N° de venta..."
           className="w-full pl-16 pr-8 py-5 rounded-[32px] border-2 border-slate-100 focus:border-slate-300 outline-none transition-all shadow-sm text-xl font-bold"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}

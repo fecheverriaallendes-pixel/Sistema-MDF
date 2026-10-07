@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { Sale, SaleStatus, DispatchType, StockItem } from '../types';
+import { matchRut, formatRut } from '../utils/rutUtils';
 import { 
   SaleTrackingModal, 
   formatShippingStatus, 
@@ -182,8 +183,9 @@ export function VendedoraShippingTracker({
         const addressMatch = (s.direccion || '').toLowerCase().includes(search);
         const productCodeMatch = (s.codigoFardo || '').toLowerCase().includes(search);
         const itemsMatch = s.items?.some(it => (it.codigoFardo || '').toLowerCase().includes(search)) ?? false;
+        const rutMatch = s.rut ? matchRut(s.rut, search) : false;
 
-        return clientMatch || saleNumMatch || phoneMatch || carrierMatch || agencyMatch || addressMatch || productCodeMatch || itemsMatch;
+        return clientMatch || rutMatch || saleNumMatch || phoneMatch || carrierMatch || agencyMatch || addressMatch || productCodeMatch || itemsMatch;
       }
 
       return true;
@@ -587,7 +589,7 @@ export function VendedoraShippingTracker({
               </div>
               <input 
                 type="text" 
-                placeholder="Buscar por cliente, N° venta, teléfono, fardo, transportista, ciudad..."
+                placeholder="Buscar por cliente, RUT (ej: 12.345.678-9), N° venta, fardo, transportista..."
                 className="w-full pl-11 pr-24 py-3 bg-slate-50 rounded-2xl border-2 border-slate-100 focus:border-blue-400 outline-none font-bold text-xs shadow-xs transition-all uppercase"
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}

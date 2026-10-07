@@ -51,6 +51,7 @@ import {
   formatChileanWhatsAppUrl 
 } from '../components/SaleTrackingModal';
 import { DispatchDepartureNotificationModal } from '../components/DispatchDepartureNotificationModal';
+import { matchRut } from '../utils/rutUtils';
 
 function parseLocalDate(dateStr?: string | null): Date {
   if (!dateStr) return new Date();
@@ -311,7 +312,7 @@ export default function Despachos() {
         (s.agencia?.toLowerCase().includes(search) ?? false) ||
         (s.direccion?.toLowerCase().includes(search) ?? false) ||
         (s.telefono?.toLowerCase().includes(search) ?? false) ||
-        (s.rut?.toLowerCase().includes(search) ?? false)
+        (s.rut ? matchRut(s.rut, search) : false)
       );
     }
 
@@ -727,7 +728,7 @@ export default function Despachos() {
               </div>
               <input 
                 type="text" 
-                placeholder="Buscar cliente, N° venta, código producto, transportista, agencia, dirección..."
+                placeholder="Buscar cliente, RUT, N° venta, código producto, transportista, agencia, dirección..."
                 className="w-full pl-14 pr-6 py-4 bg-white rounded-[24px] border-2 border-slate-100 focus:border-amber-400 outline-none font-bold text-base shadow-sm transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}

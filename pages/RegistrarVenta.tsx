@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Save, 
@@ -26,20 +26,29 @@ import {
   Info,
   Check,
   Store,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '../types';
+import RutClientLookupModal from '../components/RutClientLookupModal';
+import { cleanRut, formatRut, matchRut, getUnifiedClients } from '../utils/rutUtils';
 
 export default function RegistrarVenta() {
-  const { stock, staff, customers, addSale, playSound } = useStore();
+  const { stock, staff, customers, sales, addSale, playSound } = useStore();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'QUICK' | 'NORMAL' | 'NOTA_VENTA'>('QUICK');
   const [esMayorista, setEsMayorista] = useState(false);
   const [success, setSuccess] = useState(false);
   const [clientSearch, setClientSearch] = useState('');
+  const [isRutLookupOpen, setIsRutLookupOpen] = useState(false);
+  const [foundClientFeedback, setFoundClientFeedback] = useState<string | null>(null);
   const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number, esManual?: boolean, tipoComision?: CommissionType, esMayorista?: boolean}[]>([]);
   const [newItem, setNewItem] = useState({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
+
+  const unifiedClients = useMemo(() => {
+    return getUnifiedClients(customers, sales);
+  }, [customers, sales]);
 
   const toggleMayorista = (active: boolean) => {
     setEsMayorista(active);
@@ -93,17 +102,60 @@ export default function RegistrarVenta() {
     agencia: ''
   });
 
-  const handleClientChange = (name: string) => {
-      setFormData(prev => ({...prev, cliente: name.toUpperCase()}));
-      const found = customers.find(c => c.nombre.toLowerCase() === name.toLowerCase());
+  const handleClientChange = (nameOrRut: string) => {
+    const uppercaseVal = nameOrRut.toUpperCase();
+    setFormData(prev => ({ ...prev, cliente: uppercaseVal }));
+    
+    // Check if entered text matches a customer by name OR by RUT
+    const found = unifiedClients.find(c => 
+      c.nombre.toLowerCase() === nameOrRut.toLowerCase() ||
+      (c.rut && matchRut(c.rut, nameOrRut))
+    );
+
+    if (found) {
+      setFormData(prev => ({
+        ...prev,
+        cliente: found.nombre.toUpperCase(),
+        telefono: found.telefono || prev.telefono,
+        rut: found.rut ? formatRut(found.rut) : prev.rut,
+        direccion: found.direccion || prev.direccion
+      }));
+      setFoundClientFeedback(`✓ Datos autocompletados para: ${found.nombre}${found.rut ? ` (RUT: ${formatRut(found.rut)})` : ''}`);
+      playSound('pop');
+    }
+  };
+
+  const handleRutChange = (val: string) => {
+    const formatted = val.toUpperCase();
+    setFormData(prev => ({ ...prev, rut: formatted }));
+
+    // When at least 7 characters are typed, check if there's a matching client by RUT
+    const clean = cleanRut(val);
+    if (clean.length >= 7) {
+      const found = unifiedClients.find(c => c.rut && matchRut(c.rut, val));
       if (found) {
-          setFormData(prev => ({
-              ...prev,
-              telefono: found.telefono,
-              rut: found.rut || '',
-              direccion: found.direccion || ''
-          }));
+        setFormData(prev => ({
+          ...prev,
+          cliente: found.nombre.toUpperCase(),
+          telefono: found.telefono || prev.telefono,
+          direccion: found.direccion || prev.direccion,
+          rut: formatRut(found.rut || val)
+        }));
+        setFoundClientFeedback(`✓ Cliente encontrado por RUT: ${found.nombre}`);
+        playSound('pop');
       }
+    }
+  };
+
+  const handleSelectClientFromLookup = (selected: { nombre: string; rut: string; telefono: string; direccion: string }) => {
+    setFormData(prev => ({
+      ...prev,
+      cliente: selected.nombre.toUpperCase(),
+      rut: selected.rut,
+      telefono: selected.telefono || prev.telefono,
+      direccion: selected.direccion || prev.direccion
+    }));
+    setFoundClientFeedback(`✓ Cliente cargado desde buscador RUT: ${selected.nombre} (${selected.rut})`);
   };
 
   const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
@@ -306,15 +358,53 @@ export default function RegistrarVenta() {
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 sm:p-10 space-y-8">
+          {foundClientFeedback && (
+            <div className="flex items-center justify-between px-5 py-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-bold animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                <span>{foundClientFeedback}</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setFoundClientFeedback(null)} 
+                className="text-emerald-600 hover:text-emerald-800 ml-2 font-black"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Cliente, WhatsApp, Vendedor */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
             <div className="md:col-span-1">
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">
-                <User size={14} className="text-blue-500" /> Cliente
-              </label>
-              <input ref={quickNameRef} required list="customers-suggestions" type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-blue-500 outline-none transition-all uppercase" placeholder="NOMBRE CLIENTE" value={formData.cliente} onChange={(e) => handleClientChange(e.target.value)}/>
+              <div className="flex items-center justify-between mb-3 ml-2">
+                <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <User size={14} className="text-blue-500" /> Cliente
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsRutLookupOpen(true)}
+                  className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors"
+                  title="Buscar cliente por RUT"
+                >
+                  <CreditCard size={12} />
+                  <span>Buscar por RUT</span>
+                </button>
+              </div>
+              <input 
+                ref={quickNameRef} 
+                required 
+                list="customers-suggestions" 
+                type="text" 
+                className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-blue-500 outline-none transition-all uppercase" 
+                placeholder="NOMBRE O RUT CLIENTE" 
+                value={formData.cliente} 
+                onChange={(e) => handleClientChange(e.target.value)}
+              />
               <datalist id="customers-suggestions">
-                  {customers.map(c => <option key={c.id} value={c.nombre} />)}
+                {unifiedClients.slice(0, 50).map(c => (
+                  <option key={c.id} value={c.nombre} label={c.rut ? `RUT: ${formatRut(c.rut)}` : undefined} />
+                ))}
               </datalist>
             </div>
             
@@ -337,8 +427,33 @@ export default function RegistrarVenta() {
           {/* RUT y Dirección */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
             <div className="md:col-span-1">
-              <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><CreditCard size={14} className="text-blue-500" /> RUT Cliente {mode === 'QUICK' ? '(Opcional en Live)' : ''}</label>
-              <input required={mode !== 'QUICK'} type="text" className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg" placeholder="12.345.678-9" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})}/>
+              <div className="flex items-center justify-between mb-3 ml-2">
+                <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <CreditCard size={14} className="text-blue-500" /> RUT Cliente {mode === 'QUICK' ? '(Opcional en Live)' : ''}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsRutLookupOpen(true)}
+                  className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors"
+                  title="Abrir buscador por RUT"
+                >
+                  <Search size={11} />
+                  <span>Buscador RUT</span>
+                </button>
+              </div>
+              <input 
+                required={mode !== 'QUICK'} 
+                type="text" 
+                className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg focus:border-blue-500 outline-none transition-all uppercase" 
+                placeholder="12.345.678-9 (o sin puntos)" 
+                value={formData.rut} 
+                onChange={(e) => handleRutChange(e.target.value)}
+                onBlur={() => {
+                  if (formData.rut) {
+                    setFormData(prev => ({ ...prev, rut: formatRut(prev.rut) }));
+                  }
+                }}
+              />
             </div>
             <div className="md:col-span-1">
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><MapPin size={14} className="text-blue-500" /> Dirección Despacho {mode === 'QUICK' ? '(Opcional en Live)' : ''}</label>
@@ -753,6 +868,14 @@ export default function RegistrarVenta() {
           </button>
         </form>
       </div>
+
+      {/* Modal de Búsqueda de Clientes por RUT */}
+      <RutClientLookupModal 
+        isOpen={isRutLookupOpen}
+        onClose={() => setIsRutLookupOpen(false)}
+        onSelectClient={handleSelectClientFromLookup}
+        initialRut={formData.rut}
+      />
     </div>
   );
 }

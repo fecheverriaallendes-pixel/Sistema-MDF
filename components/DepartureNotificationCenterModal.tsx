@@ -20,6 +20,7 @@ import {
 import { useStore } from '../store/GlobalContext';
 import { Sale, StaffRole, DispatchType } from '../types';
 import { formatChileanWhatsAppUrl, generateDispatchDepartureWhatsAppMessage } from './SaleTrackingModal';
+import { matchRut } from '../utils/rutUtils';
 
 interface DepartureNotificationCenterModalProps {
   isOpen: boolean;
@@ -70,6 +71,7 @@ export function DepartureNotificationCenterModal({ isOpen, onClose }: DepartureN
       return (
         String(s.numeroVenta || '').includes(term) ||
         (s.cliente || '').toLowerCase().includes(term) ||
+        (s.rut ? matchRut(s.rut, term) : false) ||
         (s.telefono || '').toLowerCase().includes(term) ||
         (s.transportista || '').toLowerCase().includes(term) ||
         (s.agencia || '').toLowerCase().includes(term) ||
@@ -183,7 +185,7 @@ export function DepartureNotificationCenterModal({ isOpen, onClose }: DepartureN
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por cliente, venta #, transportista, teléfono..."
+              placeholder="Buscar por cliente, RUT, venta #, transportista, teléfono..."
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-emerald-500 shadow-xs"
             />
           </div>

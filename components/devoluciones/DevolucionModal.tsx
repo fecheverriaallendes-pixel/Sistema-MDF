@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store/GlobalContext';
 import { SaleReturn, StaffRole, Sale, CommissionType } from '../../types';
+import { formatRut } from '../../utils/rutUtils';
 
 interface DevolucionModalProps {
   isOpen: boolean;
@@ -519,7 +520,7 @@ export const DevolucionModal: React.FC<DevolucionModalProps> = ({
               />
               <datalist id="clientes-list">
                 {customers.map((c) => (
-                  <option key={c.id} value={c.nombre} />
+                  <option key={c.id} value={c.nombre} label={c.rut ? `RUT: ${formatRut(c.rut)}` : undefined} />
                 ))}
               </datalist>
             </div>
