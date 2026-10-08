@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   X, 
   Search, 
@@ -21,6 +21,7 @@ import {
   formatRut, 
   validateRut, 
   matchRut, 
+  exactMatchRut,
   getUnifiedClients, 
   UnifiedClient 
 } from '../utils/rutUtils';
@@ -47,6 +48,12 @@ export default function RutClientLookupModal({
   const [searchTerm, setSearchTerm] = useState(initialRut);
   const [copiedRut, setCopiedRut] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setSearchTerm(initialRut || '');
+    }
+  }, [isOpen, initialRut]);
+
   const allClients = useMemo(() => {
     return getUnifiedClients(customers, sales);
   }, [customers, sales]);
@@ -62,7 +69,7 @@ export default function RutClientLookupModal({
     const term = searchTerm.trim().toLowerCase();
     const cleanTerm = cleanRut(term);
 
-    return allClients.filter(c => {
+    const matches = allClients.filter(c => {
       // 1. Prioritize RUT match
       if (c.rut && matchRut(c.rut, term)) return true;
       // 2. Client name match
@@ -70,6 +77,13 @@ export default function RutClientLookupModal({
       // 3. Phone match
       if (c.telefono.toLowerCase().includes(term)) return true;
       return false;
+    });
+
+    return matches.sort((a, b) => {
+      const aExactRut = exactMatchRut(a.rut, cleanTerm) ? 1 : 0;
+      const bExactRut = exactMatchRut(b.rut, cleanTerm) ? 1 : 0;
+      if (bExactRut !== aExactRut) return bExactRut - aExactRut;
+      return 0;
     });
   }, [allClients, searchTerm]);
 

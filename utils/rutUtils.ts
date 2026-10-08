@@ -4,15 +4,30 @@ import { Customer, Sale } from '../types';
  * Utility functions for Chilean RUT parsing, formatting, validation, and flexible searching.
  */
 
+const RUT_PLACEHOLDERS = new Set([
+  'PENDIENTE',
+  'N/A',
+  'NA',
+  'SIN RUT',
+  'SINRUT',
+  'EXTRANJERO',
+  'PASAPORTE',
+  'NO APLICA',
+  'NOAPLICA',
+  'S/R'
+]);
+
 export const cleanRut = (rawRut?: string): string => {
   if (!rawRut) return '';
-  return rawRut.toString().trim().toUpperCase().replace(/[^0-9K]/g, '');
+  const upper = rawRut.toString().trim().toUpperCase();
+  if (RUT_PLACEHOLDERS.has(upper)) return '';
+  return upper.replace(/[^0-9K]/g, '');
 };
 
 export const formatRut = (rawRut?: string): string => {
   if (!rawRut || !rawRut.trim()) return '';
   const upper = rawRut.trim().toUpperCase();
-  if (['PENDIENTE', 'N/A', 'SIN RUT', 'EXTRANJERO', 'PASAPORTE', 'NO APLICA'].includes(upper)) {
+  if (RUT_PLACEHOLDERS.has(upper)) {
     return upper;
   }
   const clean = cleanRut(upper);
@@ -53,28 +68,31 @@ export const validateRut = (rawRut?: string): boolean => {
 };
 
 /**
- * Checks if search query matches a target RUT.
- * Handles variations like:
- * - 12.345.678-9 vs 12345678-9 vs 123456789
- * - partial searches like "12345" or "12.345"
+ * Strict exact match between two RUTs.
+ * Only returns true if both RUTs clean to the EXACT same digits + DV,
+ * and length is between 7 and 10 characters.
+ * NEVER does partial or substring matching!
+ */
+export const exactMatchRut = (rutA?: string, rutB?: string): boolean => {
+  if (!rutA || !rutB) return false;
+  const cleanA = cleanRut(rutA);
+  const cleanB = cleanRut(rutB);
+  if (cleanA.length < 7 || cleanB.length < 7) return false;
+  if (cleanA.length > 10 || cleanB.length > 10) return false;
+  return cleanA === cleanB;
+};
+
+/**
+ * Flexible match for SEARCH BARS (CRM, list filters).
+ * Requires at least 2 search characters to avoid false positive explosions.
  */
 export const matchRut = (targetRut?: string, search?: string): boolean => {
   if (!targetRut || !search) return false;
-  const rawTarget = targetRut.trim().toLowerCase();
-  const rawSearch = search.trim().toLowerCase();
-
-  // Direct substring check
-  if (rawTarget.includes(rawSearch)) return true;
-
-  // Clean alphanumeric check (removes dots, dashes, spaces)
   const cleanTarget = cleanRut(targetRut);
   const cleanSearch = cleanRut(search);
 
-  if (cleanSearch.length > 0 && cleanTarget.includes(cleanSearch)) {
-    return true;
-  }
-
-  return false;
+  if (cleanTarget.length < 3 || cleanSearch.length < 2) return false;
+  return cleanTarget.includes(cleanSearch);
 };
 
 export interface UnifiedClient {
@@ -95,21 +113,24 @@ export interface UnifiedClient {
 
 /**
  * Combines CRM customers and historical sales clients to provide a unified directory.
- * Deduplicates by cleaned RUT or normalized name.
+ * Safely deduplicates by exact cleaned RUT. Never transfers or guesses RUT across disparate records.
  */
 export const getUnifiedClients = (customers: Customer[], sales: Sale[]): UnifiedClient[] => {
   const clientMap = new Map<string, UnifiedClient>();
 
   // 1. First add CRM customers
   customers.forEach(c => {
-    const key = c.rut && cleanRut(c.rut) ? `rut_${cleanRut(c.rut)}` : `name_${c.nombre.trim().toLowerCase()}`;
+    const cleanR = cleanRut(c.rut);
+    // Key by exact valid RUT if present, otherwise by unique CRM ID
+    const key = cleanR.length >= 7 ? `rut_${cleanR}` : `crm_${c.id}`;
+    
     clientMap.set(key, {
       id: c.id,
       nombre: c.nombre,
-      telefono: c.telefono,
-      rut: c.rut,
+      telefono: c.telefono || '',
+      rut: cleanR.length >= 7 ? formatRut(c.rut) : (c.rut || ''),
       email: c.email,
-      direccion: c.direccion,
+      direccion: c.direccion || '',
       notas: c.notas || [],
       lastContacted: c.lastContacted,
       totalCompras: 0,
@@ -119,45 +140,72 @@ export const getUnifiedClients = (customers: Customer[], sales: Sale[]): Unified
     });
   });
 
-  // 2. Aggregate sales data and add clients from sales if missing
+  // 2. Aggregate sales data safely WITHOUT cross-polluting different clients
   sales.forEach(s => {
-    if (!s.cliente) return;
+    if (!s.cliente || !s.cliente.trim()) return;
     const cleanR = s.rut ? cleanRut(s.rut) : '';
-    const rutKey = cleanR ? `rut_${cleanR}` : '';
-    const nameKey = `name_${s.cliente.trim().toLowerCase()}`;
+    const hasValidRut = cleanR.length >= 7;
 
-    // Find existing entry by RUT key first, then by name key
-    let entry: UnifiedClient | undefined;
-    if (rutKey && clientMap.has(rutKey)) {
-      entry = clientMap.get(rutKey);
-    } else if (clientMap.has(nameKey)) {
-      entry = clientMap.get(nameKey);
-    }
+    if (hasValidRut) {
+      const rutKey = `rut_${cleanR}`;
+      const entry = clientMap.get(rutKey);
 
-    if (entry) {
-      entry.totalCompras += 1;
-      entry.montoTotal += (s.total || 0);
-      if (!entry.rut && s.rut) entry.rut = s.rut;
-      if (!entry.direccion && s.direccion) entry.direccion = s.direccion;
-      if (!entry.telefono && s.telefono) entry.telefono = s.telefono;
-      if (!entry.ultimaVentaFecha || (s.fecha && s.fecha > entry.ultimaVentaFecha)) {
-        entry.ultimaVentaFecha = s.fecha;
+      if (entry) {
+        // Increment purchases
+        entry.totalCompras += 1;
+        entry.montoTotal += (s.total || 0);
+        if (!entry.rut) entry.rut = formatRut(s.rut);
+        if (!entry.direccion && s.direccion) entry.direccion = s.direccion;
+        if (!entry.telefono && s.telefono) entry.telefono = s.telefono;
+        if (!entry.ultimaVentaFecha || (s.fecha && s.fecha > entry.ultimaVentaFecha)) {
+          entry.ultimaVentaFecha = s.fecha;
+        }
+      } else {
+        // New client with valid unique RUT from sales
+        clientMap.set(rutKey, {
+          id: `sale_client_${s.id}`,
+          nombre: s.cliente.trim(),
+          telefono: s.telefono || '',
+          rut: formatRut(s.rut),
+          direccion: s.direccion || '',
+          notas: [],
+          totalCompras: 1,
+          montoTotal: s.total || 0,
+          ultimaVentaFecha: s.fecha,
+          isRegisteredInCRM: false
+        });
       }
     } else {
-      // New client found in sales
-      const newKey = rutKey || nameKey;
-      clientMap.set(newKey, {
-        id: `sale_client_${s.id}`,
-        nombre: s.cliente,
-        telefono: s.telefono || '',
-        rut: s.rut || '',
-        direccion: s.direccion || '',
-        notas: [],
-        totalCompras: 1,
-        montoTotal: s.total || 0,
-        ultimaVentaFecha: s.fecha,
-        isRegisteredInCRM: false
-      });
+      // Sale WITHOUT a valid RUT:
+      // Group by normalized name + phone ONLY if both exist, otherwise unique sale ID.
+      // NEVER attach a RUT to this record, and NEVER merge into an existing RUT-bearing client!
+      const cleanPhone = (s.telefono || '').replace(/\D/g, '');
+      const nonRutKey = cleanPhone.length >= 8 
+        ? `nonrut_${s.cliente.trim().toLowerCase()}_${cleanPhone}`
+        : `sale_single_${s.id}`;
+
+      const entry = clientMap.get(nonRutKey);
+      if (entry) {
+        entry.totalCompras += 1;
+        entry.montoTotal += (s.total || 0);
+        if (!entry.direccion && s.direccion) entry.direccion = s.direccion;
+        if (!entry.ultimaVentaFecha || (s.fecha && s.fecha > entry.ultimaVentaFecha)) {
+          entry.ultimaVentaFecha = s.fecha;
+        }
+      } else {
+        clientMap.set(nonRutKey, {
+          id: `sale_client_${s.id}`,
+          nombre: s.cliente.trim(),
+          telefono: s.telefono || '',
+          rut: '', // Strictly empty! Never inherit someone else's RUT
+          direccion: s.direccion || '',
+          notas: [],
+          totalCompras: 1,
+          montoTotal: s.total || 0,
+          ultimaVentaFecha: s.fecha,
+          isRegisteredInCRM: false
+        });
+      }
     }
   });
 

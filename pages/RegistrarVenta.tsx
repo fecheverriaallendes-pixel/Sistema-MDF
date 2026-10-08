@@ -27,12 +27,13 @@ import {
   Check,
   Store,
   Trash2,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '../types';
 import RutClientLookupModal from '../components/RutClientLookupModal';
-import { cleanRut, formatRut, matchRut, getUnifiedClients } from '../utils/rutUtils';
+import { cleanRut, formatRut, exactMatchRut, validateRut, getUnifiedClients, UnifiedClient } from '../utils/rutUtils';
 
 export default function RegistrarVenta() {
   const { stock, staff, customers, sales, addSale, playSound } = useStore();
@@ -43,6 +44,7 @@ export default function RegistrarVenta() {
   const [clientSearch, setClientSearch] = useState('');
   const [isRutLookupOpen, setIsRutLookupOpen] = useState(false);
   const [foundClientFeedback, setFoundClientFeedback] = useState<string | null>(null);
+  const [detectedClientConflict, setDetectedClientConflict] = useState<UnifiedClient | null>(null);
   const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number, esManual?: boolean, tipoComision?: CommissionType, esMayorista?: boolean}[]>([]);
   const [newItem, setNewItem] = useState({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
 
@@ -102,48 +104,93 @@ export default function RegistrarVenta() {
     agencia: ''
   });
 
-  const handleClientChange = (nameOrRut: string) => {
-    const uppercaseVal = nameOrRut.toUpperCase();
+  const handleClientChange = (name: string) => {
+    const uppercaseVal = name.toUpperCase();
     setFormData(prev => ({ ...prev, cliente: uppercaseVal }));
-    
-    // Check if entered text matches a customer by name OR by RUT
-    const found = unifiedClients.find(c => 
-      c.nombre.toLowerCase() === nameOrRut.toLowerCase() ||
-      (c.rut && matchRut(c.rut, nameOrRut))
-    );
+    if (detectedClientConflict) setDetectedClientConflict(null);
 
-    if (found) {
-      setFormData(prev => ({
-        ...prev,
-        cliente: found.nombre.toUpperCase(),
-        telefono: found.telefono || prev.telefono,
-        rut: found.rut ? formatRut(found.rut) : prev.rut,
-        direccion: found.direccion || prev.direccion
-      }));
-      setFoundClientFeedback(`✓ Datos autocompletados para: ${found.nombre}${found.rut ? ` (RUT: ${formatRut(found.rut)})` : ''}`);
-      playSound('pop');
+    const trimmed = uppercaseVal.trim();
+    if (!trimmed) {
+      if (foundClientFeedback) setFoundClientFeedback(null);
+      return;
+    }
+
+    // Check if the user selected or typed an EXACT full name of an existing client
+    const exactMatches = unifiedClients.filter(c => c.nombre.trim().toUpperCase() === trimmed);
+    if (exactMatches.length === 1) {
+      const match = exactMatches[0];
+      // Only auto-fill if RUT is not already populated or matches
+      if (!formData.rut || exactMatchRut(match.rut, formData.rut)) {
+        setFormData(prev => ({
+          ...prev,
+          cliente: match.nombre.toUpperCase(),
+          telefono: prev.telefono || match.telefono || '',
+          rut: prev.rut || (match.rut ? formatRut(match.rut) : ''),
+          direccion: prev.direccion || match.direccion || ''
+        }));
+        if (match.rut) {
+          setFoundClientFeedback(`✓ Cliente registrado: ${match.nombre} (RUT: ${formatRut(match.rut)})`);
+          playSound('pop');
+        }
+      }
     }
   };
 
   const handleRutChange = (val: string) => {
-    const formatted = val.toUpperCase();
+    // Only update the field while typing - NEVER aggressively overwrite form while typing!
+    setFormData(prev => ({ ...prev, rut: val.toUpperCase() }));
+    if (detectedClientConflict) setDetectedClientConflict(null);
+    if (foundClientFeedback) setFoundClientFeedback(null);
+  };
+
+  const verifyAndApplyRut = (rawRut: string) => {
+    const clean = cleanRut(rawRut);
+    if (!clean || clean.length < 7) {
+      if (rawRut.trim()) {
+        setFormData(prev => ({ ...prev, rut: formatRut(rawRut) }));
+      }
+      return;
+    }
+
+    const formatted = formatRut(rawRut);
     setFormData(prev => ({ ...prev, rut: formatted }));
 
-    // When at least 7 characters are typed, check if there's a matching client by RUT
-    const clean = cleanRut(val);
-    if (clean.length >= 7) {
-      const found = unifiedClients.find(c => c.rut && matchRut(c.rut, val));
-      if (found) {
+    // Search for an EXACT RUT match only (never partial / substring)
+    const found = unifiedClients.find(c => exactMatchRut(c.rut, clean));
+
+    if (found) {
+      const currentName = formData.cliente.trim().toUpperCase();
+      const foundName = found.nombre.trim().toUpperCase();
+
+      // If no client name has been typed yet, or if it matches the registered name:
+      if (!currentName || currentName === foundName) {
         setFormData(prev => ({
           ...prev,
           cliente: found.nombre.toUpperCase(),
           telefono: found.telefono || prev.telefono,
           direccion: found.direccion || prev.direccion,
-          rut: formatRut(found.rut || val)
+          rut: formatRut(found.rut || formatted)
         }));
-        setFoundClientFeedback(`✓ Cliente encontrado por RUT: ${found.nombre}`);
+        setDetectedClientConflict(null);
+        setFoundClientFeedback(`✓ Cliente cargado por RUT: ${found.nombre}`);
         playSound('pop');
+      } else {
+        // CONFLICT: The salesperson typed a different name, but the RUT belongs to someone else
+        // Do NOT silently overwrite - show conflict notice
+        setDetectedClientConflict(found);
+        playSound('click');
       }
+    } else {
+      setDetectedClientConflict(null);
+      if (validateRut(clean)) {
+        setFoundClientFeedback(`✓ RUT verificado (nuevo cliente)`);
+      }
+    }
+  };
+
+  const handleRutBlur = () => {
+    if (formData.rut) {
+      verifyAndApplyRut(formData.rut);
     }
   };
 
@@ -155,7 +202,8 @@ export default function RegistrarVenta() {
       telefono: selected.telefono || prev.telefono,
       direccion: selected.direccion || prev.direccion
     }));
-    setFoundClientFeedback(`✓ Cliente cargado desde buscador RUT: ${selected.nombre} (${selected.rut})`);
+    setDetectedClientConflict(null);
+    setFoundClientFeedback(`✓ Cliente cargado desde buscador: ${selected.nombre} (${selected.rut})`);
   };
 
   const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
@@ -358,6 +406,50 @@ export default function RegistrarVenta() {
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 sm:p-10 space-y-8">
+          {/* Conflicto detectado si el RUT pertenece a otro cliente */}
+          {detectedClientConflict && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4.5 bg-amber-50 border-2 border-amber-300 rounded-3xl text-amber-950 shadow-sm animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-3">
+                <AlertCircle size={22} className="text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                <div className="text-xs">
+                  <p className="font-black text-amber-950 uppercase tracking-wide">
+                    Atención: Coincidencia de RUT con cliente registrado
+                  </p>
+                  <p className="mt-0.5 text-amber-800 font-medium">
+                    El RUT <strong>{formatRut(formData.rut)}</strong> está registrado en el sistema como <strong>{detectedClientConflict.nombre}</strong> (actualmente escribiste: <span className="font-black underline">{formData.cliente}</span>).
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({
+                      ...prev,
+                      cliente: detectedClientConflict.nombre.toUpperCase(),
+                      telefono: detectedClientConflict.telefono || prev.telefono,
+                      direccion: detectedClientConflict.direccion || prev.direccion,
+                      rut: formatRut(detectedClientConflict.rut || prev.rut)
+                    }));
+                    setFoundClientFeedback(`✓ Se cargaron los datos de ${detectedClientConflict.nombre}`);
+                    setDetectedClientConflict(null);
+                    playSound('pop');
+                  }}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-colors shadow-sm"
+                >
+                  Cargar datos de {detectedClientConflict.nombre.split(' ')[0]}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetectedClientConflict(null)}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors"
+                >
+                  Conservar "{formData.cliente}"
+                </button>
+              </div>
+            </div>
+          )}
+
           {foundClientFeedback && (
             <div className="flex items-center justify-between px-5 py-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-bold animate-in fade-in">
               <div className="flex items-center gap-2">
@@ -397,7 +489,7 @@ export default function RegistrarVenta() {
                 list="customers-suggestions" 
                 type="text" 
                 className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-xl font-black focus:border-blue-500 outline-none transition-all uppercase" 
-                placeholder="NOMBRE O RUT CLIENTE" 
+                placeholder="NOMBRE COMPLETO DEL CLIENTE" 
                 value={formData.cliente} 
                 onChange={(e) => handleClientChange(e.target.value)}
               />
@@ -441,19 +533,38 @@ export default function RegistrarVenta() {
                   <span>Buscador RUT</span>
                 </button>
               </div>
-              <input 
-                required={mode !== 'QUICK'} 
-                type="text" 
-                className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg focus:border-blue-500 outline-none transition-all uppercase" 
-                placeholder="12.345.678-9 (o sin puntos)" 
-                value={formData.rut} 
-                onChange={(e) => handleRutChange(e.target.value)}
-                onBlur={() => {
-                  if (formData.rut) {
-                    setFormData(prev => ({ ...prev, rut: formatRut(prev.rut) }));
-                  }
-                }}
-              />
+              <div className="relative">
+                <input 
+                  required={mode !== 'QUICK'} 
+                  type="text" 
+                  className="w-full px-7 py-5 pr-28 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg focus:border-blue-500 outline-none transition-all uppercase" 
+                  placeholder="12.345.678-9 (o sin puntos)" 
+                  value={formData.rut} 
+                  onChange={(e) => handleRutChange(e.target.value)}
+                  onBlur={handleRutBlur}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleRutBlur();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (formData.rut.trim()) {
+                      verifyAndApplyRut(formData.rut);
+                    } else {
+                      setIsRutLookupOpen(true);
+                    }
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black flex items-center gap-1.5 transition-colors"
+                  title="Verificar RUT o buscar cliente"
+                >
+                  <Search size={12} />
+                  <span>Verificar</span>
+                </button>
+              </div>
             </div>
             <div className="md:col-span-1">
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2"><MapPin size={14} className="text-blue-500" /> Dirección Despacho {mode === 'QUICK' ? '(Opcional en Live)' : ''}</label>
