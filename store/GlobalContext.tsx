@@ -1353,8 +1353,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   };
 
   const revertDispatchToPending = async (saleId: string): Promise<boolean> => {
-    if (currentUser?.rol !== StaffRole.ADMIN) {
-      alert("Solo la cuenta Administrador tiene la potestad de revertir un despacho a estado Pendiente.");
+    const canManageDispatch = currentUser?.rol === StaffRole.ADMIN || currentUser?.rol === StaffRole.DESPACHO;
+    if (!canManageDispatch) {
+      alert("Solo las cuentas de Administrador o Encargado de Despacho tienen la potestad de revertir un despacho a estado Pendiente.");
       return false;
     }
     const sale = sales.find(s => s.id === saleId);
@@ -1391,8 +1392,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const sale = sales.find(s => s.id === saleId);
     if (!sale) return false;
 
-    if ((sale.status === SaleStatus.ENVIADO || sale.enviado) && targetStatus === SaleStatus.PENDIENTE && currentUser?.rol !== StaffRole.ADMIN) {
-      alert("Solo la cuenta Administrador tiene la potestad de cambiar el status de un despacho completado a Pendiente.");
+    const canManageDispatch = currentUser?.rol === StaffRole.ADMIN || currentUser?.rol === StaffRole.DESPACHO;
+    if ((sale.status === SaleStatus.ENVIADO || sale.enviado) && targetStatus === SaleStatus.PENDIENTE && !canManageDispatch) {
+      alert("Solo las cuentas de Administrador o Encargado de Despacho tienen la potestad de cambiar el status de un despacho completado a Pendiente.");
       return false;
     }
 
@@ -1423,8 +1425,15 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const updateDispatchStatus = (saleId: string, status: DispatchStatus) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
-      const updatedSale: Sale = { ...sale, estadoDespacho: status };
+      const isEntregado = status === DispatchStatus.ENTREGADO;
+      const updatedSale: Sale = { 
+        ...sale, 
+        estadoDespacho: status,
+        enviado: isEntregado ? true : sale.enviado,
+        status: isEntregado ? SaleStatus.ENVIADO : sale.status
+      };
       setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
+      playSound('success');
       setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale)).catch(err => {
         console.error("Error al actualizar estado de despacho:", err);
         setSales(prev => prev.map(s => s.id === saleId ? sale : s));

@@ -67,7 +67,7 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'Pagos Proveedores', icon: Wallet, path: '/proveedores', roles: [StaffRole.ADMIN] },
     { name: 'Inventario Stock', icon: Package, path: '/stock', roles: [StaffRole.ADMIN, StaffRole.BODEGA, StaffRole.DESPACHO] },
     { name: 'Logística Despacho', icon: Truck, path: '/despachos', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
-    { name: 'Mis Despachos', icon: Truck, path: '/transportista', roles: [StaffRole.TRANSPORTISTA, StaffRole.ADMIN] },
+    { name: 'Mis Despachos', icon: Truck, path: '/transportista', roles: [StaffRole.TRANSPORTISTA, StaffRole.ADMIN, StaffRole.DESPACHO] },
     { name: 'Post-Venta', icon: Percent, path: '/post-venta', roles: [StaffRole.POST_VENTA, StaffRole.ADMIN] },
     { name: 'Etiquetas Térmicas', icon: Tags, path: '/etiquetas', roles: [StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO] },
     { name: 'Producción', icon: Factory, path: '/produccion', roles: [StaffRole.ADMIN] },
@@ -323,7 +323,7 @@ export default function App() {
               <Route path="/ventas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><Ventas /></ProtectedRoute>} />
               <Route path="/devoluciones" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Devoluciones /></ProtectedRoute>} />
               <Route path="/stock" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.BODEGA, StaffRole.DESPACHO]}><Stock /></ProtectedRoute>} />
-              <Route path="/transportista" element={<ProtectedRoute roles={[StaffRole.TRANSPORTISTA, StaffRole.ADMIN]}><TransportistaView /></ProtectedRoute>} />
+              <Route path="/transportista" element={<ProtectedRoute roles={[StaffRole.TRANSPORTISTA, StaffRole.ADMIN, StaffRole.DESPACHO]}><TransportistaView /></ProtectedRoute>} />
               <Route path="/despachos" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Despachos /></ProtectedRoute>} />
               <Route path="/produccion" element={<ProtectedRoute roles={[StaffRole.ADMIN]} extraCheck={(u) => (u?.nombre || '').toUpperCase() === 'CAMILA VIVAR'}><Produccion /></ProtectedRoute>} />
               <Route path="/crm" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><CRM /></ProtectedRoute>} />

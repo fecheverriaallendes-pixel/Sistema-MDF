@@ -40,7 +40,9 @@ import {
   RefreshCw,
   RotateCcw,
   Smartphone,
-  Globe
+  Globe,
+  X,
+  ChevronDown
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus, StaffRole } from '../types';
@@ -132,7 +134,9 @@ function formatDisplayDateTime(dateStr?: string | null): string {
 export default function Despachos() {
   const { sales, stock, markAsSent, revertDispatchToPending, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales, settings, updateSettings, triggerDispatchWebhook, markDepartureNotificationAsSent } = useStore();
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
-  const isBodegaUser = currentUser?.rol === StaffRole.BODEGA || currentUser?.rol === StaffRole.DESPACHO;
+  const isEncargadoDespacho = currentUser?.rol === StaffRole.DESPACHO;
+  const canManageDispatchStatus = isAdmin || isEncargadoDespacho;
+  const isBodegaUser = currentUser?.rol === StaffRole.BODEGA || isEncargadoDespacho;
   const bodegaInteracts = settings.bodegaInteractsWithWhatsApp === true;
   const isBodegaMode = isBodegaUser || !bodegaInteracts;
 
@@ -159,6 +163,7 @@ export default function Despachos() {
     message: string;
     wasAutoOpened: boolean;
   } | null>(null);
+  const [deliveryStatusModalSale, setDeliveryStatusModalSale] = useState<Sale | null>(null);
   const [dispatchToast, setDispatchToast] = useState<{
     title: string;
     message: string;
@@ -166,9 +171,26 @@ export default function Despachos() {
     sale?: Sale;
   } | null>(null);
 
+  const handleUpdateDeliveryStatus = (saleId: string, status: DispatchStatus) => {
+    if (!canManageDispatchStatus) {
+      alert("Solo las cuentas de Administrador o Encargado de Despacho tienen autorización para cambiar el status de entrega.");
+      return;
+    }
+    updateDispatchStatus(saleId, status);
+    const targetSale = sales.find(s => s.id === saleId);
+    setDeliveryStatusModalSale(null);
+    setDispatchToast({
+      title: 'Status de Entrega Actualizado',
+      message: `El despacho #${targetSale?.numeroVenta || ''} (${targetSale?.cliente || ''}) cambió a "${status}".`,
+      type: 'success',
+      sale: targetSale
+    });
+    playSound('success');
+  };
+
   const handleRevertDispatchToPending = async (sale: Sale) => {
-    if (!isAdmin) {
-      alert("Solo la cuenta Administrador tiene la potestad de volver este despacho a status Pendiente.");
+    if (!canManageDispatchStatus) {
+      alert("Solo las cuentas de Administrador o Encargado de Despacho tienen la potestad de volver este despacho a status Pendiente.");
       return;
     }
     const confirmed = window.confirm(
@@ -176,6 +198,12 @@ export default function Despachos() {
     );
     if (!confirmed) return;
     await revertDispatchToPending(sale.id);
+    setDispatchToast({
+      title: 'Despacho Revertido',
+      message: `La venta #${sale.numeroVenta} (${sale.cliente}) volvió a estado PENDIENTE.`,
+      type: 'info',
+      sale
+    });
   };
 
   React.useEffect(() => {
@@ -524,6 +552,13 @@ export default function Despachos() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {isEncargadoDespacho && (
+            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-blue-50 border border-blue-200/90 rounded-2xl text-[11px] font-black text-blue-900 shadow-sm">
+              <Truck size={14} className="text-blue-600" />
+              <span>Encargado de Despacho (Gestión de Status Habilitada)</span>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 border border-emerald-200/80 rounded-2xl text-[11px] font-bold text-emerald-800 shadow-sm">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -998,15 +1033,45 @@ export default function Despachos() {
                 </div>
 
                 <div className="text-right flex flex-col items-end gap-2 shrink-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                      {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
-                    </span>
-                    {isAdmin && sale.status === SaleStatus.ENVIADO && (
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (canManageDispatchStatus) {
+                          setDeliveryStatusModalSale(sale);
+                          playSound('click');
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${
+                        canManageDispatchStatus
+                          ? 'hover:ring-2 hover:ring-blue-400 cursor-pointer shadow-xs'
+                          : ''
+                      } ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}
+                      title={canManageDispatchStatus ? 'Click para cambiar status de la entrega (Encargado de Despacho / Admin)' : undefined}
+                    >
+                      <span>{sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}</span>
+                      {canManageDispatchStatus && <ChevronDown size={11} className="opacity-70" />}
+                    </button>
+
+                    {canManageDispatchStatus && (
+                      <button
+                        onClick={() => {
+                          setDeliveryStatusModalSale(sale);
+                          playSound('click');
+                        }}
+                        className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[9px] font-black uppercase tracking-tight flex items-center gap-1 transition-all active:scale-95 shadow-xs"
+                        title="Cambiar Status de Entrega"
+                      >
+                        <Truck size={10} className="text-blue-600" />
+                        <span>Status</span>
+                      </button>
+                    )}
+
+                    {canManageDispatchStatus && sale.status === SaleStatus.ENVIADO && (
                       <button
                         onClick={() => handleRevertDispatchToPending(sale)}
                         className="px-2 py-0.5 text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg text-[9px] font-black uppercase tracking-tight flex items-center gap-1 transition-all active:scale-95 shadow-sm"
-                        title="Potestad Administrador: Volver a Status Pendiente"
+                        title="Volver a Status Pendiente"
                       >
                         <RotateCcw size={10} className="text-amber-700" />
                         A Pendiente
@@ -1264,16 +1329,28 @@ export default function Despachos() {
                 ) : (
                   <div className="space-y-2">
                     <div className="w-full py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-[22px] text-xs font-black flex items-center justify-center gap-2 uppercase tracking-widest">
-                      <CheckCircle2 size={16} /> Despacho Completado
+                      <CheckCircle2 size={16} /> Despacho Completado • {sale.estadoDespacho || 'En Ruta'}
                     </div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleRevertDispatchToPending(sale)}
-                        className="w-full py-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-[22px] text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20"
-                        title="Potestad Administrador: Volver despacho a estado Pendiente"
-                      >
-                        <RotateCcw size={15} /> Volver a Status Pendiente
-                      </button>
+                    {canManageDispatchStatus && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            setDeliveryStatusModalSale(sale);
+                            playSound('click');
+                          }}
+                          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black rounded-[20px] text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-500/20"
+                          title="Cambiar status de la entrega"
+                        >
+                          <Truck size={14} /> Cambiar Status
+                        </button>
+                        <button
+                          onClick={() => handleRevertDispatchToPending(sale)}
+                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black rounded-[20px] text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-md shadow-amber-500/20"
+                          title="Volver despacho a estado Pendiente"
+                        >
+                          <RotateCcw size={14} /> A Pendiente
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1374,15 +1451,43 @@ export default function Despachos() {
                       )}
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}
-                        </span>
-                        {isAdmin && sale.status === SaleStatus.ENVIADO && (
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (canManageDispatchStatus) {
+                              setDeliveryStatusModalSale(sale);
+                              playSound('click');
+                            }
+                          }}
+                          className={`px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1 transition-all ${
+                            canManageDispatchStatus ? 'hover:ring-2 hover:ring-blue-400 cursor-pointer shadow-xs' : ''
+                          } ${sale.status === SaleStatus.PENDIENTE ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}
+                          title={canManageDispatchStatus ? 'Click para cambiar status de entrega' : undefined}
+                        >
+                          <span>{sale.status === SaleStatus.ENVIADO ? (sale.estadoDespacho || 'Despachado') : sale.status}</span>
+                          {canManageDispatchStatus && <ChevronDown size={11} className="opacity-70" />}
+                        </button>
+
+                        {canManageDispatchStatus && (
+                          <button
+                            onClick={() => {
+                              setDeliveryStatusModalSale(sale);
+                              playSound('click');
+                            }}
+                            className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all flex items-center gap-1 font-bold text-xs active:scale-95 shadow-xs"
+                            title="Cambiar status de la entrega"
+                          >
+                            <Truck size={13} className="text-blue-600" />
+                            <span className="hidden xl:inline text-[10px] font-black uppercase">Status</span>
+                          </button>
+                        )}
+
+                        {canManageDispatchStatus && sale.status === SaleStatus.ENVIADO && (
                           <button
                             onClick={() => handleRevertDispatchToPending(sale)}
                             className="p-1.5 text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-all flex items-center gap-1 font-bold text-xs active:scale-95 shadow-sm"
-                            title="Potestad Administrador: Volver a Status Pendiente"
+                            title="Volver a Status Pendiente"
                           >
                             <RotateCcw size={13} className="text-amber-700" />
                             <span className="hidden xl:inline text-[10px] font-black uppercase">A Pendiente</span>
@@ -1460,7 +1565,7 @@ export default function Despachos() {
         <SaleTrackingModal
           sale={selectedTrackingSale}
           stock={stock}
-          isAdmin={isAdmin}
+          isAdmin={canManageDispatchStatus}
           onRevertToPending={handleRevertDispatchToPending}
           onClose={() => setSelectedTrackingSale(null)}
           onLiberarJuntaCompra={(s) => {
@@ -1482,6 +1587,263 @@ export default function Despachos() {
           onClose={() => setDepartureModalData(null)}
           onMarkAsSent={() => markDepartureNotificationAsSent(departureModalData.sale.id)}
         />
+      )}
+
+      {/* Modal de Gestión de Status de Entrega */}
+      {deliveryStatusModalSale && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-200">
+          <div 
+            className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white relative">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400">
+                    <Truck size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg text-white">Cambiar Status de Entrega</h3>
+                    <p className="text-xs text-blue-200 font-medium">
+                      Venta #{deliveryStatusModalSale.numeroVenta} • {deliveryStatusModalSale.cliente}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setDeliveryStatusModalSale(null)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Current Status Pill */}
+              <div className="mt-4 flex flex-wrap items-center gap-2 pt-3 border-t border-white/10 text-xs">
+                <span className="text-slate-400 font-bold">Status actual:</span>
+                <span className="px-3 py-1 rounded-full text-xs font-black uppercase bg-blue-500 text-white shadow-xs">
+                  {deliveryStatusModalSale.estadoDespacho || (deliveryStatusModalSale.status === SaleStatus.ENVIADO ? 'Despachado' : 'Pendiente')}
+                </span>
+                {deliveryStatusModalSale.transportista && (
+                  <span className="text-blue-200 font-medium ml-auto">
+                    🚚 {deliveryStatusModalSale.transportista}
+                  </span>
+                )}
+                {deliveryStatusModalSale.agencia && (
+                  <span className="text-blue-200 font-medium ml-auto">
+                    🏢 {deliveryStatusModalSale.agencia}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Status Options Grid */}
+            <div className="p-5 sm:p-6 space-y-4 max-h-[70vh] overflow-y-auto bg-slate-50">
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                Selecciona el nuevo status de la entrega:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* EN RUTA */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.EN_RUTA)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.EN_RUTA
+                      ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-500/20'
+                      : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-blue-100 text-blue-700 shrink-0 mt-0.5">
+                    <Truck size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">En Ruta</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Pedido en tránsito hacia destino</span>
+                  </div>
+                </button>
+
+                {/* ENTREGADO */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.ENTREGADO)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.ENTREGADO
+                      ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20'
+                      : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">Entregado</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Recepción confirmada por cliente</span>
+                  </div>
+                </button>
+
+                {/* LISTO PARA RETIRO */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.LISTO_PARA_RETIRO)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.LISTO_PARA_RETIRO
+                      ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20'
+                      : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 shrink-0 mt-0.5">
+                    <Package size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">Listo para Retiro</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Disponible en bodega para retiro</span>
+                  </div>
+                </button>
+
+                {/* EN PREPARACIÓN */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.PREPARACION)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.PREPARACION
+                      ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-500/20'
+                      : 'bg-white border-slate-200 hover:border-amber-300 hover:bg-amber-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0 mt-0.5">
+                    <Clock size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">En Preparación</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Verificación y empaque en bodega</span>
+                  </div>
+                </button>
+
+                {/* CLIENTE AUSENTE */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.CLIENTE_AUSENTE)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.CLIENTE_AUSENTE
+                      ? 'bg-orange-50 border-orange-500 ring-2 ring-orange-500/20'
+                      : 'bg-white border-slate-200 hover:border-orange-300 hover:bg-orange-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-orange-100 text-orange-700 shrink-0 mt-0.5">
+                    <AlertCircle size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">Cliente Ausente</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">No hubo respuesta en domicilio</span>
+                  </div>
+                </button>
+
+                {/* DIRECCIÓN NO ENCONTRADA */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.DIRECCION_NO_ENCONTRADA)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.DIRECCION_NO_ENCONTRADA
+                      ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-500/20'
+                      : 'bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-rose-100 text-rose-700 shrink-0 mt-0.5">
+                    <MapPin size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">Dir. no encontrada</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Dirección incorrecta o no existe</span>
+                  </div>
+                </button>
+
+                {/* CLIENTE NO RECIBIÓ */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.CLIENTE_NO_RECIBIO)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.CLIENTE_NO_RECIBIO
+                      ? 'bg-rose-50 border-rose-600 ring-2 ring-rose-600/20'
+                      : 'bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-rose-100 text-rose-800 shrink-0 mt-0.5">
+                    <AlertCircle size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">Cliente no recibió</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Rechazo o problema al recibir</span>
+                  </div>
+                </button>
+
+                {/* AGENCIA MAL ASIGNADA */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.AGENCIA_MAL_ASIGNADA)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.AGENCIA_MAL_ASIGNADA
+                      ? 'bg-purple-50 border-purple-500 ring-2 ring-purple-500/20'
+                      : 'bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50/40 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-purple-100 text-purple-700 shrink-0 mt-0.5">
+                    <Building2 size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">Agencia Mal Asignada</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Requiere corregir agencia destino</span>
+                  </div>
+                </button>
+
+                {/* ERROR DE ETIQUETADO */}
+                <button
+                  type="button"
+                  onClick={() => handleUpdateDeliveryStatus(deliveryStatusModalSale.id, DispatchStatus.ERROR_ETIQUETADO)}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 sm:col-span-2 ${
+                    deliveryStatusModalSale.estadoDespacho === DispatchStatus.ERROR_ETIQUETADO
+                      ? 'bg-slate-100 border-slate-500 ring-2 ring-slate-500/20'
+                      : 'bg-white border-slate-200 hover:border-slate-400 hover:bg-slate-50 shadow-xs'
+                  }`}
+                >
+                  <div className="p-2 rounded-xl bg-slate-200 text-slate-800 shrink-0 mt-0.5">
+                    <AlertCircle size={16} />
+                  </div>
+                  <div>
+                    <span className="block font-black text-xs text-slate-900 uppercase">Error de Etiquetado</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5 font-medium">Reetiquetar con bultos y datos correctos</span>
+                  </div>
+                </button>
+              </div>
+
+              {/* Botón especial: Volver a Status Pendiente */}
+              <div className="pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleRevertDispatchToPending(deliveryStatusModalSale);
+                    setDeliveryStatusModalSale(null);
+                  }}
+                  className="w-full py-3.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border-2 border-amber-300 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+                >
+                  <RotateCcw size={16} className="text-amber-700" />
+                  <span>Volver este Despacho a Status Pendiente (Bodega)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setDeliveryStatusModalSale(null)}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

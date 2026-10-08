@@ -11,7 +11,8 @@ export default function TransportistaView() {
 
   if (!currentUser) return null;
 
-  const isAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
+  const isAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR || currentUser.rol === StaffRole.DESPACHO;
+  const canRevert = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.DESPACHO;
   
   const filteredSales = sales.filter(s => {
     const isOwner = (isAdmin || s.transportista?.toLowerCase() === (currentUser.nombre || '').toLowerCase());
@@ -70,7 +71,7 @@ export default function TransportistaView() {
               <h2 className="font-black text-lg">Venta #{sale.numeroVenta}</h2>
               <div className="flex items-center gap-2">
                 <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-3 py-1 rounded-full">{sale.estadoDespacho}</span>
-                {currentUser.rol === StaffRole.ADMIN && (
+                {canRevert && (
                   <button
                     onClick={() => {
                       if (confirm(`¿Estás seguro de que deseas volver la Venta #${sale.numeroVenta} (${sale.cliente}) a status PENDIENTE de despacho?`)) {
@@ -78,7 +79,7 @@ export default function TransportistaView() {
                       }
                     }}
                     className="p-1.5 text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors"
-                    title="Potestad Administrador: Volver a Status Pendiente"
+                    title="Potestad: Volver a Status Pendiente"
                   >
                     <RotateCcw size={15} />
                   </button>
@@ -162,7 +163,7 @@ export default function TransportistaView() {
               >
                 <AlertCircle size={16} /> ERROR ETIQUETADO
               </button>
-              {currentUser.rol === StaffRole.ADMIN && (
+              {canRevert && (
                 <button 
                   onClick={async () => {
                     if (confirm(`¿Estás seguro de que deseas volver la Venta #${selectedSale.numeroVenta} (${selectedSale.cliente}) a status PENDIENTE de despacho?`)) {
@@ -172,7 +173,7 @@ export default function TransportistaView() {
                   }}
                   className="col-span-2 flex items-center justify-center gap-2 p-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 rounded-xl font-black text-xs uppercase transition-all shadow-sm"
                 >
-                  <RotateCcw size={16} /> Volver a Status Pendiente (Admin)
+                  <RotateCcw size={16} /> Volver a Status Pendiente
                 </button>
               )}
               <button 
