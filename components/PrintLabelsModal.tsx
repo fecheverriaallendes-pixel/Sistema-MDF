@@ -44,7 +44,7 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
   onClose,
   onPrintComplete
 }) => {
-  const { currentUser, updateSale, playSound } = useStore();
+  const { currentUser, updateSale, playSound, addLabelPrintLog, getSalePrintLogs } = useStore();
 
   const [printMode, setPrintMode] = useState<PrintMode>('INDIVIDUAL');
   const [etiquetador, setEtiquetador] = useState('');
@@ -53,6 +53,9 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
   const [rangeStart, setRangeStart] = useState<number>(1);
   const [rangeEnd, setRangeEnd] = useState<number>(1);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [showHistorySection, setShowHistorySection] = useState(false);
+  const [reprintReason, setReprintReason] = useState('Copia adicional solicitada');
+  const [customReprintNote, setCustomReprintNote] = useState('');
 
   // Initialize etiquetador with current user name or sale etiquetador
   useEffect(() => {
@@ -81,6 +84,24 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
     return generateGroupedLabels(sale, stock);
   }, [sale, stock]);
 
+  const salePrintLogs = useMemo(() => {
+    if (!sale) return [];
+    return getSalePrintLogs(sale.id);
+  }, [sale, getSalePrintLogs]);
+
+  const isReprint = salePrintLogs.length > 0 || Boolean(sale?.impresa);
+  const currentPrintAttemptNumber = salePrintLogs.length + 1;
+
+  const productsToDeliver = useMemo(() => {
+    if (!sale) return [];
+    const list = getSaleItemsList(sale);
+    return list.map(item => ({
+      codigo: item.codigoFardo,
+      descripcion: getProductDescription(item.codigoFardo, stock),
+      cantidad: item.cantidad
+    }));
+  }, [sale, stock]);
+
   // Reset selections when sale changes or modal opens
   useEffect(() => {
     if (isOpen && sale) {
@@ -89,6 +110,9 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
       setCustomSelectedIds(individualLabels.map(l => l.id));
       setRangeStart(1);
       setRangeEnd(totalBultos);
+      setShowHistorySection(false);
+      setReprintReason('Copia adicional solicitada');
+      setCustomReprintNote('');
     }
   }, [isOpen, sale, individualLabels, totalBultos]);
 
@@ -150,7 +174,7 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
     setCustomSelectedIds(matching.map(l => l.id));
   };
 
-  const handleExecutePrint = () => {
+  const handleExecutePrint = async () => {
     if (activeLabelsToPrint.length === 0) {
       alert('⚠️ No hay etiquetas seleccionadas para imprimir.');
       return;
@@ -159,11 +183,33 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
     const etiquetadorName = (etiquetador.trim() || currentUser?.nombre || 'BODEGA').toUpperCase();
     setIsPrinting(true);
 
-    // Save etiquetador and mark sale as printed
-    updateSale(sale.id, {
-      impresa: true,
-      etiquetador: etiquetadorName
-    });
+    const finalReason = isReprint 
+      ? (customReprintNote.trim() || reprintReason)
+      : undefined;
+
+    const productosResumen = productsToDeliver
+      .map(p => `${p.codigo} (${p.cantidad > 1 ? `x${p.cantidad}` : '1'})`)
+      .join(', ');
+
+    try {
+      await addLabelPrintLog({
+        saleId: sale.id,
+        numeroVenta: sale.numeroVenta,
+        cliente: sale.cliente,
+        vendedor: sale.vendedor,
+        impresoPor: etiquetadorName,
+        cantidadEtiquetas: activeLabelsToPrint.length,
+        modoImpresion: printMode,
+        bultosTotales: totalBultos,
+        productosEntregados: productsToDeliver,
+        productosResumen,
+        entregaMultiplesProductos: productsToDeliver.length > 1 || (printMode === 'GROUPED' && totalBultos > 1),
+        motivoReimpresion: finalReason,
+        agenciaODestino: destinoText
+      });
+    } catch (err) {
+      console.error("Error al registrar print log:", err);
+    }
 
     if (onPrintComplete) {
       onPrintComplete(sale.id, etiquetadorName);
@@ -248,6 +294,156 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
                 <span className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-black uppercase tracking-wider">
                   {destinoText}
                 </span>
+              </div>
+            </div>
+
+            {/* Aviso de Reimpresión / Historial de Impresiones Previas */}
+            {isReprint && (
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 animate-in fade-in">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-sm">
+                      #{currentPrintAttemptNumber}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black uppercase text-amber-950">
+                          Esta venta ya fue impresa anteriormente ({salePrintLogs.length} {salePrintLogs.length === 1 ? 'impresión registrada' : 'impresiones registradas'})
+                        </span>
+                        <span className="bg-amber-200 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                          Reimpresión
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 font-medium mt-0.5">
+                        {sale.ultimoEtiquetador ? `Última impresión realizada por ${sale.ultimoEtiquetador}` : 'Se registrará este nuevo tiraje en el historial de etiquetas de bodega.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {salePrintLogs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowHistorySection(!showHistorySection)}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 text-xs font-bold hover:bg-amber-100 transition-all shadow-xs flex items-center gap-1.5 shrink-0"
+                    >
+                      <RotateCcw size={13} />
+                      {showHistorySection ? 'Ocultar Historial' : `Ver Historial (${salePrintLogs.length})`}
+                    </button>
+                  )}
+                </div>
+
+                {/* Selector de Motivo de Reimpresión */}
+                <div className="mt-3 pt-3 border-t border-amber-200/80">
+                  <label className="text-[11px] font-black uppercase text-amber-900 tracking-wider mb-1.5 block">
+                    Motivo de la reimpresión o etiqueta adicional:
+                  </label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {[
+                      'Copia adicional solicitada',
+                      'Etiqueta dañada o ilegible',
+                      'Extraviada en bodega',
+                      'Piden más de 1 etiqueta',
+                      '1 etiqueta entrega varios productos',
+                      'Cambio de agencia o destino'
+                    ].map(reason => (
+                      <button
+                        key={reason}
+                        type="button"
+                        onClick={() => { setReprintReason(reason); setCustomReprintNote(''); }}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          reprintReason === reason && !customReprintNote
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : 'bg-white text-amber-900 border border-amber-200 hover:bg-amber-100'
+                        }`}
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={customReprintNote}
+                    onChange={e => setCustomReprintNote(e.target.value)}
+                    placeholder="Otro motivo específico o nota para bodega (opcional)..."
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                {/* Acordeón de Historial Detallado de esta Venta */}
+                {showHistorySection && salePrintLogs.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-amber-200/80 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider block">
+                      Tirajes anteriores registrados para esta venta:
+                    </span>
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                      {salePrintLogs.map((log, idx) => (
+                        <div key={log.id || idx} className="bg-white/90 p-2.5 rounded-xl border border-amber-200 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-slate-900">
+                                {log.esReimpresion ? `Impresión #${log.numeroImpresion} (Reimpresión)` : '1ra Impresión'}
+                              </span>
+                              <span className="text-slate-500 font-mono text-[10px]">{log.fechaFormateada}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-600 mt-0.5">
+                              <span className="font-bold text-slate-700">Por:</span> {log.impresoPor} • <span className="font-bold text-slate-700">Modo:</span> {log.modoImpresion} • {log.cantidadEtiquetas} {log.cantidadEtiquetas === 1 ? 'etiqueta' : 'etiquetas'}
+                            </p>
+                            {log.productosResumen && (
+                              <p className="text-[10px] text-emerald-700 font-medium">
+                                📦 Productos amparados: {log.productosResumen}
+                              </p>
+                            )}
+                            {log.motivoReimpresion && (
+                              <p className="text-[10px] text-amber-800 font-semibold italic">
+                                Motivo: "{log.motivoReimpresion}"
+                              </p>
+                            )}
+                          </div>
+                          <span className="px-2 py-1 bg-amber-100 text-amber-900 rounded-lg text-[10px] font-black uppercase shrink-0">
+                            Registrado
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Banner de Entrega Multiproducto (1 etiqueta = más de un producto) */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase text-slate-900">
+                      Entrega y Bultos: {productsToDeliver.length} {productsToDeliver.length === 1 ? 'Tipo de Producto' : 'Tipos de Productos'} ({totalBultos} {totalBultos === 1 ? 'fardo' : 'fardos'} en total)
+                    </span>
+                    {productsToDeliver.length > 1 && (
+                      <span className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                        Multiproducto
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    {printMode === 'GROUPED' && totalBultos > 1
+                      ? '⚠️ Modo Agrupado: Cada etiqueta cubre y entrega todos los fardos del producto en una sola entrega.'
+                      : printMode === 'INDIVIDUAL' && totalBultos > 1
+                      ? 'Modo Individual: Se entrega 1 etiqueta separada por cada fardo físico.'
+                      : 'Esta impresión ampara la entrega física de la mercadería especificada.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 max-w-sm justify-end">
+                {productsToDeliver.map((p, idx) => (
+                  <span key={idx} className="bg-white border border-slate-200 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold">
+                    {p.codigo} {p.cantidad > 1 ? `x${p.cantidad}` : ''}
+                  </span>
+                ))}
               </div>
             </div>
 

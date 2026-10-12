@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, SalaryDeduction, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord, ValeEntrada, ValeEntradaItem } from '../types';
+import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, SalaryDeduction, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord, ValeEntrada, ValeEntradaItem, LabelPrintLog, LabelPrintProduct, DeletedSaleRecord } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
@@ -566,6 +566,15 @@ interface StoreContextType {
   valesEntrada: ValeEntrada[];
   addValeEntrada: (vale: Omit<ValeEntrada, 'id' | 'folio' | 'createdAt'>) => Promise<ValeEntrada>;
   deleteValeEntrada: (id: string, revertStock?: boolean) => Promise<void>;
+
+  // Historial de Impresiones de Etiquetas
+  labelPrintLogs: LabelPrintLog[];
+  addLabelPrintLog: (log: Omit<LabelPrintLog, 'id' | 'fechaHora' | 'fechaFormateada' | 'esReimpresion' | 'numeroImpresion'> & { motivoReimpresion?: string }) => Promise<LabelPrintLog>;
+  getSalePrintLogs: (saleId: string) => LabelPrintLog[];
+
+  // Auditoría y Registro de Ventas Eliminadas (Números Bloqueados Permanentemente)
+  deletedSales: DeletedSaleRecord[];
+  highestSaleNumber: number;
 }
 
 // Safe storage wrapper to prevent Safari private mode exception crashes
@@ -753,6 +762,24 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Historial de Impresiones de Etiquetas Térmicas
+  const [labelPrintLogs, setLabelPrintLogs] = useState<LabelPrintLog[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_label_prints');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Registro de Ventas Eliminadas / Números Bloqueados Definitivamente
+  const [deletedSales, setDeletedSales] = useState<DeletedSaleRecord[]>(() => {
+    const saved = safeLocalStorage.getItem('mdf_deleted_sales');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Contador persistente del número de venta más alto asignado
+  const [highestSaleNumber, setHighestSaleNumber] = useState<number>(() => {
+    const saved = safeLocalStorage.getItem('mdf_highest_sale_number');
+    return saved ? Number(saved) : 2000;
+  });
+
   const isSyncingRef = useRef(false);
 
   const calculatePurchaseState = (purchase: Purchase) => {
@@ -904,6 +931,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     let unsubTikTokLives: any;
     let unsubReturns: any;
     let unsubValesEntrada: any;
+    let unsubLabelPrints: any;
+    let unsubDeletedSales: any;
+    let unsubSalesCounter: any;
 
     const initFirebase = async () => {
       try {
@@ -999,6 +1029,27 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubValesEntrada = onSnapshot(collection(db, 'vales_entrada'), (snap) => {
           setValesEntrada(snap.docs.map(d => ({ ...d.data(), id: d.id } as ValeEntrada)));
         });
+        unsubLabelPrints = onSnapshot(collection(db, 'label_prints'), (snap) => {
+          const logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as LabelPrintLog));
+          logs.sort((a, b) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime());
+          setLabelPrintLogs(logs);
+          safeLocalStorage.setItem('mdf_label_prints', JSON.stringify(logs));
+        });
+        unsubDeletedSales = onSnapshot(collection(db, 'deleted_sales'), (snap) => {
+          const recs = snap.docs.map(d => ({ ...d.data(), id: d.id } as DeletedSaleRecord));
+          recs.sort((a, b) => (b.numeroVenta || 0) - (a.numeroVenta || 0));
+          setDeletedSales(recs);
+          safeLocalStorage.setItem('mdf_deleted_sales', JSON.stringify(recs));
+        });
+        unsubSalesCounter = onSnapshot(doc(db, 'config', 'sales_counter'), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (typeof data.lastSaleNumber === 'number') {
+              setHighestSaleNumber(prev => Math.max(prev, data.lastSaleNumber));
+              safeLocalStorage.setItem('mdf_highest_sale_number', String(data.lastSaleNumber));
+            }
+          }
+        });
       } catch (error: any) {
         console.error("Error al suscribirse a colecciones de Firebase:", error.code, error.message);
       }
@@ -1030,6 +1081,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (unsubTikTokLives) unsubTikTokLives();
       if (unsubReturns) unsubReturns();
       if (unsubValesEntrada) unsubValesEntrada();
+      if (unsubLabelPrints) unsubLabelPrints();
+      if (unsubDeletedSales) unsubDeletedSales();
+      if (unsubSalesCounter) unsubSalesCounter();
     };
   }, []);
 
@@ -1096,13 +1150,30 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       ? CommissionType.MAYORISTA 
       : (saleData.codigoFardo ? calculateCommission(saleData.codigoFardo) : CommissionType.FARDO_NORMAL);
 
+    // Calcular el próximo número de venta de forma estrictamente incremental
+    // NUNCA se reutilizan números eliminados ni números previamente asignados
+    const activeMax = sales.length > 0 ? Math.max(...sales.map(s => Number(s.numeroVenta) || 0)) : 0;
+    const deletedMax = deletedSales.length > 0 ? Math.max(...deletedSales.map(d => Number(d.numeroVenta) || 0)) : 0;
+    const baseNumber = Math.max(highestSaleNumber, activeMax, deletedMax, 2000);
+    let nextNumeroVenta = baseNumber + 1;
+
+    // Asegurar que no coincida con ningún número de venta activo o eliminado
+    const allOccupiedNumbers = new Set<number>([
+      ...sales.map(s => Number(s.numeroVenta) || 0),
+      ...deletedSales.map(d => Number(d.numeroVenta) || 0)
+    ]);
+
+    while (allOccupiedNumbers.has(nextNumeroVenta)) {
+      nextNumeroVenta++;
+    }
+
     const newSale: Sale = {
       ...saleData,
       esMayorista: isMayorista,
       items: saleData.tipoVenta === SaleType.NOTA_VENTA ? items : saleData.items,
       total,
       id: Math.random().toString(36).substr(2, 9),
-      numeroVenta: sales.length > 0 ? Math.max(...sales.map(s => s.numeroVenta || 0)) + 1 : 2000,
+      numeroVenta: nextNumeroVenta,
       fecha: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
       hora: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: SaleStatus.PENDIENTE,
@@ -1117,12 +1188,17 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     
     // Remove undefined values to prevent Firestore errors
     const cleanSale = Object.fromEntries(Object.entries(newSale).filter(([_, v]) => v !== undefined));
-    
 
     try {
       console.log("Saving sale to Firestore...", newSale.id, cleanSale);
       const batch = writeBatch(db);
       batch.set(doc(db, 'sales', newSale.id), cleanSale);
+
+      // Persistir el contador para que nunca retroceda aunque se elimine la venta
+      batch.set(doc(db, 'config', 'sales_counter'), {
+        lastSaleNumber: nextNumeroVenta,
+        updatedAt: now.toISOString()
+      }, { merge: true });
 
       if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
           console.log("Processing Nota de Venta items:", items);
@@ -1144,6 +1220,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       await batch.commit();
       console.log("Sale and stock updates committed successfully.");
       setSales(prev => [newSale, ...prev.filter(s => s.id !== newSale.id)]);
+      setHighestSaleNumber(prev => Math.max(prev, nextNumeroVenta));
+      safeLocalStorage.setItem('mdf_highest_sale_number', String(Math.max(highestSaleNumber, nextNumeroVenta)));
     } catch(error) {
         console.error("Error adding sale:", error);
         alert("Error al registrar venta. Revisa la consola.");
@@ -2277,7 +2355,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
 
-  const deleteSale = async (saleId: string) => {
+  const deleteSale = async (saleId: string, motivoEliminacion?: string) => {
     console.log("DEBUG: Intentando eliminar venta:", saleId, "Usuario actual:", currentUser?.nombre, "Rol:", currentUser?.rol);
     if (!currentUser) {
       alert("No hay usuario autenticado.");
@@ -2289,11 +2367,43 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       return;
     }
     const saleToDelete = sales.find(s => s.id === saleId);
+    if (!saleToDelete) {
+      alert("No se encontró la venta a eliminar.");
+      return;
+    }
+
+    const saleNum = Number(saleToDelete.numeroVenta) || 0;
     setSales(prev => prev.filter(s => s.id !== saleId));
+
     try {
       const batch = writeBatch(db);
       
+      // 1. Eliminar de ventas activas
       batch.delete(doc(db, 'sales', saleId));
+
+      // 2. Registrar en auditoría de ventas eliminadas para BLOQUEAR su número permanentemente
+      // Esto asegura que en bodega jamás se confundan ni se reutilice el número
+      const deletedRecord: DeletedSaleRecord = {
+        id: saleToDelete.id,
+        numeroVenta: saleNum,
+        cliente: saleToDelete.cliente,
+        vendedor: saleToDelete.vendedor,
+        fechaVenta: saleToDelete.fecha,
+        total: saleToDelete.total,
+        codigoFardo: saleToDelete.codigoFardo || '',
+        items: saleToDelete.items || [],
+        deletedAt: new Date().toISOString(),
+        deletedBy: currentUser?.nombre || 'ADMIN',
+        motivo: motivoEliminacion || 'Venta eliminada del sistema. Número bloqueado definitivamente para evitar confusiones en bodega.'
+      };
+      batch.set(doc(db, 'deleted_sales', saleToDelete.id), cleanUndefined(deletedRecord));
+
+      // 3. Mantener el contador en el número más alto para que la próxima venta sea estrictamente mayor
+      const newHighest = Math.max(highestSaleNumber, saleNum);
+      batch.set(doc(db, 'config', 'sales_counter'), {
+        lastSaleNumber: newHighest,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
 
       if (saleToDelete) {
         if (saleToDelete.tipoVenta === SaleType.NOTA_VENTA && saleToDelete.items) {
@@ -2311,7 +2421,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
                 balanceAntes: currentStockItem ? currentStockItem.stockActual : 0,
                 balanceDespues: (currentStockItem ? currentStockItem.stockActual : 0) + item.cantidad,
                 vendedor: currentUser?.nombre || 'SISTEMA',
-                observaciones: `Anulación de Nota de Venta #${saleToDelete.numeroVenta || ''}`
+                observaciones: `Anulación de Nota de Venta #${saleToDelete.numeroVenta || ''} (Número bloqueado y retirado)`
               });
             }
           }
@@ -2328,15 +2438,21 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
             balanceAntes: currentStockItem ? currentStockItem.stockActual : 0,
             balanceDespues: (currentStockItem ? currentStockItem.stockActual : 0) + (saleToDelete.cantidad || 0),
             vendedor: currentUser?.nombre || 'SISTEMA',
-            observaciones: `Anulación de Venta #${saleToDelete.numeroVenta || ''}`
+            observaciones: `Anulación de Venta #${saleToDelete.numeroVenta || ''} (Número bloqueado y retirado)`
           });
         }
       }
 
       await batch.commit();
+
+      // Actualizar estado local
+      setDeletedSales(prev => [deletedRecord, ...prev.filter(d => d.id !== deletedRecord.id)]);
+      setHighestSaleNumber(newHighest);
+      safeLocalStorage.setItem('mdf_highest_sale_number', String(newHighest));
+
       playSound('click');
-      alert("Venta eliminada con éxito y productos retornados al stock.");
-      console.log("Venta eliminada con éxito:", saleId);
+      alert(`Venta #${saleNum} eliminada con éxito.\nEl número #${saleNum} ha sido bloqueado permanentemente para evitar confusiones en bodega.`);
+      console.log("Venta eliminada con éxito y número bloqueado:", saleId, saleNum);
     } catch (e: any) {
       console.error("Error al borrar venta:", e);
       alert(`Error al borrar la venta: ${e.message}`);
@@ -3374,6 +3490,68 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     playSound('click');
   };
 
+  const addLabelPrintLog = async (logData: Omit<LabelPrintLog, 'id' | 'fechaHora' | 'fechaFormateada' | 'esReimpresion' | 'numeroImpresion'> & { motivoReimpresion?: string }): Promise<LabelPrintLog> => {
+    const now = new Date();
+    const id = Math.random().toString(36).substr(2, 9);
+    
+    // Contar cuántas veces se ha impreso previamente esta venta
+    const previousPrints = labelPrintLogs.filter(l => l.saleId === logData.saleId);
+    const numeroImpresion = previousPrints.length + 1;
+    const esReimpresion = previousPrints.length > 0;
+
+    const fechaFormateada = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+    const newLog: LabelPrintLog = {
+      ...logData,
+      id,
+      fechaHora: now.toISOString(),
+      fechaFormateada,
+      esReimpresion,
+      numeroImpresion,
+      motivoReimpresion: logData.motivoReimpresion || (esReimpresion ? 'Reimpresión de etiqueta' : undefined)
+    };
+
+    try {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'label_prints', id), cleanUndefined(newLog));
+
+      // Actualizar la venta para que refleje la última impresión y el total de veces impresa
+      const saleRef = doc(db, 'sales', logData.saleId);
+      batch.update(saleRef, {
+        impresa: true,
+        etiquetador: logData.impresoPor,
+        totalImpresiones: increment(1),
+        ultimaImpresionAt: now.toISOString(),
+        ultimoEtiquetador: logData.impresoPor
+      });
+
+      await batch.commit();
+
+      setLabelPrintLogs(prev => [newLog, ...prev.filter(l => l.id !== id)]);
+      setSales(prev => prev.map(s => {
+        if (s.id === logData.saleId) {
+          return {
+            ...s,
+            impresa: true,
+            etiquetador: logData.impresoPor,
+            totalImpresiones: (s.totalImpresiones || 0) + 1,
+            ultimaImpresionAt: now.toISOString(),
+            ultimoEtiquetador: logData.impresoPor
+          };
+        }
+        return s;
+      }));
+    } catch (err) {
+      console.error("Error al registrar impresión de etiqueta en Firestore:", err);
+    }
+
+    return newLog;
+  };
+
+  const getSalePrintLogs = useCallback((saleId: string) => {
+    return labelPrintLogs.filter(l => l.saleId === saleId);
+  }, [labelPrintLogs]);
+
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
@@ -3395,7 +3573,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       weeklyAttendance, saveWeeklyAttendance, deleteWeeklyAttendance,
       tiktokLives, addTikTokLive, bulkAddTikTokLives, updateTikTokLive, deleteTikTokLive,
       saleReturns, addSaleReturn, updateSaleReturn, deleteSaleReturn,
-      valesEntrada, addValeEntrada, deleteValeEntrada
+      valesEntrada, addValeEntrada, deleteValeEntrada,
+      labelPrintLogs, addLabelPrintLog, getSalePrintLogs,
+      deletedSales, highestSaleNumber
     }}>
       {children}
     </StoreContext.Provider>

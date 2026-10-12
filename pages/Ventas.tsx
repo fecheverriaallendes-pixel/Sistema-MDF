@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive, RotateCcw, Send } from 'lucide-react';
+import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive, RotateCcw, Send, ShieldAlert, Lock, Printer } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 import { smartTextMatch } from '../utils/search';
@@ -8,6 +8,7 @@ import { matchRut, cleanRut, formatRut } from '../utils/rutUtils';
 import { Label } from '../components/Label';
 import { Invoice } from '../components/Invoice';
 import { VentasArchiveModal } from '../components/VentasArchiveModal';
+import { VentasEliminadasModal } from '../components/VentasEliminadasModal';
 import { SaleTrackingModal, formatShippingStatus, generateWhatsAppTrackingMessage } from '../components/SaleTrackingModal';
 import { PrintLabelsModal } from '../components/PrintLabelsModal';
 import { getTotalBultos, generateIndividualLabels } from '../utils/labelUtils';
@@ -30,7 +31,7 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 export default function Ventas() {
-  const { sales, updateSale, revertDispatchToPending, playSound, deleteSale, deleteAllSales, currentUser, stock } = useStore();
+  const { sales, updateSale, revertDispatchToPending, playSound, deleteSale, deleteAllSales, currentUser, stock, deletedSales, getSalePrintLogs } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('PENDING');
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -44,6 +45,7 @@ export default function Ventas() {
   const [trackingSale, setTrackingSale] = useState<Sale | null>(null);
   const [labelModalSale, setLabelModalSale] = useState<Sale | null>(null);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isDeletedSalesModalOpen, setIsDeletedSalesModalOpen] = useState(false);
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
 
@@ -222,14 +224,25 @@ export default function Ventas() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {isAdmin && (
-            <button
-              onClick={() => { setIsArchiveModalOpen(true); playSound('click'); }}
-              className="flex items-center gap-2 px-5 py-3.5 bg-slate-900 hover:bg-black text-white rounded-[20px] font-black text-xs uppercase tracking-wider transition-all shadow-lg hover:shadow-slate-900/20 active:scale-95"
-              title="Archivar ventas antiguas y descargar copias de respaldo"
-            >
-              <Archive size={16} className="text-emerald-400" />
-              <span>Respaldar / Archivar</span>
-            </button>
+            <>
+              <button
+                onClick={() => { setIsDeletedSalesModalOpen(true); playSound('click'); }}
+                className="flex items-center gap-2 px-5 py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200/90 rounded-[20px] font-black text-xs uppercase tracking-wider transition-all shadow-xs active:scale-95"
+                title="Ver ventas eliminadas y números bloqueados definitivamente"
+              >
+                <ShieldAlert size={16} className="text-rose-600" />
+                <span>Ventas Eliminadas ({deletedSales.length})</span>
+              </button>
+
+              <button
+                onClick={() => { setIsArchiveModalOpen(true); playSound('click'); }}
+                className="flex items-center gap-2 px-5 py-3.5 bg-slate-900 hover:bg-black text-white rounded-[20px] font-black text-xs uppercase tracking-wider transition-all shadow-lg hover:shadow-slate-900/20 active:scale-95"
+                title="Archivar ventas antiguas y descargar copias de respaldo"
+              >
+                <Archive size={16} className="text-emerald-400" />
+                <span>Respaldar / Archivar</span>
+              </button>
+            </>
           )}
           <div className="flex bg-slate-200 p-1.5 rounded-[24px] shadow-inner">
             <button 
@@ -417,12 +430,17 @@ export default function Ventas() {
                           <button 
                             onClick={() => { setLabelModalSale(sale); playSound('click'); }} 
                             className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-lg transition-colors font-black"
-                            title="Imprimir etiquetas de bultos / fardos"
+                            title={sale.impresa ? `Impresa previamente (${sale.totalImpresiones || 1} veces). Clic para ver historial o reimprimir` : 'Imprimir etiquetas térmicas'}
                           >
                             Etiquetas {(() => {
                               const b = getTotalBultos(sale);
                               return b > 1 ? `(${b})` : '';
                             })()}
+                            {sale.impresa && (
+                              <span className="ml-0.5 text-[9px] bg-emerald-600 text-white px-1.5 py-0.2 rounded-full font-mono font-bold" title={`Impresa ${sale.totalImpresiones || 1} vez/veces`}>
+                                ✓{sale.totalImpresiones && sale.totalImpresiones > 1 ? `x${sale.totalImpresiones}` : ''}
+                              </span>
+                            )}
                           </button>
                         </div>
                       )}
@@ -442,8 +460,13 @@ export default function Ventas() {
                       )}
                       {isAdmin && (
                         <button
-                          onClick={() => { if(confirm('¿Borrar venta?')) deleteSale(sale.id); }}
+                          onClick={() => { 
+                            if(confirm(`¿Estás seguro de que deseas eliminar la venta #${sale.numeroVenta} (${sale.cliente})?\n\n⚠️ AVISO IMPORTANTE: El número #${sale.numeroVenta} quedará BLOQUEADO PERMANENTEMENTE y NO será reutilizado por ninguna otra venta para evitar confusiones en bodega.`)) {
+                              deleteSale(sale.id);
+                            }
+                          }}
                           className="mt-1 text-red-500 hover:text-red-700 block mx-auto text-xs"
+                          title={`Eliminar venta #${sale.numeroVenta} (Bloquea el número permanentemente)`}
                         >
                           <Trash2 size={15} />
                         </button>

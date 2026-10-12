@@ -86,9 +86,50 @@
         "totalUnidades": { "type": "number" }
       },
       "required": ["folio", "fecha", "responsable", "totalArticulos", "totalUnidades"]
+    },
+    "LabelPrintLog": {
+      "title": "LabelPrintLog",
+      "description": "Log of thermal label prints with multi-product delivery tracking and reprint audit",
+      "type": "object",
+      "properties": {
+        "saleId": { "type": "string" },
+        "numeroVenta": { "type": "number" },
+        "cliente": { "type": "string" },
+        "impresoPor": { "type": "string" },
+        "cantidadEtiquetas": { "type": "number" },
+        "modoImpresion": { "type": "string" },
+        "fechaHora": { "type": "string" },
+        "esReimpresion": { "type": "boolean" },
+        "numeroImpresion": { "type": "number" }
+      },
+      "required": ["saleId", "numeroVenta", "cliente", "impresoPor", "cantidadEtiquetas", "modoImpresion", "fechaHora"]
+    },
+    "DeletedSale": {
+      "title": "DeletedSale",
+      "description": "Retired sales audit record to permanently reserve sale numbers and avoid confusion in bodega",
+      "type": "object",
+      "properties": {
+        "numeroVenta": { "type": "number" },
+        "cliente": { "type": "string" },
+        "vendedor": { "type": "string" },
+        "fechaVenta": { "type": "string" },
+        "total": { "type": "number" },
+        "deletedAt": { "type": "string" },
+        "deletedBy": { "type": "string" },
+        "motivo": { "type": "string" }
+      },
+      "required": ["numeroVenta", "cliente", "vendedor", "deletedAt", "deletedBy"]
     }
   },
   "firestore": {
+    "/label_prints/{printId}": {
+      "schema": { "$ref": "LabelPrintLog" },
+      "description": "Thermal label printing history and multi-product delivery logs"
+    },
+    "/deleted_sales/{saleId}": {
+      "schema": { "$ref": "DeletedSale" },
+      "description": "Permanently retired sales and audit trail to prevent reuse of numbers"
+    },
     "/vales_entrada/{valeId}": {
       "schema": { "$ref": "ValeEntrada" },
       "description": "Inbound shipment and container receipt vouchers"

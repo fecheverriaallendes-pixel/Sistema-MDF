@@ -453,11 +453,58 @@ export interface Sale {
   esManual?: boolean;
   esMayorista?: boolean;
   
+  // Historial y auditoría de impresiones
+  totalImpresiones?: number;
+  ultimaImpresionAt?: string;
+  ultimoEtiquetador?: string;
+  
   // Notificación de salida de bodega
   notificacionSalidaPendiente?: boolean;
   notificacionSalidaFecha?: string;
   notificacionSalidaMensaje?: string;
   notificacionSalidaEnviada?: boolean;
+}
+
+export interface LabelPrintProduct {
+  codigo: string;
+  descripcion?: string;
+  cantidad: number;
+}
+
+export interface LabelPrintLog {
+  id: string;
+  saleId: string;
+  numeroVenta: number;
+  cliente: string;
+  vendedor?: string;
+  fechaHora: string; // ISO date string
+  fechaFormateada: string; // e.g. "12/10/2026 13:45"
+  impresoPor: string;
+  cantidadEtiquetas: number;
+  modoImpresion: 'INDIVIDUAL' | 'GROUPED' | 'CUSTOM' | string;
+  bultosTotales: number;
+  productosEntregados: LabelPrintProduct[];
+  productosResumen: string;
+  entregaMultiplesProductos: boolean; // true si ampara/entrega más de 1 producto físico
+  esReimpresion: boolean;
+  numeroImpresion: number; // 1 = 1ra impresión, 2 = 2da...
+  motivoReimpresion?: string;
+  observaciones?: string;
+  agenciaODestino?: string;
+}
+
+export interface DeletedSaleRecord {
+  id: string;
+  numeroVenta: number;
+  cliente: string;
+  vendedor: string;
+  fechaVenta: string;
+  total: number;
+  codigoFardo?: string;
+  items?: SaleItem[];
+  deletedAt: string;
+  deletedBy: string;
+  motivo: string;
 }
 
 export interface CommissionAdjustment {

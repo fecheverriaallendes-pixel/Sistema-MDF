@@ -19,6 +19,15 @@ service cloud.firestore {
     match /vales_entrada/{document=**} {
       allow read, write: if true;
     }
+    match /label_prints/{document=**} {
+      allow read, write: if true;
+    }
+    match /deleted_sales/{document=**} {
+      allow read, write: if true;
+    }
+    match /config/{document=**} {
+      allow read, write: if true;
+    }
     match /users/{userId} {
       allow read, write: if true;
     }

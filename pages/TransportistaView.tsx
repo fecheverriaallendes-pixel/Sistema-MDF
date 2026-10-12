@@ -86,11 +86,12 @@ export default function TransportistaView() {
                 )}
                 <button 
                     onClick={() => {
-                        if(confirm("¿Estás seguro de que quieres eliminar este despacho?")) {
+                        if(confirm(`¿Estás seguro de que quieres eliminar el despacho #${sale.numeroVenta} (${sale.cliente})?\n\n⚠️ AVISO: El número #${sale.numeroVenta} quedará BLOQUEADO PERMANENTEMENTE y no se reutilizará para evitar confusiones en bodega.`)) {
                             deleteSale(sale.id);
                         }
                     }}
                     className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Eliminar despacho (bloquea el número permanentemente)"
                 >
                     <Trash2 size={16} />
                 </button>

@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Printer, ArrowLeft, CheckCircle2, AlertCircle, User, X, Boxes, Layers, SlidersHorizontal, Settings2 } from 'lucide-react';
+import { Printer, ArrowLeft, CheckCircle2, AlertCircle, User, X, Boxes, Layers, SlidersHorizontal, Settings2, RotateCcw, Calendar, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
 import { Sale, SaleType, SaleStatus, CommissionType, StaffRole } from '../types';
 import { Label, LabelItemData } from '../components/Label';
 import { PrintLabelsModal } from '../components/PrintLabelsModal';
+import { HistorialEtiquetasTab } from '../components/etiquetas/HistorialEtiquetasTab';
 import { getTotalBultos, generateIndividualLabels, generateGroupedLabels } from '../utils/labelUtils';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
@@ -16,7 +17,8 @@ interface QueuePrintableLabel {
 }
 
 export default function Etiquetas() {
-  const { sales, stock, currentUser, updateSale, playSound } = useStore();
+  const { sales, stock, currentUser, updateSale, playSound, labelPrintLogs, addLabelPrintLog, getSalePrintLogs, deletedSales } = useStore();
+  const [activeTab, setActiveTab] = useState<'QUEUE' | 'HISTORY'>('QUEUE');
   const [labelsToPrint, setLabelsToPrint] = useState<QueuePrintableLabel[]>([]);
   // Use a ref to store labels currently in the queue so the print callback can access them safely
   const printingLabelsRef = useRef<QueuePrintableLabel[]>([]);
@@ -67,8 +69,31 @@ export default function Etiquetas() {
       if (printingLabelsRef.current.length > 0) {
         const uniqueSaleIds = Array.from(new Set(printingLabelsRef.current.map(l => l.sale.id)));
         uniqueSaleIds.forEach(id => {
-          const item = printingLabelsRef.current.find(l => l.sale.id === id);
-          updateSale(id, { impresa: true, etiquetador: item?.sale.etiquetador });
+          const matching = printingLabelsRef.current.filter(l => l.sale.id === id);
+          const saleObj = matching[0]?.sale;
+          if (saleObj) {
+            updateSale(id, { impresa: true, etiquetador: saleObj.etiquetador });
+
+            const prods = (saleObj.items && saleObj.items.length > 0)
+              ? saleObj.items.map(i => ({ codigo: i.codigoFardo, cantidad: i.cantidad }))
+              : [{ codigo: saleObj.codigoFardo || 'N/A', cantidad: saleObj.cantidad || 1 }];
+            const resumen = prods.map(p => `${p.codigo} (x${p.cantidad})`).join(', ');
+
+            addLabelPrintLog({
+              saleId: saleObj.id,
+              numeroVenta: saleObj.numeroVenta,
+              cliente: saleObj.cliente,
+              vendedor: saleObj.vendedor,
+              impresoPor: saleObj.etiquetador || currentUser?.nombre || 'BODEGA',
+              cantidadEtiquetas: matching.length,
+              modoImpresion: queueMode,
+              bultosTotales: getTotalBultos(saleObj),
+              productosEntregados: prods,
+              productosResumen: resumen,
+              entregaMultiplesProductos: prods.length > 1 || (queueMode === 'GROUPED' && getTotalBultos(saleObj) > 1),
+              motivoReimpresion: saleObj.impresa ? 'Impresión desde cola de centro de etiquetado' : undefined
+            }).catch(e => console.error(e));
+          }
         });
         printingLabelsRef.current = [];
       }
@@ -76,7 +101,7 @@ export default function Etiquetas() {
     };
     window.addEventListener('afterprint', handleAfterPrint);
     return () => window.removeEventListener('afterprint', handleAfterPrint);
-  }, [updateSale]);
+  }, [updateSale, addLabelPrintLog, currentUser, queueMode]);
 
   useEffect(() => {
     if (labelsToPrint.length > 0) {
@@ -90,8 +115,31 @@ export default function Etiquetas() {
         if (activePrintingLabels.length > 0) {
           const uniqueSaleIds = Array.from(new Set(activePrintingLabels.map(l => l.sale.id)));
           uniqueSaleIds.forEach(id => {
-            const item = activePrintingLabels.find(l => l.sale.id === id);
-            updateSale(id, { impresa: true, etiquetador: item?.sale.etiquetador });
+            const matching = activePrintingLabels.filter(l => l.sale.id === id);
+            const saleObj = matching[0]?.sale;
+            if (saleObj) {
+              updateSale(id, { impresa: true, etiquetador: saleObj.etiquetador });
+
+              const prods = (saleObj.items && saleObj.items.length > 0)
+                ? saleObj.items.map(i => ({ codigo: i.codigoFardo, cantidad: i.cantidad }))
+                : [{ codigo: saleObj.codigoFardo || 'N/A', cantidad: saleObj.cantidad || 1 }];
+              const resumen = prods.map(p => `${p.codigo} (x${p.cantidad})`).join(', ');
+
+              addLabelPrintLog({
+                saleId: saleObj.id,
+                numeroVenta: saleObj.numeroVenta,
+                cliente: saleObj.cliente,
+                vendedor: saleObj.vendedor,
+                impresoPor: saleObj.etiquetador || currentUser?.nombre || 'BODEGA',
+                cantidadEtiquetas: matching.length,
+                modoImpresion: queueMode,
+                bultosTotales: getTotalBultos(saleObj),
+                productosEntregados: prods,
+                productosResumen: resumen,
+                entregaMultiplesProductos: prods.length > 1 || (queueMode === 'GROUPED' && getTotalBultos(saleObj) > 1),
+                motivoReimpresion: saleObj.impresa ? 'Impresión desde cola de centro de etiquetado' : undefined
+              }).catch(e => console.error(e));
+            }
           });
           printingLabelsRef.current = [];
           setLabelsToPrint([]);
@@ -100,7 +148,7 @@ export default function Etiquetas() {
       
       return () => clearTimeout(timer);
     }
-  }, [labelsToPrint, updateSale]);
+  }, [labelsToPrint, updateSale, addLabelPrintLog, currentUser, queueMode]);
 
   const generateLabelsForSale = (sale: Sale, etiquetador: string, mode: 'INDIVIDUAL' | 'GROUPED'): QueuePrintableLabel[] => {
     const enrichedSale = { ...sale, impresa: true, etiquetador };
@@ -170,183 +218,249 @@ export default function Etiquetas() {
 
   return (
     <div className="space-y-8">
-      {/* Header and Controls */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between no-print gap-6">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Centro de Etiquetado</h2>
-          <p className="text-slate-500 font-medium italic">Cola de impresión térmica (100x150mm) con soporte para bultos individuales</p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* Search */}
-          <input 
-            type="text" 
-            placeholder="Buscar por cliente, venta, fardo..." 
-            value={searchTerm} 
-            onChange={e => setSearchTerm(e.target.value)}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-56"
-          />
-
-          {/* Queue Mode Selector for Notas de Venta */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setQueueMode('INDIVIDUAL')}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
-                queueMode === 'INDIVIDUAL'
-                  ? 'bg-white text-emerald-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Genera 1 etiqueta por cada fardo físico (ej: 15 etiquetas para 10 + 5 fardos)"
-            >
-              <Boxes size={13} /> 1 por Fardo
-            </button>
-            <button
-              type="button"
-              onClick={() => setQueueMode('GROUPED')}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
-                queueMode === 'GROUPED'
-                  ? 'bg-white text-blue-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Genera 1 etiqueta por producto con la cantidad total"
-            >
-              <Layers size={13} /> Agrupadas
-            </button>
-          </div>
-
-          <label className="flex items-center gap-2 px-3 py-2.5 bg-slate-100 rounded-xl cursor-pointer">
-            <input type="checkbox" checked={showPrinted} onChange={e => setShowPrinted(e.target.checked)} />
-            <span className="text-xs font-bold text-slate-700">Incluir impresos</span>
-          </label>
-
-          <button onClick={() => setShowDemo(!showDemo)} className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${showDemo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-            {showDemo ? 'Ocultar Demo' : 'Guía Visual'}
+      {/* Navigation Tabs: Cola de Impresión vs Historial de Impresiones */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 no-print border-b border-slate-200/80 pb-4">
+        <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('QUEUE')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+              activeTab === 'QUEUE'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <Printer size={16} />
+            <span>Cola de Impresión</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-900 text-white font-mono">
+              {readyToPrint.length}
+            </span>
           </button>
 
-          <button 
-            onClick={handlePrintAll} 
-            disabled={readyToPrint.length === 0} 
-            className="flex-1 sm:flex-none flex items-center justify-center gap-3 px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-black hover:bg-black transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+          <button
+            type="button"
+            onClick={() => setActiveTab('HISTORY')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+              activeTab === 'HISTORY'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
           >
-            <Printer size={20} /> 
-            <span>
-              Imprimir Cola ({readyToPrint.length} ventas / {totalQueueLabelsCount} etiquetas)
+            <RotateCcw size={15} />
+            <span>Historial de Impresiones</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-600 text-white font-mono">
+              {labelPrintLogs.length}
             </span>
           </button>
         </div>
+
+        <p className="text-xs text-slate-400 font-semibold italic">
+          {activeTab === 'QUEUE' 
+            ? `${readyToPrint.length} ventas listas para impresión térmica` 
+            : `${labelPrintLogs.length} tirajes de etiquetas registrados en el historial de bodega`}
+        </p>
       </div>
 
-      {/* Grid of Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center no-print pb-20">
-        {showDemo && (
-          <div className="relative group w-full flex flex-col items-center">
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-500 text-white text-[10px] font-black px-4 py-1 rounded-full shadow-lg">ETIQUETA DE MUESTRA</div>
-            <div className="relative bg-white p-4 border-4 border-amber-200 rounded-[32px] shadow-lg scale-[0.5] origin-top overflow-hidden">
-              <Label sale={demoSale} stock={stock} />
+      {activeTab === 'HISTORY' ? (
+        <HistorialEtiquetasTab 
+          labelPrintLogs={labelPrintLogs}
+          sales={sales}
+          stock={stock}
+          deletedSales={deletedSales}
+          onSelectSale={(s) => setModalSale(s)}
+        />
+      ) : (
+        <>
+          {/* Header and Controls */}
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between no-print gap-6">
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Centro de Etiquetado</h2>
+              <p className="text-slate-500 font-medium italic">Cola de impresión térmica (100x150mm) con soporte para bultos individuales y agrupados</p>
             </div>
-          </div>
-        )}
 
-        {readyToPrint.map((sale) => {
-          const bultos = getTotalBultos(sale);
-          const hasMultipleItems = Boolean(sale.items && sale.items.length > 0);
-          const isNotaVenta = sale.tipoVenta === SaleType.NOTA_VENTA;
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+              {/* Search */}
+              <input 
+                type="text" 
+                placeholder="Buscar por cliente, venta, fardo..." 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-56"
+              />
 
-          return (
-            <div key={sale.id} className="relative group animate-in fade-in slide-in-from-bottom duration-500 w-full flex flex-col items-center bg-white rounded-3xl p-3 border-2 border-slate-100 shadow-sm hover:shadow-md transition-all">
-              
-              {/* Sale Info Bar */}
-              <div className="w-full flex items-center justify-between mb-2 px-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-sm text-slate-900">#{sale.numeroVenta}</span>
-                  {bultos > 1 && (
-                    <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Boxes size={11} /> {bultos} FARDOS
-                    </span>
-                  )}
-                </div>
-                
-                {sale.impresa ? (
-                  <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-2 py-0.5 rounded-full">
-                    IMPRESO
-                  </span>
-                ) : (
-                  <span className="bg-slate-100 text-slate-600 text-[9px] font-black px-2 py-0.5 rounded-full">
-                    PENDIENTE
-                  </span>
-                )}
-              </div>
-
-              {/* Thermal Preview Box */}
-              <div className={`relative bg-white p-2 border-2 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-2xl hover:border-emerald-400 transition-all shadow-md scale-[0.42] origin-top -mb-[85mm] overflow-hidden`}>
-                {sale.impresa && sale.etiquetador && (
-                  <div className="absolute top-4 right-4 z-10 bg-white/90 text-slate-900 text-[8px] font-black px-2 py-1 rounded-full border border-emerald-200 shadow-sm flex items-center gap-1">
-                    <User size={8} /> {sale.etiquetador}
-                  </div>
-                )}
-                
-                <Label 
-                  sale={sale} 
-                  stock={stock} 
-                  item={bultos > 1 ? {
-                    codigoFardo: sale.items?.[0]?.codigoFardo || sale.codigoFardo || 'N/A',
-                    cantidad: 1,
-                    bultoNumero: 1,
-                    bultoTotal: bultos,
-                    itemIndex: 1,
-                    itemTotalQty: sale.items?.[0]?.cantidad || 1,
-                    variante: sale.variante
-                  } : undefined}
-                />
-
-                {/* Hover overlay with printing actions */}
-                <div className="absolute inset-0 bg-slate-950/85 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3 backdrop-blur-sm p-4">
-                  <button 
-                    onClick={() => handlePrintSingle(sale, 'INDIVIDUAL')} 
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl transition-all"
-                  >
-                    <Printer size={16} /> 
-                    {bultos > 1 ? `Imprimir ${bultos} Fardos` : (sale.impresa ? 'Imprimir Otra Vez' : 'Imprimir Ahora')}
-                  </button>
-
-                  <button 
-                    onClick={() => { setModalSale(sale); playSound('click'); }} 
-                    className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Settings2 size={15} /> Opciones / Vista Previa
-                  </button>
-                </div>
-              </div>
-
-              {/* Bottom Card Footer */}
-              <div className="w-full mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
-                <span className="truncate max-w-[140px] text-slate-800">{sale.cliente}</span>
+              {/* Queue Mode Selector for Notas de Venta */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
                 <button
                   type="button"
-                  onClick={() => { setModalSale(sale); playSound('click'); }}
-                  className="text-emerald-600 hover:text-emerald-800 font-black"
+                  onClick={() => setQueueMode('INDIVIDUAL')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
+                    queueMode === 'INDIVIDUAL'
+                      ? 'bg-white text-emerald-800 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Genera 1 etiqueta por cada fardo físico (ej: 15 etiquetas para 10 + 5 fardos)"
                 >
-                  {bultos > 1 ? `${bultos} etiquetas` : '1 etiqueta'}
+                  <Boxes size={13} /> 1 por Fardo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQueueMode('GROUPED')}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all flex items-center gap-1.5 ${
+                    queueMode === 'GROUPED'
+                      ? 'bg-white text-blue-800 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Genera 1 etiqueta por producto con la cantidad total"
+                >
+                  <Layers size={13} /> Agrupadas
                 </button>
               </div>
 
-            </div>
-          );
-        })}
+              <label className="flex items-center gap-2 px-3 py-2.5 bg-slate-100 rounded-xl cursor-pointer">
+                <input type="checkbox" checked={showPrinted} onChange={e => setShowPrinted(e.target.checked)} />
+                <span className="text-xs font-bold text-slate-700">Incluir impresos</span>
+              </label>
 
-        {readyToPrint.length === 0 && !showDemo && (
-          <div className="col-span-full py-40 flex flex-col items-center justify-center text-center">
-            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-6">
-              <Printer size={48} />
+              <button onClick={() => setShowDemo(!showDemo)} className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${showDemo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                {showDemo ? 'Ocultar Demo' : 'Guía Visual'}
+              </button>
+
+              <button 
+                onClick={handlePrintAll} 
+                disabled={readyToPrint.length === 0} 
+                className="flex-1 sm:flex-none flex items-center justify-center gap-3 px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-black hover:bg-black transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Printer size={20} /> 
+                <span>
+                  Imprimir Cola ({readyToPrint.length} ventas / {totalQueueLabelsCount} etiquetas)
+                </span>
+              </button>
             </div>
-            <h3 className="text-2xl font-black text-slate-400">No hay etiquetas pendientes</h3>
-            <button onClick={() => setShowDemo(true)} className="mt-6 text-emerald-500 font-bold flex items-center gap-2 hover:underline">
-              <AlertCircle size={16} /> Ver cómo se verá una etiqueta
-            </button>
           </div>
-        )}
-      </div>
+
+          {/* Grid of Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center no-print pb-20">
+            {showDemo && (
+              <div className="relative group w-full flex flex-col items-center">
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 bg-amber-500 text-white text-[10px] font-black px-4 py-1 rounded-full shadow-lg">ETIQUETA DE MUESTRA</div>
+                <div className="relative bg-white p-4 border-4 border-amber-200 rounded-[32px] shadow-lg scale-[0.5] origin-top overflow-hidden">
+                  <Label sale={demoSale} stock={stock} />
+                </div>
+              </div>
+            )}
+
+            {readyToPrint.map((sale) => {
+              const bultos = getTotalBultos(sale);
+              const hasMultipleItems = Boolean(sale.items && sale.items.length > 0);
+              const isNotaVenta = sale.tipoVenta === SaleType.NOTA_VENTA;
+              const salePrints = getSalePrintLogs(sale.id);
+              const printsCount = salePrints.length;
+
+              return (
+                <div key={sale.id} className="relative group animate-in fade-in slide-from-bottom duration-500 w-full flex flex-col items-center bg-white rounded-3xl p-3 border-2 border-slate-100 shadow-sm hover:shadow-md transition-all">
+                  
+                  {/* Sale Info Bar */}
+                  <div className="w-full flex items-center justify-between mb-2 px-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-black text-sm text-slate-900">#{sale.numeroVenta}</span>
+                      {bultos > 1 && (
+                        <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Boxes size={11} /> {bultos} FARDOS
+                        </span>
+                      )}
+                      {printsCount > 0 && (
+                        <span 
+                          onClick={() => { setModalSale(sale); playSound('click'); }}
+                          className="bg-amber-100 hover:bg-amber-200 text-amber-900 text-[9px] font-black px-2 py-0.5 rounded-full cursor-pointer transition-colors"
+                          title="Ver historial de impresiones"
+                        >
+                          {printsCount === 1 ? '1 TIRAJE' : `${printsCount} TIRAJES`}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {sale.impresa ? (
+                      <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-2 py-0.5 rounded-full">
+                        IMPRESO
+                      </span>
+                    ) : (
+                      <span className="bg-slate-100 text-slate-600 text-[9px] font-black px-2 py-0.5 rounded-full">
+                        PENDIENTE
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Thermal Preview Box */}
+                  <div className={`relative bg-white p-2 border-2 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-2xl hover:border-emerald-400 transition-all shadow-md scale-[0.42] origin-top -mb-[85mm] overflow-hidden`}>
+                    {sale.impresa && sale.etiquetador && (
+                      <div className="absolute top-4 right-4 z-10 bg-white/90 text-slate-900 text-[8px] font-black px-2 py-1 rounded-full border border-emerald-200 shadow-sm flex items-center gap-1">
+                        <User size={8} /> {sale.etiquetador}
+                      </div>
+                    )}
+                    
+                    <Label 
+                      sale={sale} 
+                      stock={stock} 
+                      item={bultos > 1 ? {
+                        codigoFardo: sale.items?.[0]?.codigoFardo || sale.codigoFardo || 'N/A',
+                        cantidad: 1,
+                        bultoNumero: 1,
+                        bultoTotal: bultos,
+                        itemIndex: 1,
+                        itemTotalQty: sale.items?.[0]?.cantidad || 1,
+                        variante: sale.variante
+                      } : undefined}
+                    />
+
+                    {/* Hover overlay with printing actions */}
+                    <div className="absolute inset-0 bg-slate-950/85 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3 backdrop-blur-sm p-4">
+                      <button 
+                        onClick={() => handlePrintSingle(sale, 'INDIVIDUAL')} 
+                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl transition-all"
+                      >
+                        <Printer size={16} /> 
+                        {bultos > 1 ? `Imprimir ${bultos} Fardos` : (sale.impresa ? 'Imprimir Otra Vez' : 'Imprimir Ahora')}
+                      </button>
+
+                      <button 
+                        onClick={() => { setModalSale(sale); playSound('click'); }} 
+                        className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+                      >
+                        <Settings2 size={15} /> Opciones / Vista Previa
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Bottom Card Footer */}
+                  <div className="w-full mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
+                    <span className="truncate max-w-[140px] text-slate-800">{sale.cliente}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setModalSale(sale); playSound('click'); }}
+                      className="text-emerald-600 hover:text-emerald-800 font-black"
+                    >
+                      {bultos > 1 ? `${bultos} etiquetas` : '1 etiqueta'}
+                    </button>
+                  </div>
+
+                </div>
+              );
+            })}
+
+            {readyToPrint.length === 0 && !showDemo && (
+              <div className="col-span-full py-40 flex flex-col items-center justify-center text-center">
+                <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-6">
+                  <Printer size={48} />
+                </div>
+                <h3 className="text-2xl font-black text-slate-400">No hay etiquetas pendientes</h3>
+                <button onClick={() => setShowDemo(true)} className="mt-6 text-emerald-500 font-bold flex items-center gap-2 hover:underline">
+                  <AlertCircle size={16} /> Ver cómo se verá una etiqueta
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Hidden Print Container for thermal printer output */}
       <div className="hidden print-only">

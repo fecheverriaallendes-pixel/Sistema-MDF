@@ -1080,12 +1080,12 @@ export default function Despachos() {
                   </div>
                   <button 
                     onClick={() => {
-                        if(confirm(`¿Estás seguro de que quieres eliminar la venta/despacho #${sale.numeroVenta} (${sale.cliente})?`)) {
+                        if(confirm(`¿Estás seguro de que quieres eliminar la venta/despacho #${sale.numeroVenta} (${sale.cliente})?\n\n⚠️ AVISO: El número #${sale.numeroVenta} quedará BLOQUEADO PERMANENTEMENTE y no se reutilizará para evitar confusiones en bodega.`)) {
                             deleteSale(sale.id);
                         }
                     }}
                     className="p-2 text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200/90 rounded-xl transition-all shadow-sm hover:shadow"
-                    title="Eliminar despacho"
+                    title="Eliminar despacho (bloquea el número permanentemente)"
                   >
                     <Trash2 size={16} className="text-rose-600" />
                   </button>
@@ -1512,12 +1512,12 @@ export default function Despachos() {
                         </button>
                         <button
                           onClick={() => {
-                            if(confirm(`¿Estás seguro de que quieres eliminar la venta/despacho #${sale.numeroVenta} (${sale.cliente})?`)) {
+                            if(confirm(`¿Estás seguro de que quieres eliminar la venta/despacho #${sale.numeroVenta} (${sale.cliente})?\n\n⚠️ AVISO: El número #${sale.numeroVenta} quedará BLOQUEADO PERMANENTEMENTE y no se reutilizará para evitar confusiones en bodega.`)) {
                               deleteSale(sale.id);
                             }
                           }}
                           className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 rounded-lg transition-all"
-                          title="Eliminar despacho"
+                          title="Eliminar despacho (bloquea el número permanentemente)"
                         >
                           <Trash2 size={13} />
                         </button>
