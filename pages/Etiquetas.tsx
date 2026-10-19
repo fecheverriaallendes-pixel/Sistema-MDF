@@ -8,6 +8,7 @@ import { Label, LabelItemData } from '../components/Label';
 import { PrintLabelsModal } from '../components/PrintLabelsModal';
 import { HistorialEtiquetasTab } from '../components/etiquetas/HistorialEtiquetasTab';
 import { getTotalBultos, generateIndividualLabels, generateGroupedLabels } from '../utils/labelUtils';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
@@ -375,6 +376,14 @@ export default function Etiquetas() {
                           title="Ver historial de impresiones"
                         >
                           {printsCount === 1 ? '1 TIRAJE' : `${printsCount} TIRAJES`}
+                        </span>
+                      )}
+                      {isLautaroOrFardolandia(sale) && (
+                        <span 
+                          className="bg-purple-100 text-purple-800 border border-purple-200 text-[8.5px] font-black px-2 py-0.5 rounded-full shadow-xs"
+                          title="Venta de socio comercial externo Fardolandia (Lautaro Jofré)"
+                        >
+                          FARDOLANDIA
                         </span>
                       )}
                     </div>

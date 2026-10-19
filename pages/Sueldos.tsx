@@ -57,6 +57,7 @@ import TrabajoExtraModal from '../components/sueldos/TrabajoExtraModal';
 import TikTokLiveModal from '../components/sueldos/TikTokLiveModal';
 import TrabajadorModal from '../components/sueldos/TrabajadorModal';
 import AsistenciaSemanalModal from '../components/sueldos/AsistenciaSemanalModal';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.FARDO_NORMAL]: 3000,
@@ -407,11 +408,16 @@ export default function Sueldos() {
     });
   }, [weeklyAttendance, weekRange]);
 
+  // Personal dependiente/laboral de Mundo del Fardo (excluyendo socios/partners externos como Lautaro / Fardolandia)
+  const laboralStaff = useMemo(() => {
+    return staff.filter(s => !isLautaroOrFardolandia(s.nombre) && !s.esPartner);
+  }, [staff]);
+
   // ----------------------------------------------------
   // CONSOLIDATED WORKER PAYROLL CALCULATION
   // ----------------------------------------------------
   const calculatedPayrollList = useMemo(() => {
-    const activeStaff = staff.filter(s => s.activo !== false);
+    const activeStaff = laboralStaff.filter(s => s.activo !== false);
 
     return activeStaff.map(member => {
       // 1. Sueldo base semanal pactado (Base para 6 días de trabajo)
@@ -2458,7 +2464,7 @@ export default function Sueldos() {
 
           {/* Grid de Fichas de Trabajadores */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {staff.map(member => (
+            {laboralStaff.map(member => (
               <div
                 key={member.id}
                 className="bg-white rounded-[28px] border border-slate-200 p-6 space-y-4 shadow-sm hover:border-emerald-300 transition-all group"
@@ -2470,9 +2476,16 @@ export default function Sueldos() {
                     </div>
                     <div>
                       <h3 className="font-black text-slate-900 uppercase text-base">{member.nombre}</h3>
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">
-                        {member.rol}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">
+                          {member.rol}
+                        </span>
+                        {isLautaroOrFardolandia(member) && (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-800 border border-purple-200 rounded text-[9px] font-black uppercase">
+                            Partner Fardolandia (Excluido Nómina)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -2623,7 +2636,7 @@ export default function Sueldos() {
             setIsAdelantoModalOpen(false);
             setSelectedAdvanceWorkerId(undefined);
           }}
-          staffList={staff}
+          staffList={laboralStaff}
           defaultWorkerId={selectedAdvanceWorkerId}
           defaultSemanaPago={weekRange.saturdayStr}
           onSave={async advance => {
@@ -2641,7 +2654,7 @@ export default function Sueldos() {
             setSelectedDeductionWorkerId(undefined);
             setEditingDeduction(null);
           }}
-          staffList={staff}
+          staffList={laboralStaff}
           defaultWorkerId={selectedDeductionWorkerId}
           defaultSemanaPago={weekRange.saturdayStr}
           editingDeduction={editingDeduction}
@@ -2659,7 +2672,7 @@ export default function Sueldos() {
         <PrestamoModal
           isOpen={isPrestamoModalOpen}
           onClose={() => setIsPrestamoModalOpen(false)}
-          staffList={staff}
+          staffList={laboralStaff}
           onSave={async loan => {
             await addEmployeeLoan(loan);
           }}
@@ -2674,7 +2687,7 @@ export default function Sueldos() {
             setIsExtraModalOpen(false);
             setQuickExtraTargetWorker(undefined);
           }}
-          staffList={staff}
+          staffList={laboralStaff}
           defaultWorkerId={quickExtraTargetWorker}
           defaultSemanaPago={weekRange.saturdayStr}
           onSaveSingle={async extra => {
@@ -2694,7 +2707,7 @@ export default function Sueldos() {
             setIsTikTokModalOpen(false);
             setQuickTikTokTargetWorker(undefined);
           }}
-          staffList={staff}
+          staffList={laboralStaff}
           defaultWorkerId={quickTikTokTargetWorker}
           defaultSemanaPago={weekRange.saturdayStr}
           onSaveSingle={async live => {

@@ -26,6 +26,7 @@ import {
 } from '../utils/labelUtils';
 import { Label, getAgenciaODestino } from './Label';
 import { useStore } from '../store/GlobalContext';
+import { isLautaroOrFardolandia, getPartnerInfo } from '../utils/partnerUtils';
 
 interface PrintLabelsModalProps {
   sale: Sale | null;
@@ -244,6 +245,11 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase bg-emerald-100 text-emerald-800">
                     Venta #{sale.numeroVenta}
                   </span>
+                  {isLautaroOrFardolandia(sale) && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-200">
+                      Partner Fardolandia
+                    </span>
+                  )}
                 </div>
                 <p className="text-slate-500 text-xs font-semibold flex items-center gap-2 mt-0.5">
                   <span>{sale.cliente}</span>

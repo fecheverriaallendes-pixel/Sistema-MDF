@@ -13,6 +13,7 @@ import { useStore } from '../store/GlobalContext';
 import { StaffRole } from '../types';
 import { VentasArchiveModal } from '../components/VentasArchiveModal';
 import { exportSalesToExcel, exportSalesToJSON } from '../utils/salesBackup';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 export default function Configuracion() {
   const { 
@@ -286,7 +287,14 @@ export default function Configuracion() {
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400"><Shield size={20} /></div>
                       <div>
-                        <p className="font-black text-slate-900 uppercase text-xs">{member.nombre}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-black text-slate-900 uppercase text-xs">{member.nombre}</p>
+                          {isLautaroOrFardolandia(member) && (
+                            <span className="bg-purple-100 text-purple-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase border border-purple-200">
+                              Partner Fardolandia
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <p className="text-[9px] font-bold text-emerald-500 uppercase">{member.rol}</p>
                           <span className="text-[9px] text-slate-300 font-bold">•</span>

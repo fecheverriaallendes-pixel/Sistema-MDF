@@ -38,6 +38,7 @@ import {
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, CommissionType } from '../types';
 import { VendedoraShippingTracker } from '../components/VendedoraShippingTracker';
+import { isLautaroOrFardolandia, FARDOLANDIA_LOGO_URL } from '../utils/partnerUtils';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
@@ -175,6 +176,45 @@ export default function Home() {
       totalAjustes
     };
   }, [sales, adjustments, currentUser, userWeekRange]);
+
+  const isPartnerUser = isLautaroOrFardolandia(currentUser?.nombre);
+
+  const partnerWeeklyMetrics = useMemo(() => {
+    if (!isPartnerUser || !currentUser) return null;
+    const userSales = (sales || []).filter(s => {
+      if (!s || !s.fecha || typeof s.fecha !== 'string') return false;
+      if (!isLautaroOrFardolandia(s.vendedor)) return false;
+      try {
+        let saleDate: Date;
+        if (s.fecha.includes('/')) {
+            const parts = s.fecha.split('/');
+            if (parts.length !== 3) return false;
+            const [d, m, y] = parts;
+            saleDate = new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0);
+        } else {
+            const parts = s.fecha.split('-');
+            if (parts.length !== 3) return false;
+            const [y, m, d] = parts;
+            saleDate = new Date(Number(y), Number(m) - 1, Number(d), 0, 0, 0);
+        }
+        if (isNaN(saleDate.getTime())) return false;
+        return saleDate >= userWeekRange.start && saleDate <= userWeekRange.end;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    const totalVendido = userSales.reduce((acc, s) => acc + (Number(s.total) || 0), 0);
+    const totalFardos = userSales.reduce((acc, s) => {
+      if (s.items && s.items.length > 0) {
+        return acc + s.items.reduce((sum, it) => sum + (Number(it.cantidad) || 0), 0);
+      }
+      return acc + (Number(s.cantidad) || 1);
+    }, 0);
+    const totalOrdenes = userSales.length;
+
+    return { totalVendido, totalFardos, totalOrdenes, count: userSales.length };
+  }, [sales, isPartnerUser, currentUser, userWeekRange]);
   
   // Estado para vincular URL desde el inicio
   const [setupUrl, setSetupUrl] = useState('');
@@ -426,17 +466,35 @@ export default function Home() {
         </div>
       </div>
 
-      {/* SECCIÓN RESUMEN DE COMISIONES PERSONAL */}
+      {/* SECCIÓN RESUMEN DE VENTAS / COMISIONES */}
       {canSeeCatalogue && (
         <div className="w-full max-w-6xl mb-12 animate-in slide-in-from-top duration-700">
            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
-                 <div className="p-2 bg-amber-500 text-white rounded-2xl">
-                    <Wallet size={22} />
+                 <div className={`p-2.5 rounded-2xl ${isPartnerUser ? 'bg-purple-600' : 'bg-amber-500'} text-white shadow-md flex items-center justify-center`}>
+                    {isPartnerUser ? (
+                      <img src={FARDOLANDIA_LOGO_URL} alt="Fardolandia" className="w-6 h-6 object-contain rounded-full" />
+                    ) : (
+                      <Wallet size={22} />
+                    )}
                  </div>
                  <div>
-                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Mi Resumen de Comisiones</h2>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tus estadísticas de venta personalizadas de la semana</p>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">
+                        {isPartnerUser ? 'Mi Resumen Comercial • Fardolandia' : 'Mi Resumen de Comisiones'}
+                      </h2>
+                      {isPartnerUser && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-200">
+                          Partner Externo
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      {isPartnerUser 
+                        ? 'Tus métricas de ventas y fardos movilizados con el catálogo MDF'
+                        : 'Tus estadísticas de venta personalizadas de la semana'
+                      }
+                    </p>
                  </div>
               </div>
 
@@ -457,71 +515,137 @@ export default function Home() {
               </div>
            </div>
 
-           {/* Bento Grid layout */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Card 1: Total a pago */}
-              <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-[32px] p-6 shadow-xl overflow-hidden flex flex-col justify-between min-h-[140px]">
-                 <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl"></div>
-                 <div>
-                    <span className="text-[9px] font-black text-amber-400 uppercase tracking-[0.22em]">Total a Liquidar</span>
-                    <h3 className="text-4xl font-black tracking-tight mt-1">
-                       ${userCommissions.total.toLocaleString('es-CL')}
-                    </h3>
-                 </div>
-                 <div className="flex items-center gap-1.5 text-slate-400 font-bold italic text-[9px] border-t border-white/5 pt-3 mt-4">
-                    <Calendar size={12} />
-                    Rango: {userWeekRange.start.toLocaleDateString()} al {userWeekRange.end.toLocaleDateString()}
-                 </div>
-              </div>
+           {isPartnerUser ? (
+             /* Bento Grid Partner Fardolandia */
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Card 1: Total Vendido */}
+                <div className="relative bg-gradient-to-br from-purple-950 via-slate-900 to-slate-900 text-white rounded-[32px] p-6 shadow-xl overflow-hidden flex flex-col justify-between min-h-[140px] border border-purple-800/30">
+                   <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/20 rounded-full blur-2xl"></div>
+                   <div>
+                      <span className="text-[9px] font-black text-purple-300 uppercase tracking-[0.22em]">Total Vendido Fardolandia</span>
+                      <h3 className="text-4xl font-black tracking-tight mt-1 font-mono text-purple-100">
+                         ${(partnerWeeklyMetrics?.totalVendido || 0).toLocaleString('es-CL')}
+                      </h3>
+                   </div>
+                   <div className="flex items-center gap-1.5 text-slate-400 font-bold italic text-[9px] border-t border-white/5 pt-3 mt-4">
+                      <Calendar size={12} />
+                      Periodo: {userWeekRange.start.toLocaleDateString()} al {userWeekRange.end.toLocaleDateString()}
+                   </div>
+                </div>
 
-              {/* Card 2: Fardos Normales */}
-              <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
-                 <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl"></div>
-                 <div>
-                    <div className="flex items-center justify-between">
-                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Fardos Normales</span>
-                       <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-extrabold uppercase">+$3.000 c/u</span>
-                    </div>
-                    <div className="flex items-baseline gap-2 mt-2">
-                       <h4 className="text-4xl font-black text-slate-800 tracking-tight">
-                          {userCommissions.fardosNormales}
-                       </h4>
-                       <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Vendidos</span>
-                    </div>
-                 </div>
-                 <div className="text-[9px] text-emerald-600 font-black uppercase tracking-wider pt-3 border-t border-slate-50 mt-4 flex items-center justify-between font-bold">
-                    <span>Subtotal:</span>
-                    <span className="font-mono text-xs">${(userCommissions.fardosNormales * 3000).toLocaleString('es-CL')}</span>
-                 </div>
-              </div>
+                {/* Card 2: Fardos Vendidos */}
+                <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+                   <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full blur-xl"></div>
+                   <div>
+                      <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Fardos / Unidades</span>
+                         <span className="px-2.5 py-0.5 bg-purple-50 text-purple-700 rounded-full text-[9px] font-extrabold uppercase border border-purple-100">Catálogo MDF</span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-2">
+                         <h4 className="text-4xl font-black text-slate-800 tracking-tight">
+                            {partnerWeeklyMetrics?.totalFardos || 0}
+                         </h4>
+                         <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Fardos</span>
+                      </div>
+                   </div>
+                   <div className="text-[9px] text-purple-700 font-black uppercase tracking-wider pt-3 border-t border-slate-50 mt-4 flex items-center justify-between font-bold">
+                      <span>Rendimiento Fardolandia:</span>
+                      <span className="font-mono text-xs">{partnerWeeklyMetrics?.totalFardos || 0} u. en la semana</span>
+                   </div>
+                </div>
 
-              {/* Card 3: Promociones / Ajustes */}
-              <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
-                 <div className="absolute top-0 right-0 w-20 h-20 bg-rose-500/5 rounded-full blur-xl"></div>
-                 <div>
-                    <div className="flex items-center justify-between">
-                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Promos y Ofertas</span>
-                       <span className="px-2.5 py-0.5 bg-rose-50 text-rose-500 rounded-full text-[9px] font-extrabold uppercase">Varía</span>
-                    </div>
-                    <div className="flex items-baseline gap-2 mt-2">
-                       <h4 className="text-4xl font-black text-slate-800 tracking-tight">
-                          {userCommissions.promos}
-                       </h4>
-                       <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Vendidos</span>
-                    </div>
-                 </div>
-                 <div className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider pt-3 border-t border-slate-50 mt-4">
-                    {userCommissions.totalAjustes !== 0 ? (
-                       <span className="flex items-center justify-between text-rose-500 font-bold">
-                          <span>Ajustes:</span>
-                          <span className="font-mono text-xs">{userCommissions.totalAjustes > 0 ? '+' : ''}${userCommissions.totalAjustes.toLocaleString('es-CL')}</span>
-                       </span>
-                    ) : (
-                       <span className="text-slate-400 italic font-medium">Bono Especial Promocional</span>
-                    )}
-                 </div>
-              </div>
-           </div>
+                {/* Card 3: Órdenes Totales */}
+                <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+                   <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl"></div>
+                   <div>
+                      <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Órdenes Registradas</span>
+                         <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-extrabold uppercase">Sistema Activo</span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-2">
+                         <h4 className="text-4xl font-black text-slate-800 tracking-tight">
+                            {partnerWeeklyMetrics?.totalOrdenes || 0}
+                         </h4>
+                         <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Ventas</span>
+                      </div>
+                   </div>
+                   <div className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider pt-3 border-t border-slate-50 mt-4 flex items-center justify-between">
+                      <span>Ticket Promedio:</span>
+                      <span className="font-mono text-xs font-bold text-slate-800">
+                        {partnerWeeklyMetrics?.totalOrdenes 
+                          ? `$${Math.round(partnerWeeklyMetrics.totalVendido / partnerWeeklyMetrics.totalOrdenes).toLocaleString('es-CL')}`
+                          : '$0'}
+                      </span>
+                   </div>
+                </div>
+             </div>
+           ) : (
+             /* Bento Grid Regular Staff Commissions */
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Card 1: Total a pago */}
+                <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-[32px] p-6 shadow-xl overflow-hidden flex flex-col justify-between min-h-[140px]">
+                   <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl"></div>
+                   <div>
+                      <span className="text-[9px] font-black text-amber-400 uppercase tracking-[0.22em]">Total a Liquidar</span>
+                      <h3 className="text-4xl font-black tracking-tight mt-1">
+                         ${userCommissions.total.toLocaleString('es-CL')}
+                      </h3>
+                   </div>
+                   <div className="flex items-center gap-1.5 text-slate-400 font-bold italic text-[9px] border-t border-white/5 pt-3 mt-4">
+                      <Calendar size={12} />
+                      Rango: {userWeekRange.start.toLocaleDateString()} al {userWeekRange.end.toLocaleDateString()}
+                   </div>
+                </div>
+
+                {/* Card 2: Fardos Normales */}
+                <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+                   <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl"></div>
+                   <div>
+                      <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Fardos Normales</span>
+                         <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-extrabold uppercase">+$3.000 c/u</span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-2">
+                         <h4 className="text-4xl font-black text-slate-800 tracking-tight">
+                            {userCommissions.fardosNormales}
+                         </h4>
+                         <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Vendidos</span>
+                      </div>
+                   </div>
+                   <div className="text-[9px] text-emerald-600 font-black uppercase tracking-wider pt-3 border-t border-slate-50 mt-4 flex items-center justify-between font-bold">
+                      <span>Subtotal:</span>
+                      <span className="font-mono text-xs">${(userCommissions.fardosNormales * 3000).toLocaleString('es-CL')}</span>
+                   </div>
+                </div>
+
+                {/* Card 3: Promociones / Ajustes */}
+                <div className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-xl flex flex-col justify-between min-h-[140px] relative overflow-hidden">
+                   <div className="absolute top-0 right-0 w-20 h-20 bg-rose-500/5 rounded-full blur-xl"></div>
+                   <div>
+                      <div className="flex items-center justify-between">
+                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Promos y Ofertas</span>
+                         <span className="px-2.5 py-0.5 bg-rose-50 text-rose-500 rounded-full text-[9px] font-extrabold uppercase">Varía</span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-2">
+                         <h4 className="text-4xl font-black text-slate-800 tracking-tight">
+                            {userCommissions.promos}
+                         </h4>
+                         <span className="text-xs font-semibold text-slate-400 uppercase font-mono">Vendidos</span>
+                      </div>
+                   </div>
+                   <div className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider pt-3 border-t border-slate-50 mt-4">
+                      {userCommissions.totalAjustes !== 0 ? (
+                         <span className="flex items-center justify-between text-rose-500 font-bold">
+                            <span>Ajustes:</span>
+                            <span className="font-mono text-xs">{userCommissions.totalAjustes > 0 ? '+' : ''}${userCommissions.totalAjustes.toLocaleString('es-CL')}</span>
+                         </span>
+                      ) : (
+                         <span className="text-slate-400 italic font-medium">Bono Especial Promocional</span>
+                      )}
+                   </div>
+                </div>
+             </div>
+           )}
         </div>
       )}
 

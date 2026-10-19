@@ -169,6 +169,10 @@ export interface StaffMember {
   rutCuenta?: string;
   
   notas?: string;
+  
+  // Distinción de socios comerciales / partners externos (ej: Lautaro Jofré / Fardolandia)
+  esPartner?: boolean;
+  nombreEmpresa?: string;
 }
 
 export interface SalaryAdvance {
@@ -463,6 +467,10 @@ export interface Sale {
   notificacionSalidaFecha?: string;
   notificacionSalidaMensaje?: string;
   notificacionSalidaEnviada?: boolean;
+
+  // Socio comercial o Partner Externo (ej: Fardolandia / Lautaro Jofré)
+  esPartner?: boolean;
+  nombreEmpresa?: string;
 }
 
 export interface LabelPrintProduct {

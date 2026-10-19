@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { CommissionType, Sale, CommissionAdjustment } from '../types';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.FARDO_NORMAL]: 3000,
@@ -149,9 +150,14 @@ export default function Comisiones() {
       adjustments: CommissionAdjustment[]
     }> = {};
 
-    // Process Sales
+    // Process Sales (Excluyendo partners comerciales como Lautaro / Fardolandia)
     weeklySales.forEach(s => {
       const vendedorName = s.vendedor || 'Sin Vendedor';
+
+      // Lautaro Jofré / Fardolandia no cobra comisión laboral a Mundo del Fardo
+      if (isLautaroOrFardolandia(vendedorName) || isLautaroOrFardolandia(s)) {
+        return;
+      }
       
       if (!report[vendedorName]) {
         report[vendedorName] = { total: 0, count: 0, details: [], entries: [], adjustments: [] };
@@ -216,8 +222,11 @@ export default function Comisiones() {
       }
     });
 
-    // Process Adjustments
+    // Process Adjustments (excluyendo a Lautaro)
     weeklyAdjustments.forEach(a => {
+      if (isLautaroOrFardolandia(a.vendedor)) {
+        return;
+      }
       if (!report[a.vendedor]) {
         report[a.vendedor] = { total: 0, count: 0, details: [], entries: [], adjustments: [] };
       }
@@ -276,6 +285,33 @@ export default function Comisiones() {
         </div>
       </div>
 
+      {/* Partner Notice Banner */}
+      <div className="bg-gradient-to-r from-purple-50 via-slate-50 to-white border-2 border-purple-200/80 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm no-print">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-md">
+            FL
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-purple-950">
+                Partner Comercial: Lautaro Jofré (Fardolandia)
+              </span>
+              <span className="bg-purple-200 text-purple-900 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                Excluido de Nómina
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+              Lautaro trabaja con catálogo e instalaciones MDF de manera independiente. Sus ventas no generan comisión laboral interna.
+            </p>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <span className="text-[10px] font-black text-purple-700 bg-white px-3 py-1.5 rounded-xl border border-purple-200 uppercase tracking-widest inline-block shadow-2xs">
+            Comisión MDF: $0 (Partner)
+          </span>
+        </div>
+      </div>
+
       {/* Adjustment Form Toggle */}
       <div className="no-print">
         <button 
@@ -298,7 +334,7 @@ export default function Comisiones() {
                   onChange={e => setNewAdjustment({...newAdjustment, vendedor: e.target.value})}
                 >
                   <option value="">Seleccionar...</option>
-                  {staff.filter(s => s.rol === 'Vendedor').map(s => (
+                  {staff.filter(s => s.rol === 'Vendedor' && !isLautaroOrFardolandia(s.nombre)).map(s => (
                     <option key={s.id} value={s.nombre}>{s.nombre}</option>
                   ))}
                 </select>

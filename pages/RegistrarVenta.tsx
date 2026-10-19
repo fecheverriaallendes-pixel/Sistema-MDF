@@ -34,9 +34,10 @@ import { useStore } from '../store/GlobalContext';
 import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '../types';
 import RutClientLookupModal from '../components/RutClientLookupModal';
 import { cleanRut, formatRut, exactMatchRut, validateRut, getUnifiedClients, UnifiedClient } from '../utils/rutUtils';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 export default function RegistrarVenta() {
-  const { stock, staff, customers, sales, addSale, playSound } = useStore();
+  const { stock, staff, customers, sales, addSale, playSound, currentUser } = useStore();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'QUICK' | 'NORMAL' | 'NOTA_VENTA'>('QUICK');
   const [esMayorista, setEsMayorista] = useState(false);
@@ -65,7 +66,10 @@ export default function RegistrarVenta() {
     }
   };
   
-  const vendedores = staff.filter(m => m.rol === StaffRole.VENDEDOR);
+  const vendedores = useMemo(() => {
+    return staff.filter(m => m.rol === StaffRole.VENDEDOR || isLautaroOrFardolandia(m));
+  }, [staff]);
+
   const quickNameRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<{
@@ -249,6 +253,12 @@ export default function RegistrarVenta() {
     if (mode === 'QUICK') quickNameRef.current?.focus();
   }, [mode, success]);
 
+  useEffect(() => {
+    if (currentUser?.nombre && !formData.vendedor) {
+      setFormData(prev => ({ ...prev, vendedor: currentUser.nombre }));
+    }
+  }, [currentUser]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isQuick = mode === 'QUICK';
@@ -297,8 +307,12 @@ export default function RegistrarVenta() {
       finalTipoDespacho = DispatchType.AGENCIA;
     }
 
+    const isPartnerSale = isLautaroOrFardolandia(formData.vendedor);
+
     const finalData = {
       ...formData,
+      esPartner: isPartnerSale ? true : undefined,
+      nombreEmpresa: isPartnerSale ? 'Fardolandia' : undefined,
       tipoVenta: isQuick ? SaleType.LIVE : isNotaVenta ? SaleType.NOTA_VENTA : SaleType.NORMAL,
       esMayorista: !isQuick && esMayorista,
       tipoComision: (!isQuick && esMayorista) ? CommissionType.MAYORISTA : formData.tipoComision,
@@ -511,7 +525,7 @@ export default function RegistrarVenta() {
               <label className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">Vendedora Asignada</label>
               <select required className="w-full px-7 py-5 bg-slate-50 border-2 border-slate-100 rounded-[24px] text-lg font-black focus:border-slate-900 outline-none transition-all appearance-none" value={formData.vendedor} onChange={(e) => setFormData({...formData, vendedor: e.target.value})}>
                 <option value="">ELEGIR VENDEDORA...</option>
-                {vendedores.map(v => ( <option key={v.id} value={v.nombre}>{v.nombre}</option> ))}
+                {vendedores.map(v => ( <option key={v.id} value={v.nombre}>{v.nombre}{isLautaroOrFardolandia(v) ? ' (FARDOLANDIA)' : ''}</option> ))}
               </select>
             </div>
           </div>

@@ -1,10 +1,9 @@
 import React from 'react';
 import { Sale, DispatchType } from '../types';
 import { LabelItemData } from '../utils/labelUtils';
+import { getLogoForSale, getPartnerInfo, isLautaroOrFardolandia, FARDOLANDIA_LOGO_URL, MDF_LOGO_URL } from '../utils/partnerUtils';
 
 export type { LabelItemData };
-
-const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
 export const formatRut = (rawRut?: string): string => {
   if (!rawRut || !rawRut.trim()) return 'PENDIENTE';
@@ -74,6 +73,11 @@ export const Label = ({
   const hasMultipleBultos = Boolean(displayItem.bultoTotal && displayItem.bultoTotal > 1);
   const isIndividualBulto = hasMultipleBultos && displayItem.cantidad === 1;
   
+  // Identidad comercial y logo (Fardolandia para Lautaro Jofré, MDF por defecto)
+  const partnerInfo = getPartnerInfo(sale);
+  const logoToUse = getLogoForSale(sale);
+  const isFardolandia = partnerInfo.isPartner;
+
   return (
     <div 
       className="w-[96mm] max-w-[96mm] h-[142mm] max-h-[142mm] box-border bg-white border-[3px] border-black p-2 flex flex-col justify-between overflow-hidden print:w-[96mm] print:h-[142mm] select-none text-black mx-auto"
@@ -82,9 +86,24 @@ export const Label = ({
       {/* 1. Header: Logo, N° Venta, Fecha y Hora, Canal y Teléfono */}
       <div className="flex flex-row border-b-2 border-black pb-1 justify-between items-center gap-2">
         <div className="flex flex-row items-center gap-2">
-          <img src={LOGO_URL} alt="Logo" className="w-[13mm] max-h-[12mm] object-contain grayscale" />
+          <div className="relative shrink-0 flex items-center justify-center">
+            <img 
+              src={logoToUse} 
+              alt={isFardolandia ? "Fardolandia Logo" : "Logo"} 
+              className="w-[14mm] max-h-[13mm] object-contain rounded-xs" 
+            />
+          </div>
           <div className="flex flex-col">
-            <span className="text-[7.5px] font-black uppercase tracking-wider text-black leading-none">N° ENVÍO / VENTA</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[7.5px] font-black uppercase tracking-wider text-black leading-none">
+                {isFardolandia ? 'FARDOLANDIA • N° VENTA' : 'N° ENVÍO / VENTA'}
+              </span>
+              {isFardolandia && (
+                <span className="text-[6.5px] font-black uppercase bg-black text-white px-1 py-0.2 rounded leading-none">
+                  SOCIO
+                </span>
+              )}
+            </div>
             <span 
               className="thermal-num text-[23px] font-black tracking-tight text-black leading-none mt-0.5"
               style={{ fontFamily: "Arial, Helvetica, 'Inter', sans-serif" }}
@@ -302,7 +321,12 @@ export const Label = ({
 
       {/* 7. Footer: Metadatos */}
       <div className="border-t-2 border-black pt-0.5 flex justify-between items-center text-[7.5px] font-black uppercase text-black leading-none">
-        <span>VENDEDOR: {sale.vendedor || 'SISTEMA'}</span>
+        <span>
+          {isFardolandia 
+            ? `EMPRESA: FARDOLANDIA (${sale.vendedor || 'LAUTARO'})` 
+            : `VENDEDOR: ${sale.vendedor || 'SISTEMA'}`
+          }
+        </span>
         <span>EMISIÓN: {sale.fecha || 'N/A'}{sale.hora ? ` ${sale.hora}` : ''}</span>
         {hasMultipleBultos && (
           <span className="font-extrabold bg-black text-white px-1.5 py-0.2 rounded text-[7.5px]">

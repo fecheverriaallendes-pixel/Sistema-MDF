@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { ReportModal } from '../components/ReportModal';
 import { SupplierFjReport } from '../components/dashboard/SupplierFjReport';
+import { FardolandiaPartnerReport } from '../components/dashboard/FardolandiaPartnerReport';
 import { 
   TrendingUp, 
   Package, 
@@ -28,7 +29,8 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -313,6 +315,13 @@ export default function Dashboard() {
             >
               <ShieldCheck size={18} className="text-emerald-400" /> Informe Proveedor FJ
             </a>
+
+            <a 
+              href="#fardolandia-partner-dashboard-section"
+              className="flex items-center gap-2.5 px-6 py-4 bg-purple-950 text-purple-200 border-2 border-purple-700 rounded-[24px] font-black text-xs uppercase tracking-widest hover:bg-purple-900 transition-all shadow-md active:scale-95"
+            >
+              <Sparkles size={18} className="text-purple-400" /> Métricas Fardolandia
+            </a>
           </div>
           
           {stats.stockCritico > 0 && (
@@ -368,6 +377,9 @@ export default function Dashboard() {
 
       {/* SECCIÓN ESPECIAL ADMINISTRADOR: INFORME INTEGRAL DE FARDOS Y VENTAS PROVEEDOR FJ */}
       <SupplierFjReport sales={sales} stock={stock} currentUser={currentUser} />
+
+      {/* SECCIÓN ESPECIAL ADMINISTRADOR: INFORME Y CONTROL COMERCIAL FARDOLANDIA (LAUTARO JOFRÉ) */}
+      <FardolandiaPartnerReport sales={sales} stock={stock} currentUser={currentUser} />
 
       {/* SECCIÓN DEDICADA: CONTROL OPERATIVO DE JUNTA COMPRA (COMPACTA Y OPTIMIZADA) */}
       <div className="bg-white p-6 md:p-8 rounded-[40px] border-2 border-indigo-100 shadow-xl overflow-hidden relative">
