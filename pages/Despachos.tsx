@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { 
   Send, 
@@ -54,6 +54,7 @@ import {
 } from '../components/SaleTrackingModal';
 import { DispatchDepartureNotificationModal } from '../components/DispatchDepartureNotificationModal';
 import { matchRut } from '../utils/rutUtils';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 function parseLocalDate(dateStr?: string | null): Date {
   if (!dateStr) return new Date();
@@ -263,8 +264,17 @@ export default function Despachos() {
     window.open(url, '_blank');
   };
 
-  const allSales = sales;
-  const vendedores = Array.from(new Set(sales.map(s => s.vendedor).filter(Boolean)));
+  const isLautaroUser = Boolean(currentUser && isLautaroOrFardolandia(currentUser));
+
+  // Para la cuenta de Lautaro / Fardolandia, restringir estrictamente para que solo aparezcan sus ventas y despachos
+  const allSales = useMemo(() => {
+    if (!isLautaroUser) return sales;
+    return (sales || []).filter(s => isLautaroOrFardolandia(s) || (currentUser?.nombre && s.vendedor === currentUser.nombre));
+  }, [sales, isLautaroUser, currentUser?.nombre]);
+
+  const vendedores = useMemo(() => {
+    return Array.from(new Set(allSales.map(s => s.vendedor).filter(Boolean)));
+  }, [allSales]);
   
   // Categorize sales into tabs
   const isJunta = (s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
@@ -689,6 +699,37 @@ export default function Despachos() {
         </div>
       )}
 
+      {/* Banner Informativo Partner Fardolandia */}
+      {isLautaroUser && (
+        <div className="max-w-6xl mx-auto bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white p-6 md:p-8 rounded-[36px] shadow-xl border border-purple-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center border border-purple-400/30 text-purple-300 shrink-0">
+              <Truck size={30} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-purple-500/30 text-purple-200 border border-purple-400/30 rounded-full text-[10px] font-black uppercase tracking-wider">
+                  Partner Fardolandia
+                </span>
+                <span className="text-xs text-purple-300 font-bold uppercase">{currentUser?.nombre || 'Lautaro Jofré'}</span>
+              </div>
+              <h3 className="text-2xl font-black uppercase tracking-tight mt-1">
+                Tus Ventas y Despachos ({allSales.length} {allSales.length === 1 ? 'registro' : 'registros'})
+              </h3>
+              <p className="text-xs text-purple-200/80 font-medium mt-0.5">
+                Vista restringida: únicamente se visualizan tus pedidos, clientes y despachos autorizados de Fardolandia.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="bg-white/10 px-5 py-3 rounded-2xl border border-white/10 text-right">
+              <p className="text-[9px] font-black text-purple-300 uppercase tracking-widest">Envíos Propios</p>
+              <p className="text-xl font-black font-mono text-purple-200">{allSales.length} en sistema</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex flex-wrap p-1.5 bg-slate-200 rounded-[24px] w-full max-w-6xl mx-auto shadow-inner gap-1">
         <button 
@@ -781,33 +822,40 @@ export default function Despachos() {
                     {carriers.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="flex-1 lg:flex-none min-w-[180px] flex items-center gap-2">
-                <select 
-                    className={`w-full px-5 py-4 rounded-[24px] border-2 font-bold text-sm outline-none transition-all ${vendedorFilter ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-white border-slate-100 text-slate-700'}`}
-                    value={vendedorFilter}
-                    onChange={(e) => setVendedorFilter(e.target.value)}
-                >
-                    <option value="">👤 Vendedor (Todos)</option>
-                    {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-                {currentUser?.nombre && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVendedorFilter(vendedorFilter === currentUser.nombre ? '' : currentUser.nombre);
-                      playSound('click');
-                    }}
-                    className={`px-4 py-4 rounded-[24px] font-black text-xs uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                      vendedorFilter === currentUser.nombre
-                        ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
-                        : 'bg-white border-2 border-slate-100 text-slate-700 hover:border-amber-300'
-                    }`}
-                    title="Filtrar solo mis ventas"
+              {isLautaroUser ? (
+                <div className="flex-1 lg:flex-none min-w-[200px] flex items-center gap-2.5 px-5 py-4 bg-purple-50 border-2 border-purple-200 rounded-[24px] text-purple-900 font-black text-xs uppercase tracking-wider shadow-xs">
+                  <User size={15} className="text-purple-600 shrink-0" />
+                  <span className="truncate">Mis Ventas ({currentUser?.nombre || 'Lautaro Jofré'})</span>
+                </div>
+              ) : (
+                <div className="flex-1 lg:flex-none min-w-[180px] flex items-center gap-2">
+                  <select 
+                      className={`w-full px-5 py-4 rounded-[24px] border-2 font-bold text-sm outline-none transition-all ${vendedorFilter ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-white border-slate-100 text-slate-700'}`}
+                      value={vendedorFilter}
+                      onChange={(e) => setVendedorFilter(e.target.value)}
                   >
-                    <User size={14} /> Mis Ventas
-                  </button>
-                )}
-              </div>
+                      <option value="">👤 Vendedor (Todos)</option>
+                      {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  {currentUser?.nombre && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVendedorFilter(vendedorFilter === currentUser.nombre ? '' : currentUser.nombre);
+                        playSound('click');
+                      }}
+                      className={`px-4 py-4 rounded-[24px] font-black text-xs uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        vendedorFilter === currentUser.nombre
+                          ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
+                          : 'bg-white border-2 border-slate-100 text-slate-700 hover:border-amber-300'
+                      }`}
+                      title="Filtrar solo mis ventas"
+                    >
+                      <User size={14} /> Mis Ventas
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
         </div>
 

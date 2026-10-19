@@ -12,6 +12,7 @@ import { VentasEliminadasModal } from '../components/VentasEliminadasModal';
 import { SaleTrackingModal, formatShippingStatus, generateWhatsAppTrackingMessage } from '../components/SaleTrackingModal';
 import { PrintLabelsModal } from '../components/PrintLabelsModal';
 import { getTotalBultos, generateIndividualLabels } from '../utils/labelUtils';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -48,12 +49,25 @@ export default function Ventas() {
   const [isDeletedSalesModalOpen, setIsDeletedSalesModalOpen] = useState(false);
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
+  const isLautaroUser = Boolean(currentUser && isLautaroOrFardolandia(currentUser));
+  const canSeeAll = isAdmin && !isLautaroUser;
 
-  const pendingLiveSales = sales.filter(s => s && !s.datosCompletos && s.tipoVenta === SaleType.LIVE && (isAdmin || s.vendedor === currentUser?.nombre));
+  const matchesLautaro = (s: Sale) => isLautaroOrFardolandia(s) || (currentUser?.nombre && s.vendedor === currentUser.nombre);
+
+  const pendingLiveSales = sales.filter(s => {
+    if (!s || s.datosCompletos || s.tipoVenta !== SaleType.LIVE) return false;
+    if (isLautaroUser) return matchesLautaro(s);
+    return canSeeAll || s.vendedor === currentUser?.nombre;
+  });
+
   const readySales = sales.filter(s => {
     if (!s) return false;
     if (!(s.datosCompletos || s.tipoVenta === SaleType.NORMAL || s.tipoVenta === SaleType.NOTA_VENTA)) return false;
-    if (!(isAdmin || s.vendedor === currentUser?.nombre)) return false;
+    if (isLautaroUser) {
+      if (!matchesLautaro(s)) return false;
+    } else if (!canSeeAll && s.vendedor !== currentUser?.nombre) {
+      return false;
+    }
     
     // Attempt parsing; if it fails, default to today or skip
     const d = s.fecha ? parseLocalDate(s.fecha) : new Date();

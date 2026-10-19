@@ -21,6 +21,7 @@ import { useStore } from '../store/GlobalContext';
 import { Sale, StaffRole, DispatchType } from '../types';
 import { formatChileanWhatsAppUrl, generateDispatchDepartureWhatsAppMessage } from './SaleTrackingModal';
 import { matchRut } from '../utils/rutUtils';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
 interface DepartureNotificationCenterModalProps {
   isOpen: boolean;
@@ -36,11 +37,15 @@ export function DepartureNotificationCenterModal({ isOpen, onClose }: DepartureN
 
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const isVendedor = currentUser?.rol === StaffRole.VENDEDOR;
+  const isPartnerLautaro = Boolean(currentUser && isLautaroOrFardolandia(currentUser));
 
   // Pending notifications: sales with notificacionSalidaPendiente === true
   const pendingSales = useMemo(() => {
     return (sales || []).filter(s => {
       if (!s.notificacionSalidaPendiente) return false;
+      if (isPartnerLautaro) {
+        return isLautaroOrFardolandia(s) || (currentUser?.nombre && s.vendedor === currentUser.nombre);
+      }
       if (isVendedor && !isAdmin && currentUser?.nombre) {
         if (selectedVendedor === 'MIS_VENTAS') {
           return s.vendedor === currentUser.nombre;
@@ -51,10 +56,13 @@ export function DepartureNotificationCenterModal({ isOpen, onClose }: DepartureN
       }
       return true;
     });
-  }, [sales, isVendedor, isAdmin, currentUser, selectedVendedor]);
+  }, [sales, isVendedor, isAdmin, currentUser, selectedVendedor, isPartnerLautaro]);
 
   // Vendedoras list for filtering
   const allVendedoras = useMemo(() => {
+    if (isPartnerLautaro) {
+      return [currentUser?.nombre || 'Lautaro Jofré'];
+    }
     const set = new Set<string>();
     (sales || []).forEach(s => {
       if (s.notificacionSalidaPendiente && s.vendedor) {
@@ -62,7 +70,7 @@ export function DepartureNotificationCenterModal({ isOpen, onClose }: DepartureN
       }
     });
     return Array.from(set);
-  }, [sales]);
+  }, [sales, isPartnerLautaro, currentUser]);
 
   const filteredSales = useMemo(() => {
     if (!searchTerm.trim()) return pendingSales;

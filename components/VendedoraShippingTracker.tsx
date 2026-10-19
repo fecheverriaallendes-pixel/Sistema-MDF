@@ -31,6 +31,7 @@ import {
 import { useStore } from '../store/GlobalContext';
 import { Sale, SaleStatus, DispatchType, StockItem } from '../types';
 import { matchRut, formatRut } from '../utils/rutUtils';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 import { 
   SaleTrackingModal, 
   formatShippingStatus, 
@@ -72,14 +73,19 @@ export function VendedoraShippingTracker({
   const PAGE_SIZE_TABLE = 10;
   const pageSize = viewLayout === 'cards' ? PAGE_SIZE_CARDS : PAGE_SIZE_TABLE;
 
+  const isPartnerLautaro = Boolean(vendedoraName && isLautaroOrFardolandia(vendedoraName));
+
   // Filter sales for this vendedora (unless admin who can view all or specific)
   const mySales = useMemo(() => {
     return (sales || []).filter(s => {
       if (!s) return false;
+      if (isPartnerLautaro) {
+        return isLautaroOrFardolandia(s) || (vendedoraName && s.vendedor === vendedoraName);
+      }
       if (!isAdmin && vendedoraName && s.vendedor !== vendedoraName) return false;
       return true;
     });
-  }, [sales, vendedoraName, isAdmin]);
+  }, [sales, vendedoraName, isAdmin, isPartnerLautaro]);
 
   // Metrics counters
   const counts = useMemo(() => {

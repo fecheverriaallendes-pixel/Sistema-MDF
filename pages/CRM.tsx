@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
 import { Customer } from '../types';
+import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 import { 
   Phone, 
   Search, 
@@ -33,7 +35,12 @@ import {
 } from '../utils/rutUtils';
 
 export default function CRM() {
-  const { customers, sales, addCustomer, updateCustomer, removeCustomer, playSound } = useStore();
+  const { customers, sales, addCustomer, updateCustomer, removeCustomer, playSound, currentUser } = useStore();
+
+  // Protección estricta: La cuenta de Lautaro / Fardolandia no tiene acceso a la base de clientes de MDF
+  if (isLautaroOrFardolandia(currentUser)) {
+    return <Navigate to="/" replace />;
+  }
   const [searchTerm, setSearchTerm] = useState('');
   const [searchMode, setSearchMode] = useState<'ALL' | 'RUT' | 'NOMBRE' | 'TELEFONO'>('ALL');
   const [rutFilter, setRutFilter] = useState<'ALL' | 'CON_RUT' | 'SIN_RUT'>('ALL');

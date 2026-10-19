@@ -47,6 +47,7 @@ import { DepartureNotificationCenterModal } from './components/DepartureNotifica
 import Devoluciones from './pages/Devoluciones';
 import { useStore } from './store/GlobalContext';
 import { StaffRole } from './types';
+import { isLautaroOrFardolandia } from './utils/partnerUtils';
 
 const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) => {
   const location = useLocation();
@@ -74,9 +75,13 @@ const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) =>
     { name: 'Configuración', icon: Settings, path: '/configuracion', roles: [StaffRole.ADMIN] },
   ];
 
-  const menuItems = allMenuItems.filter(item => 
-    item.roles.includes(currentUser.rol) || (item.name === 'Producción' && (currentUser.nombre || '').toUpperCase() === 'CAMILA VIVAR')
-  );
+  const isPartnerLautaro = isLautaroOrFardolandia(currentUser);
+
+  const menuItems = allMenuItems.filter(item => {
+    // Si es la cuenta de Lautaro / Fardolandia, no mostrar CRM Clientes para resguardar los clientes
+    if (isPartnerLautaro && item.path === '/crm') return false;
+    return item.roles.includes(currentUser.rol) || (item.name === 'Producción' && (currentUser.nombre || '').toUpperCase() === 'CAMILA VIVAR');
+  });
 
   return (
     <>
@@ -133,9 +138,13 @@ const Header = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   if (!currentUser) return null;
 
+  const isPartnerLautaro = Boolean(currentUser && isLautaroOrFardolandia(currentUser));
   const isVendedorOrAdmin = currentUser.rol === StaffRole.ADMIN || currentUser.rol === StaffRole.VENDEDOR;
   const pendingDepartureCount = isVendedorOrAdmin ? (sales || []).filter(s => {
     if (!s.notificacionSalidaPendiente) return false;
+    if (isPartnerLautaro) {
+      return isLautaroOrFardolandia(s) || (currentUser.nombre && s.vendedor === currentUser.nombre);
+    }
     if (currentUser.rol === StaffRole.VENDEDOR && s.vendedor && s.vendedor !== currentUser.nombre) {
       return false;
     }
@@ -190,9 +199,28 @@ const Header = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
   );
 };
 
-const ProtectedRoute = ({ children, roles, extraCheck }: React.PropsWithChildren<{ roles: StaffRole[], extraCheck?: (user: any) => boolean }>) => {
+const ProtectedRoute = ({ 
+  children, 
+  roles, 
+  extraCheck,
+  disallowedCheck
+}: React.PropsWithChildren<{ 
+  roles: StaffRole[]; 
+  extraCheck?: (user: any) => boolean;
+  disallowedCheck?: (user: any) => boolean;
+}>) => {
   const { currentUser } = useStore();
   if (!currentUser) return <Navigate to="/" />;
+  if (disallowedCheck && disallowedCheck(currentUser)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+        <ShieldAlert size={64} className="text-red-500" />
+        <h2 className="text-2xl font-black text-slate-900 uppercase">Acceso Restringido</h2>
+        <p className="text-slate-500">Este módulo no está disponible para esta cuenta comercial.</p>
+        <Link to="/" className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold uppercase text-xs tracking-widest">Volver al Inicio</Link>
+      </div>
+    );
+  }
   if (!roles.includes(currentUser.rol) && (!extraCheck || !extraCheck(currentUser))) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
@@ -326,7 +354,7 @@ export default function App() {
               <Route path="/transportista" element={<ProtectedRoute roles={[StaffRole.TRANSPORTISTA, StaffRole.ADMIN, StaffRole.DESPACHO]}><TransportistaView /></ProtectedRoute>} />
               <Route path="/despachos" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Despachos /></ProtectedRoute>} />
               <Route path="/produccion" element={<ProtectedRoute roles={[StaffRole.ADMIN]} extraCheck={(u) => (u?.nombre || '').toUpperCase() === 'CAMILA VIVAR'}><Produccion /></ProtectedRoute>} />
-              <Route path="/crm" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]}><CRM /></ProtectedRoute>} />
+              <Route path="/crm" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR]} disallowedCheck={(u) => isLautaroOrFardolandia(u)}><CRM /></ProtectedRoute>} />
               <Route path="/post-venta" element={<ProtectedRoute roles={[StaffRole.POST_VENTA, StaffRole.ADMIN]}><PostVenta /></ProtectedRoute>} />
               <Route path="/etiquetas" element={<ProtectedRoute roles={[StaffRole.ADMIN, StaffRole.VENDEDOR, StaffRole.BODEGA, StaffRole.DESPACHO]}><Etiquetas /></ProtectedRoute>} />
               <Route path="/configuracion" element={<ProtectedRoute roles={[StaffRole.ADMIN]}><Configuracion /></ProtectedRoute>} />
