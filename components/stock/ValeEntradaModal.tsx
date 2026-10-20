@@ -50,7 +50,8 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
   const [items, setItems] = useState<ValeEntradaItem[]>([]);
   const [selectedStockId, setSelectedStockId] = useState('');
   const [searchProductQuery, setSearchProductQuery] = useState('');
-  const [tempQty, setTempQty] = useState(1);
+  const [tempQty, setTempQty] = useState<number | ''>(1);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Modal submenú para crear nuevo artículo
   const [isCreatingNewProduct, setIsCreatingNewProduct] = useState(false);
@@ -111,11 +112,13 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
     const stockItem = stock.find(s => s.id === selectedStockId || s.codigo === selectedStockId);
     if (!stockItem) return;
 
+    const qtyToAdd = Math.max(1, Number(tempQty) || 1);
+
     // Verificar si ya existe en la lista para incrementar o añadir fila
     const existingIndex = items.findIndex(it => it.codigo.toUpperCase() === stockItem.codigo.toUpperCase());
     if (existingIndex >= 0) {
       const updated = [...items];
-      updated[existingIndex].cantidad += Math.max(1, tempQty);
+      updated[existingIndex].cantidad = (Number(updated[existingIndex].cantidad) || 0) + qtyToAdd;
       setItems(updated);
     } else {
       const newItem: ValeEntradaItem = {
@@ -125,7 +128,7 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
         categoria: stockItem.categoria || 'FARDO',
         unidad: stockItem.unidad || 'FARDO',
         proveedor: stockItem.proveedor || proveedorGeneral || 'GENERAL',
-        cantidad: Math.max(1, tempQty),
+        cantidad: qtyToAdd,
         precioCosto: stockItem.precioCosto || 0,
         precioSugerido: stockItem.precioSugerido || 0,
         peso: stockItem.peso || 0
@@ -235,9 +238,8 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
     playSound('click');
   };
 
-  // Confirmar y registrar Vale de Entrada
-  const handleSubmitVale = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Solicitar confirmación previa para registrar Vale de Entrada
+  const handleRequestConfirmation = () => {
     setErrorMessage('');
 
     const finalResponsable = useCustomResponsable ? customResponsable.trim() : responsable.trim();
@@ -255,12 +257,28 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
       return;
     }
 
-    const invalidQtyItem = items.find(it => !it.cantidad || it.cantidad <= 0);
+    const invalidQtyItem = items.find(it => !it.cantidad || Number(it.cantidad) <= 0);
     if (invalidQtyItem) {
       setErrorMessage(`⚠️ El artículo ${invalidQtyItem.codigo} (${invalidQtyItem.tipo}) tiene una cantidad inválida. Debe ser mayor a 0.`);
       playSound('click');
       return;
     }
+
+    setShowConfirmModal(true);
+    playSound('transition');
+  };
+
+  // Registrar definitivamente el Vale de Entrada en Bodega tras la confirmación
+  const doSubmitVale = async () => {
+    setErrorMessage('');
+    const finalResponsable = useCustomResponsable ? customResponsable.trim() : responsable.trim();
+
+    const sanitizedItems: ValeEntradaItem[] = items.map(it => ({
+      ...it,
+      cantidad: Math.max(1, Number(it.cantidad) || 1),
+      precioCosto: Number(it.precioCosto) || 0,
+      precioSugerido: Number(it.precioSugerido) || 0
+    }));
 
     setIsSubmitting(true);
     try {
@@ -275,19 +293,21 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
         proveedor: proveedorGeneral.trim() ? proveedorGeneral.trim().toUpperCase() : undefined,
         descripcion: descripcion.trim() || undefined,
         observaciones: observaciones.trim() || undefined,
-        items,
+        items: sanitizedItems,
         totalArticulos,
         totalUnidades,
         totalCostoEstimado,
         totalVentaEstimada
       });
 
+      setShowConfirmModal(false);
       setSavedVale(newVale);
       if (onValeCreated) onValeCreated(newVale);
       playSound('success');
     } catch (err: any) {
       console.error("Error al registrar Vale de Entrada:", err);
       setErrorMessage("Ocurrió un error al guardar el vale: " + (err.message || 'Error desconocido'));
+      setShowConfirmModal(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -412,7 +432,19 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmitVale} className="p-6 sm:p-8 overflow-y-auto space-y-8 flex-grow">
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleRequestConfirmation();
+          }}
+          onKeyDown={(e) => {
+            // Prevenir que presionar Enter dentro de inputs confirme o ingrese el vale accidentalmente
+            if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+              e.preventDefault();
+            }
+          }}
+          className="p-6 sm:p-8 overflow-y-auto space-y-8 flex-grow"
+        >
           {errorMessage && (
             <div className="p-4 bg-rose-50 border-2 border-rose-200 text-rose-700 rounded-2xl flex items-center gap-3 text-xs font-black animate-shake">
               <AlertCircle size={20} className="shrink-0 text-rose-600" />
@@ -604,14 +636,36 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
               </div>
 
               <div className="flex items-center gap-2 w-full md:w-auto">
-                <div className="flex items-center bg-white rounded-2xl border border-slate-200 px-3 py-1.5">
+                <div className="flex items-center bg-white rounded-2xl border border-slate-200 px-3 py-1.5 focus-within:border-emerald-500 transition-colors">
                   <span className="text-[10px] font-black text-slate-400 uppercase mr-2">Cant:</span>
                   <input
                     type="number"
                     min="1"
-                    className="w-16 font-black text-sm text-center outline-none"
-                    value={tempQty}
-                    onChange={(e) => setTempQty(Math.max(1, Number(e.target.value)))}
+                    className="w-16 font-black text-sm text-center outline-none bg-transparent"
+                    value={tempQty === 0 || (tempQty as any) === '' ? '' : tempQty}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') {
+                        setTempQty('' as any);
+                      } else {
+                        const parsed = parseInt(v, 10);
+                        setTempQty(isNaN(parsed) ? ('' as any) : parsed);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!tempQty || Number(tempQty) < 1) {
+                        setTempQty(1);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (selectedStockId) {
+                          handleAddExistingProduct();
+                        }
+                      }
+                    }}
                   />
                 </div>
 
@@ -619,7 +673,7 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
                   type="button"
                   onClick={handleAddExistingProduct}
                   disabled={!selectedStockId}
-                  className="flex-1 md:flex-none px-6 py-3 bg-slate-900 hover:bg-black disabled:opacity-40 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                  className="flex-1 md:flex-none px-6 py-3 bg-slate-900 hover:bg-black disabled:opacity-40 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Plus size={16} /> Añadir al Vale
                 </button>
@@ -676,25 +730,45 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
                             />
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            <div className="inline-flex items-center bg-emerald-50 rounded-xl p-1 border border-emerald-200">
+                            <div className="inline-flex items-center bg-emerald-50 rounded-xl p-1 border border-emerald-200 focus-within:border-emerald-500">
                               <button
                                 type="button"
-                                onClick={() => handleUpdateItem(idx, { cantidad: Math.max(1, item.cantidad - 1) })}
-                                className="w-6 h-6 rounded-lg bg-white text-slate-700 font-black flex items-center justify-center hover:bg-emerald-100"
+                                onClick={() => handleUpdateItem(idx, { cantidad: Math.max(1, (Number(item.cantidad) || 1) - 1) })}
+                                className="w-6 h-6 rounded-lg bg-white text-slate-700 font-black flex items-center justify-center hover:bg-emerald-100 transition-colors"
                               >
                                 -
                               </button>
                               <input
                                 type="number"
                                 min="1"
-                                className="w-12 bg-transparent text-center font-black text-emerald-800 text-sm outline-none"
-                                value={item.cantidad}
-                                onChange={(e) => handleUpdateItem(idx, { cantidad: Math.max(1, Number(e.target.value)) })}
+                                className="w-14 bg-transparent text-center font-black text-emerald-800 text-sm outline-none px-1"
+                                value={item.cantidad === 0 || (item.cantidad as any) === '' ? '' : item.cantidad}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === '') {
+                                    handleUpdateItem(idx, { cantidad: '' as any });
+                                  } else {
+                                    const parsed = parseInt(v, 10);
+                                    handleUpdateItem(idx, { cantidad: isNaN(parsed) ? ('' as any) : parsed });
+                                  }
+                                }}
+                                onBlur={() => {
+                                  if (!item.cantidad || Number(item.cantidad) < 1) {
+                                    handleUpdateItem(idx, { cantidad: 1 });
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    (e.target as HTMLElement).blur();
+                                  }
+                                }}
                               />
                               <button
                                 type="button"
-                                onClick={() => handleUpdateItem(idx, { cantidad: item.cantidad + 1 })}
-                                className="w-6 h-6 rounded-lg bg-white text-slate-700 font-black flex items-center justify-center hover:bg-emerald-100"
+                                onClick={() => handleUpdateItem(idx, { cantidad: (Number(item.cantidad) || 0) + 1 })}
+                                className="w-6 h-6 rounded-lg bg-white text-slate-700 font-black flex items-center justify-center hover:bg-emerald-100 transition-colors"
                               >
                                 +
                               </button>
@@ -786,15 +860,16 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-8 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+              className="w-full sm:w-auto px-8 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all cursor-pointer"
             >
               Cancelar
             </button>
 
             <button
-              type="submit"
+              type="button"
+              onClick={handleRequestConfirmation}
               disabled={isSubmitting || items.length === 0}
-              className="w-full sm:w-auto px-10 py-5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-emerald-600/30 transition-all active:scale-95"
+              className="w-full sm:w-auto px-10 py-5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
             >
               <CheckCircle2 size={20} />
               {isSubmitting ? 'REGISTRANDO EN BODEGA...' : 'CONFIRMAR E INGRESAR VALE'}
@@ -802,6 +877,114 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
           </div>
         </form>
       </div>
+
+      {/* MODAL DE CONFIRMACIÓN OBLIGATORIA ANTES DE INGRESAR VALE */}
+      {showConfirmModal && (
+        <div 
+          className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isSubmitting) setShowConfirmModal(false);
+          }}
+        >
+          <div className="bg-white rounded-[40px] shadow-2xl max-w-lg w-full p-6 sm:p-8 text-center border border-slate-100 animate-in zoom-in-95 duration-200 relative">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+              <AlertCircle size={40} className="animate-pulse" />
+            </div>
+
+            <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-[10px] font-black uppercase tracking-widest inline-block mb-2">
+              Confirmación Requerida
+            </span>
+
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
+              ¿Confirmar Vale de Entrada?
+            </h3>
+
+            <p className="text-slate-500 font-medium text-xs mt-1.5 max-w-sm mx-auto">
+              Estás a punto de ingresar esta mercadería oficialmente al inventario de bodega. Por favor verifica los datos antes de continuar:
+            </p>
+
+            {/* Resumen de confirmación */}
+            <div className="bg-slate-50 border border-slate-200/90 rounded-3xl p-4 sm:p-5 my-4 sm:my-5 text-left space-y-2.5 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Responsable:</span>
+                <span className="font-black text-slate-900 uppercase bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
+                  {useCustomResponsable ? customResponsable.trim().toUpperCase() : responsable.trim().toUpperCase()}
+                </span>
+              </div>
+
+              {numeroContenedor.trim() && (
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-slate-500 font-bold uppercase text-[10px]">Contenedor / Camión:</span>
+                  <span className="font-mono font-black text-blue-700 uppercase bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
+                    {numeroContenedor.trim().toUpperCase()}
+                  </span>
+                </div>
+              )}
+
+              {proveedorGeneral.trim() && (
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-slate-500 font-bold uppercase text-[10px]">Proveedor / Origen:</span>
+                  <span className="font-black text-purple-700 uppercase">
+                    {proveedorGeneral.trim().toUpperCase()}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-bold uppercase text-[10px]">Artículos Distintos:</span>
+                <span className="font-black text-slate-800">{totalArticulos} productos</span>
+              </div>
+
+              <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                <span className="text-slate-800 font-black uppercase text-xs">Total Bultos a Sumar:</span>
+                <span className="font-black text-emerald-700 text-sm sm:text-base bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-300">
+                  +{totalUnidades} {totalUnidades === 1 ? 'unidad' : 'unidades'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-[11px] text-slate-500 pt-1">
+                <span className="font-bold uppercase text-[10px]">Costo Estimado:</span>
+                <span className="font-mono font-bold text-slate-700">${totalCostoEstimado.toLocaleString('es-CL')}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-2xl border border-amber-200 font-semibold mb-5">
+              ⚠️ Esta acción actualizará inmediatamente el stock en el sistema y generará el vale correspondiente.
+            </p>
+
+            {/* Botones de Confirmación */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={isSubmitting}
+                className="flex-1 py-3.5 px-4 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Cancelar / Seguir Editando
+              </button>
+
+              <button
+                type="button"
+                onClick={doSubmitVale}
+                disabled={isSubmitting}
+                className="flex-1 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} />
+                    <span>Sí, Registrar Ingreso</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SUB-MODAL: CREAR NUEVO ARTÍCULO AL CATÁLOGO (SUB-MENÚ SOLICITADO) */}
       {isCreatingNewProduct && (
@@ -893,8 +1076,22 @@ export const ValeEntradaModal: React.FC<ValeEntradaModalProps> = ({ onClose, onV
                     type="number"
                     min="1"
                     className="w-full px-4 py-3 bg-emerald-50 border border-emerald-300 rounded-2xl font-black text-sm text-emerald-900 outline-none focus:border-emerald-500 text-center"
-                    value={newProductForm.cantidadInicialVale}
-                    onChange={(e) => setNewProductForm({...newProductForm, cantidadInicialVale: Math.max(1, Number(e.target.value))})}
+                    value={newProductForm.cantidadInicialVale === 0 || (newProductForm.cantidadInicialVale as any) === '' ? '' : newProductForm.cantidadInicialVale}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') {
+                        setNewProductForm({...newProductForm, cantidadInicialVale: '' as any});
+                      } else {
+                        const parsed = parseInt(v, 10);
+                        setNewProductForm({...newProductForm, cantidadInicialVale: isNaN(parsed) ? ('' as any) : parsed});
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!newProductForm.cantidadInicialVale || Number(newProductForm.cantidadInicialVale) < 1) {
+                        setNewProductForm({...newProductForm, cantidadInicialVale: 1});
+                      }
+                    }}
                   />
                 </div>
               </div>
