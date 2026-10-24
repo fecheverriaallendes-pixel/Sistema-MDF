@@ -872,7 +872,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       const snap = await getDocs(collection(db, 'sales'));
       const freshSales = snap.docs.map(d => d.data() as Sale);
       setSales(freshSales);
-      safeLocalStorage.setItem('mdf_sales', JSON.stringify(freshSales));
       const now = new Date();
       const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       updateSettings({ dbConnected: true, lastSync: timeString, lastError: null });

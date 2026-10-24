@@ -34,7 +34,7 @@ function parseLocalDate(dateStr: string): Date {
 export default function Ventas() {
   const { sales, updateSale, markAsSent, revertDispatchToPending, playSound, deleteSale, deleteAllSales, currentUser, stock, deletedSales, getSalePrintLogs } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('PENDING');
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('READY');
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
