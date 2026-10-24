@@ -946,7 +946,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
         unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
           const salesData = snap.docs.map(d => d.data() as Sale);
           setSales(salesData);
-          safeLocalStorage.setItem('mdf_sales', JSON.stringify(salesData));
           const now = new Date();
           const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
           updateSettings({ dbConnected: true, lastSync: timeString, lastError: null });
@@ -1088,25 +1087,9 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   }, []);
 
   useEffect(() => {
-    safeLocalStorage.setItem('mdf_sales', JSON.stringify(sales));
-    safeLocalStorage.setItem('mdf_stock', JSON.stringify(stock));
-    safeLocalStorage.setItem('mdf_staff', JSON.stringify(staff));
-    safeLocalStorage.setItem('mdf_purchases', JSON.stringify(purchases));
-    safeLocalStorage.setItem('mdf_usa_purchases', JSON.stringify(usaPurchases));
-    safeLocalStorage.setItem('mdf_carriers', JSON.stringify(carriers));
-    safeLocalStorage.setItem('mdf_adjustments', JSON.stringify(adjustments));
     safeLocalStorage.setItem('mdf_settings', JSON.stringify(settings));
-    safeLocalStorage.setItem('mdf_stock_history', JSON.stringify(stockHistory));
-    safeLocalStorage.setItem('mdf_incidents', JSON.stringify(incidents));
-    safeLocalStorage.setItem('mdf_salary_advances', JSON.stringify(salaryAdvances));
-    safeLocalStorage.setItem('mdf_employee_loans', JSON.stringify(employeeLoans));
-    safeLocalStorage.setItem('mdf_work_extras', JSON.stringify(workExtras));
-    safeLocalStorage.setItem('mdf_payroll_records', JSON.stringify(payrollRecords));
-    safeLocalStorage.setItem('mdf_weekly_attendance', JSON.stringify(weeklyAttendance));
-    safeLocalStorage.setItem('mdf_tiktok_lives', JSON.stringify(tiktokLives));
-    safeLocalStorage.setItem('mdf_sale_returns', JSON.stringify(saleReturns));
-    safeLocalStorage.setItem('mdf_vales_entrada', JSON.stringify(valesEntrada));
-  }, [sales, stock, staff, purchases, usaPurchases, carriers, adjustments, settings, stockHistory, incidents, salaryAdvances, employeeLoans, workExtras, payrollRecords, weeklyAttendance, tiktokLives, saleReturns, valesEntrada]);
+    safeLocalStorage.setItem('mdf_carriers', JSON.stringify(carriers));
+  }, [settings, carriers]);
 
   useEffect(() => {
     safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
@@ -1293,14 +1276,13 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
       const isLocal = sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO');
-      const shouldNotify = notificationData?.pendiente !== undefined ? notificationData.pendiente : (!isLocal);
       const updatedSale: Sale = { 
         ...sale, 
         status: SaleStatus.ENVIADO, 
         enviado: true, 
         fechaDespacho: new Date().toISOString(), 
         estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA,
-        notificacionSalidaPendiente: shouldNotify,
+        notificacionSalidaPendiente: false,
         notificacionSalidaFecha: new Date().toISOString(),
         notificacionSalidaMensaje: notificationData?.message || sale.notificacionSalidaMensaje
       };

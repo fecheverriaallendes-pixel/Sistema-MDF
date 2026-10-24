@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { 
   Send, 
@@ -52,7 +51,6 @@ import {
   generateDispatchDepartureWhatsAppMessage, 
   formatChileanWhatsAppUrl 
 } from '../components/SaleTrackingModal';
-import { DispatchDepartureNotificationModal } from '../components/DispatchDepartureNotificationModal';
 import { matchRut } from '../utils/rutUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
@@ -159,11 +157,7 @@ export default function Despachos() {
   const [verifyingSaleId, setVerifyingSaleId] = useState<string | null>(null);
   const [selectedTrackingSale, setSelectedTrackingSale] = useState<Sale | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [departureModalData, setDepartureModalData] = useState<{
-    sale: Sale;
-    message: string;
-    wasAutoOpened: boolean;
-  } | null>(null);
+  const [displayLimit, setDisplayLimit] = useState<number>(36);
   const [deliveryStatusModalSale, setDeliveryStatusModalSale] = useState<Sale | null>(null);
   const [dispatchToast, setDispatchToast] = useState<{
     title: string;
@@ -276,97 +270,104 @@ export default function Despachos() {
     return Array.from(new Set(allSales.map(s => s.vendedor).filter(Boolean)));
   }, [allSales]);
   
+  const stockMap = useMemo(() => new Map((stock || []).map(s => [s.codigo, s])), [stock]);
+
   // Categorize sales into tabs
-  const isJunta = (s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
-  const isDomicilio = (s: Sale) => s.tipoDespacho === DispatchType.DOMICILIO || (Boolean(s.tipoDespacho) && s.tipoDespacho.toUpperCase().includes('DOMICILIO'));
-  const isRetiro = (s: Sale) => s.tipoDespacho === DispatchType.RETIRO || (Boolean(s.tipoDespacho) && s.tipoDespacho.toUpperCase().includes('RETIRO'));
+  const isJunta = useCallback((s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA')), []);
+  const isDomicilio = useCallback((s: Sale) => s.tipoDespacho === DispatchType.DOMICILIO || (Boolean(s.tipoDespacho) && s.tipoDespacho.toUpperCase().includes('DOMICILIO')), []);
+  const isRetiro = useCallback((s: Sale) => s.tipoDespacho === DispatchType.RETIRO || (Boolean(s.tipoDespacho) && s.tipoDespacho.toUpperCase().includes('RETIRO')), []);
 
-  const allJuntaCompraSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && isJunta(s));
-  const allHomeSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && isDomicilio(s));
-  const allWithdrawalSales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && isRetiro(s));
-  const allAgencySales = allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && !isDomicilio(s) && !isRetiro(s));
-  const allHistorySales = allSales.filter(s => s.status === SaleStatus.ENVIADO);
+  const allJuntaCompraSales = useMemo(() => allSales.filter(s => s.status === SaleStatus.PENDIENTE && isJunta(s)), [allSales, isJunta]);
+  const allHomeSales = useMemo(() => allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && isDomicilio(s)), [allSales, isJunta, isDomicilio]);
+  const allWithdrawalSales = useMemo(() => allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && isRetiro(s)), [allSales, isJunta, isRetiro]);
+  const allAgencySales = useMemo(() => allSales.filter(s => s.status === SaleStatus.PENDIENTE && !isJunta(s) && !isDomicilio(s) && !isRetiro(s)), [allSales, isJunta, isDomicilio, isRetiro]);
+  const allHistorySales = useMemo(() => allSales.filter(s => s.status === SaleStatus.ENVIADO), [allSales]);
 
-  const juntaTotalProducts = allJuntaCompraSales.reduce((acc, s) => {
+  const juntaTotalProducts = useMemo(() => allJuntaCompraSales.reduce((acc, s) => {
     if (s.items && s.items.length > 0) {
       return acc + s.items.reduce((sum, it) => sum + (Number(it.cantidad) || 0), 0);
     }
     return acc + (Number(s.cantidad) || 1);
-  }, 0);
+  }, 0), [allJuntaCompraSales]);
 
-  const juntaTotalMoney = allJuntaCompraSales.reduce((acc, s) => acc + (Number(s.total) || 0), 0);
+  const juntaTotalMoney = useMemo(() => allJuntaCompraSales.reduce((acc, s) => acc + (Number(s.total) || 0), 0), [allJuntaCompraSales]);
 
-  const activeTabList = activeTab === 'AGENCIA' ? allAgencySales 
-                      : activeTab === 'DOMICILIO' ? allHomeSales 
-                      : activeTab === 'RETIRO' ? allWithdrawalSales
-                      : activeTab === 'JUNTA_COMPRA' ? allJuntaCompraSales
-                      : allHistorySales;
+  const activeTabList = useMemo(() => {
+    return activeTab === 'AGENCIA' ? allAgencySales 
+         : activeTab === 'DOMICILIO' ? allHomeSales 
+         : activeTab === 'RETIRO' ? allWithdrawalSales
+         : activeTab === 'JUNTA_COMPRA' ? allJuntaCompraSales
+         : allHistorySales;
+  }, [activeTab, allAgencySales, allHomeSales, allWithdrawalSales, allJuntaCompraSales, allHistorySales]);
 
   // Filter the current list
-  const filteredList = activeTabList.filter(s => {
-    // Determine the date to compare against
-    const targetDate = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
-      ? getDispatchDate(s)
-      : getSaleDate(s);
+  const filteredList = useMemo(() => {
+    return activeTabList.filter(s => {
+      const targetDate = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
+        ? getDispatchDate(s)
+        : getSaleDate(s);
 
-    // Date range filter
-    if (startDate) {
-      const start = getStartOfDay(startDate);
-      if (targetDate < start) return false;
-    }
-    if (endDate) {
-      const end = getEndOfDay(endDate);
-      if (targetDate > end) return false;
-    }
+      if (startDate) {
+        const start = getStartOfDay(startDate);
+        if (targetDate < start) return false;
+      }
+      if (endDate) {
+        const end = getEndOfDay(endDate);
+        if (targetDate > end) return false;
+      }
 
-    // Transportista filter
-    if (transportistaFilter && s.transportista !== transportistaFilter) {
-      return false;
-    }
+      if (transportistaFilter && s.transportista !== transportistaFilter) {
+        return false;
+      }
 
-    // Vendedor filter
-    if (vendedorFilter && s.vendedor !== vendedorFilter) {
-      return false;
-    }
+      if (vendedorFilter && s.vendedor !== vendedorFilter) {
+        return false;
+      }
 
-    // Search term
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase().trim();
-      const productObj = stock.find(item => item.codigo === s.codigoFardo);
-      const productTypeName = productObj?.tipo?.toLowerCase() || '';
-      const itemsMatch = s.items?.some(it => {
-        const itStock = stock.find(item => item.codigo === it.codigoFardo);
-        return it.codigoFardo.toLowerCase().includes(search) || (itStock?.tipo?.toLowerCase() || '').includes(search);
-      }) ?? false;
+      if (searchTerm.trim()) {
+        const search = searchTerm.toLowerCase().trim();
+        const productObj = stockMap.get(s.codigoFardo);
+        const productTypeName = productObj?.tipo?.toLowerCase() || '';
+        const itemsMatch = s.items?.some(it => {
+          const itStock = stockMap.get(it.codigoFardo);
+          return it.codigoFardo.toLowerCase().includes(search) || (itStock?.tipo?.toLowerCase() || '').includes(search);
+        }) ?? false;
 
-      return (
-        s.cliente.toLowerCase().includes(search) || 
-        s.numeroVenta.toString().includes(search) ||
-        (s.codigoFardo?.toLowerCase().includes(search) ?? false) ||
-        (s.vendedor?.toLowerCase().includes(search) ?? false) ||
-        productTypeName.includes(search) ||
-        itemsMatch ||
-        (s.transportista?.toLowerCase().includes(search) ?? false) ||
-        (s.agencia?.toLowerCase().includes(search) ?? false) ||
-        (s.direccion?.toLowerCase().includes(search) ?? false) ||
-        (s.telefono?.toLowerCase().includes(search) ?? false) ||
-        (s.rut ? matchRut(s.rut, search) : false)
-      );
-    }
+        return (
+          s.cliente.toLowerCase().includes(search) || 
+          s.numeroVenta.toString().includes(search) ||
+          (s.codigoFardo?.toLowerCase().includes(search) ?? false) ||
+          (s.vendedor?.toLowerCase().includes(search) ?? false) ||
+          productTypeName.includes(search) ||
+          itemsMatch ||
+          (s.transportista?.toLowerCase().includes(search) ?? false) ||
+          (s.agencia?.toLowerCase().includes(search) ?? false) ||
+          (s.direccion?.toLowerCase().includes(search) ?? false) ||
+          (s.telefono?.toLowerCase().includes(search) ?? false) ||
+          (s.rut ? matchRut(s.rut, search) : false)
+        );
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [activeTabList, activeTab, dateFilterType, startDate, endDate, transportistaFilter, vendedorFilter, searchTerm, stockMap]);
 
   // Sorting
-  const currentList = [...filteredList].sort((a, b) => {
-    const timeA = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
-      ? getDispatchDate(a).getTime()
-      : getSaleDate(a).getTime();
-    const timeB = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
-      ? getDispatchDate(b).getTime()
-      : getSaleDate(b).getTime();
-    return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
-  });
+  const currentList = useMemo(() => {
+    return [...filteredList].sort((a, b) => {
+      const timeA = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
+        ? getDispatchDate(a).getTime()
+        : getSaleDate(a).getTime();
+      const timeB = (activeTab === 'HISTORIAL' && dateFilterType === 'despacho')
+        ? getDispatchDate(b).getTime()
+        : getSaleDate(b).getTime();
+      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+    });
+  }, [filteredList, activeTab, dateFilterType, sortOrder]);
+
+  const displayedList = useMemo(() => {
+    return currentList.slice(0, displayLimit);
+  }, [currentList, displayLimit]);
 
   const setDatePreset = (preset: 'today' | 'yesterday' | 'week' | 'month' | 'clear') => {
     playSound('click');
@@ -462,89 +463,32 @@ export default function Despachos() {
 
     setVerifyingSaleId(null);
 
-    const isDomicilioOrAgencia = 
-      sale.tipoDespacho === DispatchType.DOMICILIO || 
-      sale.tipoDespacho === DispatchType.AGENCIA ||
-      (sale.tipoDespacho && sale.tipoDespacho.toUpperCase().includes('DOMICILIO')) ||
-      (sale.tipoDespacho && sale.tipoDespacho.toUpperCase().includes('AGENCIA'));
+    const isLocal = sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO');
 
-    let departureMessage = '';
-    let updatedSaleForNotification: Sale | null = null;
-    let sentViaWebhook = false;
+    // Marcamos como enviado en base de datos inmediatamente
+    markAsSent(sale.id);
 
-    if (isDomicilioOrAgencia) {
-      const isLocal = sale.tipoDespacho === DispatchType.RETIRO;
-      updatedSaleForNotification = {
-        ...sale,
-        status: SaleStatus.ENVIADO,
-        enviado: true,
-        fechaDespacho: new Date().toISOString(),
-        estadoDespacho: isLocal ? DispatchStatus.ENTREGADO : DispatchStatus.EN_RUTA
-      };
-
-      departureMessage = generateDispatchDepartureWhatsAppMessage(updatedSaleForNotification, stock);
-
-      // Si hay webhook configurado, enviamos de forma automática y desatendida
-      if (settings.webhookSalidaDespachoUrl) {
-        try {
-          sentViaWebhook = await triggerDispatchWebhook(updatedSaleForNotification, departureMessage);
-        } catch (e) {
-          console.warn("No se pudo enviar vía webhook:", e);
-        }
-      }
-    }
-
-    // Marcamos como enviado en base de datos registrando el mensaje y estado de aviso
-    markAsSent(sale.id, {
-      message: departureMessage,
-      pendiente: isDomicilioOrAgencia ? !sentViaWebhook : false
+    setDispatchToast({
+      title: isLocal ? `¡Retiro Venta #${sale.numeroVenta} Confirmado!` : `¡Salida Venta #${sale.numeroVenta} Confirmada!`,
+      message: isLocal
+        ? `El pedido de ${sale.cliente} fue marcado como retirado en bodega exitosamente.`
+        : `El pedido de ${sale.cliente} fue despachado exitosamente.`,
+      type: 'success',
+      sale
     });
+    playSound('success');
+  };
 
-    if (isDomicilioOrAgencia && updatedSaleForNotification) {
-      if (sentViaWebhook) {
-        // Envió 100% automático por Webhook / API
-        setDispatchToast({
-          title: `¡Salida Venta #${sale.numeroVenta} Confirmada!`,
-          message: `Mensaje de WhatsApp enviado automáticamente al cliente (${sale.cliente}) vía Webhook / API conectada.`,
-          type: 'success',
-          sale: updatedSaleForNotification
-        });
-        playSound('success');
-      } else if (isBodegaMode) {
-        // Modo Bodega Silencioso: El Jefe de Bodega no interactúa con WhatsApp
-        setDispatchToast({
-          title: `¡Salida de Bodega Confirmada (Venta #${sale.numeroVenta})!`,
-          message: `El pedido de ${sale.cliente} fue despachado. El aviso al cliente quedó derivado en la bandeja de ${sale.vendedor || 'la vendedora'} para su notificación sin interrumpirte en bodega.`,
-          type: 'info',
-          sale: updatedSaleForNotification
-        });
-        playSound('success');
-      } else {
-        // Modo Administrador / Operador con interacción directa de WhatsApp
-        const autoOpen = settings.autoOpenWhatsAppOnDispatch !== false;
-        let wasAutoOpened = false;
-
-        if (autoOpen && sale.telefono) {
-          const waUrl = formatChileanWhatsAppUrl(sale.telefono, departureMessage);
-          if (waUrl) {
-            try {
-              window.open(waUrl, '_blank');
-              wasAutoOpened = true;
-            } catch (e) {
-              console.warn("No se pudo abrir WhatsApp automáticamente:", e);
-            }
-          }
-        }
-
-        setDepartureModalData({
-          sale: updatedSaleForNotification,
-          message: departureMessage,
-          wasAutoOpened
-        });
-      }
-    } else {
-      playSound('success');
-    }
+  const handleQuickWithdrawal = (sale: Sale) => {
+    if (!sale) return;
+    markAsSent(sale.id);
+    setDispatchToast({
+      title: `¡Retiro Confirmado!`,
+      message: `Venta #${sale.numeroVenta} (${sale.cliente}) marcada como retirada en bodega.`,
+      type: 'success',
+      sale
+    });
+    playSound('success');
   };
 
   return (
@@ -1035,8 +979,9 @@ export default function Despachos() {
 
       {/* Content */}
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {currentList.map((sale) => (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayedList.map((sale) => (
             <div key={sale.id} className={`group bg-white rounded-[40px] border-2 ${verifyingSaleId === sale.id ? 'border-amber-400 ring-4 ring-amber-100' : 'border-slate-100'} shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col`}>
               
               {/* Card Header */}
@@ -1181,7 +1126,7 @@ export default function Despachos() {
                   {sale.items && sale.items.length > 0 ? (
                     <div className="space-y-1.5">
                       {sale.items.map((it, idx) => {
-                        const product = stock.find(item => item.codigo === it.codigoFardo);
+                        const product = stockMap.get(it.codigoFardo);
                         return (
                           <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl">
                             <div className="flex items-center gap-2.5">
@@ -1203,7 +1148,7 @@ export default function Despachos() {
                           <Package size={20} />
                         </div>
                         <div>
-                          <p className="text-sm font-black text-slate-900">{stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}</p>
+                          <p className="text-sm font-black text-slate-900">{stockMap.get(sale.codigoFardo)?.tipo || sale.codigoFardo}</p>
                           <p className="text-[10px] text-slate-500 font-bold">CANTIDAD: {sale.cantidad || 1}</p>
                         </div>
                       </div>
@@ -1360,12 +1305,27 @@ export default function Despachos() {
 
                 {sale.status === SaleStatus.PENDIENTE ? (
                   verifyingSaleId !== sale.id ? (
-                    <button 
-                      onClick={() => { setVerifyingSaleId(sale.id); playSound('click'); }}
-                      className="w-full py-4 bg-slate-900 text-white rounded-[24px] text-xs font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20"
-                    >
-                      <QrCode size={16} /> PREPARAR ENVÍO
-                    </button>
+                    <div className="space-y-2">
+                      {(isRetiro(sale) || activeTab === 'RETIRO') && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Confirmar retiro físico de la Venta #${sale.numeroVenta} (${sale.cliente}) en Bodega?`)) {
+                              handleQuickWithdrawal(sale);
+                            }
+                          }}
+                          className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[24px] text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+                          title="Confirmar retiro directamente en 1 clic"
+                        >
+                          <CheckCircle2 size={16} /> Confirmar Retiro Directo
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => { setVerifyingSaleId(sale.id); playSound('click'); }}
+                        className={`w-full py-3.5 ${(isRetiro(sale) || activeTab === 'RETIRO') ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-900/20'} rounded-[24px] text-xs font-black transition-all flex items-center justify-center gap-2`}
+                      >
+                        <QrCode size={16} /> {(isRetiro(sale) || activeTab === 'RETIRO') ? 'Verificar Items / Retiro' : 'PREPARAR ENVÍO'}
+                      </button>
+                    </div>
                   ) : (
                     <button 
                       onClick={() => setVerifyingSaleId(null)}
@@ -1405,6 +1365,24 @@ export default function Despachos() {
               </div>
             </div>
           ))}
+          </div>
+
+          {currentList.length > displayedList.length && (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-6 pb-2">
+              <button
+                onClick={() => setDisplayLimit(prev => prev + 36)}
+                className="px-8 py-4 bg-slate-900 hover:bg-black text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95"
+              >
+                Cargar Más Despachos ({currentList.length - displayedList.length} restantes)
+              </button>
+              <button
+                onClick={() => setDisplayLimit(currentList.length)}
+                className="px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-[24px] font-black text-xs uppercase tracking-wider transition-all"
+              >
+                Mostrar Todos ({currentList.length})
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         /* Table View */
@@ -1428,7 +1406,7 @@ export default function Despachos() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {currentList.map((sale) => (
+                {displayedList.map((sale) => (
                   <tr key={sale.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-5 font-mono font-bold text-slate-700">
                       <span className="bg-slate-100 px-2.5 py-1 rounded-lg">#{sale.numeroVenta}</span>
@@ -1459,12 +1437,12 @@ export default function Despachos() {
                         <div>
                           {sale.items.map((it, idx) => (
                             <div key={idx}>
-                              {it.cantidad}x {stock.find(item => item.codigo === it.codigoFardo)?.tipo || it.codigoFardo}
+                              {it.cantidad}x {stockMap.get(it.codigoFardo)?.tipo || it.codigoFardo}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        `${sale.cantidad || 1} x ${stock.find(item => item.codigo === sale.codigoFardo)?.tipo || sale.codigoFardo}`
+                        `${sale.cantidad || 1} x ${stockMap.get(sale.codigoFardo)?.tipo || sale.codigoFardo}`
                       )}
                     </td>
                     <td className="px-6 py-5 text-xs font-bold">
@@ -1500,6 +1478,17 @@ export default function Despachos() {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {sale.tipoDespacho === DispatchType.RETIRO && sale.status === SaleStatus.PENDIENTE && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickWithdrawal(sale)}
+                            className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all flex items-center gap-1 font-black text-[10px] uppercase shadow-sm"
+                            title="Confirmar retiro inmediato del cliente"
+                          >
+                            <CheckCircle2 size={13} />
+                            <span>Confirmar Retiro</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -1575,6 +1564,30 @@ export default function Despachos() {
               ))}
             </tbody>
           </table>
+
+          {currentList.length > displayedList.length && (
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500">
+                Mostrando {displayedList.length} de {currentList.length} despachos
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDisplayLimit((prev) => prev + 50)}
+                  className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-xs"
+                >
+                  Cargar +50
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDisplayLimit(currentList.length)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs transition-all shadow-xs"
+                >
+                  Mostrar Todos ({currentList.length})
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1624,18 +1637,6 @@ export default function Despachos() {
         />
       )}
 
-      {/* Modal de Notificación Automática de Salida de Despacho (Domicilio y Agencia) */}
-      {departureModalData && (
-        <DispatchDepartureNotificationModal
-          sale={departureModalData.sale}
-          message={departureModalData.message}
-          wasAutoOpened={departureModalData.wasAutoOpened}
-          autoOpenPreference={settings.autoOpenWhatsAppOnDispatch !== false}
-          onToggleAutoOpenPreference={(enabled) => updateSettings({ autoOpenWhatsAppOnDispatch: enabled })}
-          onClose={() => setDepartureModalData(null)}
-          onMarkAsSent={() => markDepartureNotificationAsSent(departureModalData.sale.id)}
-        />
-      )}
 
       {/* Modal de Gestión de Status de Entrega */}
       {deliveryStatusModalSale && (
