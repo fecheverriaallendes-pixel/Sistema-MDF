@@ -13,6 +13,7 @@ import { SaleTrackingModal, formatShippingStatus, generateWhatsAppTrackingMessag
 import { PrintLabelsModal } from '../components/PrintLabelsModal';
 import { getTotalBultos, generateIndividualLabels } from '../utils/labelUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
+import { matchesCarrierSearch } from '../utils/carrierUtils';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -105,7 +106,7 @@ export default function Ventas() {
         const itemsText = (s.items || []).map(i => `${i.codigoFardo}`).join(' ');
         const cleanRutVal = s.rut ? cleanRut(s.rut) : '';
         const combined = `${s.cliente} ${s.codigoFardo || ''} ${s.numeroVenta} ${s.rut || ''} ${cleanRutVal} ${s.vendedor || ''} ${itemsText} ${s.transportista || ''} ${s.agencia || ''}`;
-        return smartTextMatch(combined, searchTerm) || Boolean(s.rut && matchRut(s.rut, searchTerm));
+        return matchesCarrierSearch(searchTerm.toLowerCase().trim(), s) || smartTextMatch(combined, searchTerm) || Boolean(s.rut && matchRut(s.rut, searchTerm));
       })
       .sort((a, b) => {
         let comparison = 0;

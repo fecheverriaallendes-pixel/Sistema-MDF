@@ -53,6 +53,12 @@ import {
 } from '../components/SaleTrackingModal';
 import { matchRut } from '../utils/rutUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
+import { 
+  DEFAULT_CARRIERS, 
+  suggestCarrierForSale, 
+  matchesCarrierFilter, 
+  matchesCarrierSearch 
+} from '../utils/carrierUtils';
 
 function parseLocalDate(dateStr?: string | null): Date {
   if (!dateStr) return new Date();
@@ -131,7 +137,7 @@ function formatDisplayDateTime(dateStr?: string | null): string {
 }
 
 export default function Despachos() {
-  const { sales, stock, markAsSent, revertDispatchToPending, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales, settings, updateSettings, triggerDispatchWebhook, markDepartureNotificationAsSent } = useStore();
+  const { sales, stock, markAsSent, revertDispatchToPending, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, autoAssignPendingCarriers, playSound, carriers, deleteSale, updateSale, currentUser, refreshSales, settings, updateSettings, triggerDispatchWebhook, markDepartureNotificationAsSent } = useStore();
   const isAdmin = currentUser?.rol === StaffRole.ADMIN;
   const isEncargadoDespacho = currentUser?.rol === StaffRole.DESPACHO;
   const canManageDispatchStatus = isAdmin || isEncargadoDespacho;
@@ -140,6 +146,7 @@ export default function Despachos() {
   const isBodegaMode = isBodegaUser || !bodegaInteracts;
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string>(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
   const [searchParams] = useSearchParams();
   const initialTab = (searchParams.get('tab') as any) || 'AGENCIA';
@@ -272,6 +279,17 @@ export default function Despachos() {
   
   const stockMap = useMemo(() => new Map((stock || []).map(s => [s.codigo, s])), [stock]);
 
+  // Combined list of carriers: standard carriers, configured carriers, and any active carriers found in sales
+  const availableCarriers = useMemo(() => {
+    const set = new Set<string>([...DEFAULT_CARRIERS, ...(carriers || [])]);
+    (sales || []).forEach(s => {
+      if (s.transportista && s.transportista.trim()) {
+        set.add(s.transportista.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [carriers, sales]);
+
   // Categorize sales into tabs
   const isJunta = useCallback((s: Sale) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA')), []);
   const isDomicilio = useCallback((s: Sale) => s.tipoDespacho === DispatchType.DOMICILIO || (Boolean(s.tipoDespacho) && s.tipoDespacho.toUpperCase().includes('DOMICILIO')), []);
@@ -300,6 +318,41 @@ export default function Despachos() {
          : allHistorySales;
   }, [activeTab, allAgencySales, allHomeSales, allWithdrawalSales, allJuntaCompraSales, allHistorySales]);
 
+  // Unassigned carrier count for active tab
+  const unassignedCount = useMemo(() => {
+    return activeTabList.filter(s => !s.transportista || s.transportista.trim() === '').length;
+  }, [activeTabList]);
+
+  // Total pending unassigned across agency and domicilio
+  const totalPendingUnassigned = useMemo(() => {
+    return [...allAgencySales, ...allHomeSales].filter(s => !s.transportista || s.transportista.trim() === '').length;
+  }, [allAgencySales, allHomeSales]);
+
+  const handleAutoAssignCarriers = async () => {
+    if (!canManageDispatchStatus) {
+      alert("Solo las cuentas de Administrador o Encargado de Despacho pueden auto-asignar transportistas.");
+      return;
+    }
+    setIsAutoAssigning(true);
+    playSound('click');
+    try {
+      const count = await autoAssignPendingCarriers();
+      playSound('success');
+      setDispatchToast({
+        title: 'Transportistas Asignados',
+        message: count > 0 
+          ? `Se asignaron automáticamente los transportistas a ${count} despachos pendientes (Santiago -> Tamarindo, Chevalier/BlueExpress -> Augusto, etc.).`
+          : 'Todos los despachos pendientes ya cuentan con transportista asignado.',
+        type: 'success'
+      });
+    } catch (err) {
+      console.error("Error al auto-asignar transportistas:", err);
+      alert("Error al auto-asignar transportistas.");
+    } finally {
+      setIsAutoAssigning(false);
+    }
+  };
+
   // Filter the current list
   const filteredList = useMemo(() => {
     return activeTabList.filter(s => {
@@ -316,7 +369,7 @@ export default function Despachos() {
         if (targetDate > end) return false;
       }
 
-      if (transportistaFilter && s.transportista !== transportistaFilter) {
+      if (transportistaFilter && !matchesCarrierFilter(s.transportista, transportistaFilter, s.agencia, s.tipoDespacho, s.direccion)) {
         return false;
       }
 
@@ -333,7 +386,10 @@ export default function Despachos() {
           return it.codigoFardo.toLowerCase().includes(search) || (itStock?.tipo?.toLowerCase() || '').includes(search);
         }) ?? false;
 
+        const carrierSearchMatch = matchesCarrierSearch(search, s);
+
         return (
+          carrierSearchMatch ||
           s.cliente.toLowerCase().includes(search) || 
           s.numeroVenta.toString().includes(search) ||
           (s.codigoFardo?.toLowerCase().includes(search) ?? false) ||
@@ -552,6 +608,18 @@ export default function Despachos() {
             </span>
           </button>
 
+          {canManageDispatchStatus && totalPendingUnassigned > 0 && activeTab !== 'HISTORIAL' && (
+            <button 
+              onClick={handleAutoAssignCarriers}
+              disabled={isAutoAssigning}
+              className="flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/20 active:scale-95 disabled:opacity-60"
+              title="Asignar automáticamente transportistas según agencia (Santiago -> Tamarindo, Chevalier/BlueExpress -> Augusto, etc.)"
+            >
+              <Sparkles size={16} className={`text-amber-300 ${isAutoAssigning ? 'animate-spin' : ''}`} />
+              <span>Auto-asignar Rutas ({totalPendingUnassigned})</span>
+            </button>
+          )}
+
           <button 
             onClick={handleExportExcel}
             className="flex items-center gap-2.5 px-5 py-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20"
@@ -763,7 +831,10 @@ export default function Despachos() {
                     onChange={(e) => setTransportistaFilter(e.target.value)}
                 >
                     <option value="">🚚 Transportista (Todos)</option>
-                    {carriers.map(c => <option key={c} value={c}>{c}</option>)}
+                    {unassignedCount > 0 && (
+                      <option value="__SIN_ASIGNAR__">⚠️ Sin Transportista Asignado ({unassignedCount})</option>
+                    )}
+                    {availableCarriers.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               {isLautaroUser ? (
@@ -956,7 +1027,7 @@ export default function Despachos() {
               )}
               {transportistaFilter && (
                 <span className="bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
-                  Transportista: {transportistaFilter}
+                  Transportista: {transportistaFilter === '__SIN_ASIGNAR__' ? '⚠️ Sin Asignar' : transportistaFilter}
                 </span>
               )}
               {vendedorFilter && (
@@ -1112,10 +1183,29 @@ export default function Despachos() {
                     {sale.direccion || 'RETIRO EN BODEGA'}
                   </p>
 
-                  {(sale.transportista || sale.agencia) && (
-                    <div className="pt-2 border-t border-slate-200/60 flex items-center gap-1 text-xs font-bold text-slate-800">
-                      <Truck size={13} className="text-amber-600" />
-                      <span>Transporte: <strong className="text-slate-900">{sale.transportista || sale.agencia}</strong></span>
+                  {sale.transportista ? (
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1 text-xs font-bold text-slate-800">
+                      <div className="flex items-center gap-1">
+                        <Truck size={13} className="text-amber-600" />
+                        <span>Transporte: <strong className="text-slate-900">{sale.transportista}</strong></span>
+                      </div>
+                      {sale.agencia && <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{sale.agencia}</span>}
+                    </div>
+                  ) : (
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-1 text-xs">
+                      {suggestCarrierForSale(sale.agencia, sale.tipoDespacho, sale.direccion) ? (
+                        <button 
+                          type="button"
+                          onClick={() => assignCarrier(sale.id, suggestCarrierForSale(sale.agencia, sale.tipoDespacho, sale.direccion)!)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-lg transition-colors"
+                          title="Clic para asignar transportista sugerido"
+                        >
+                          <Sparkles size={11} className="text-indigo-600" /> Sugerido: {suggestCarrierForSale(sale.agencia, sale.tipoDespacho, sale.direccion)} (Asignar)
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-medium text-slate-400 italic">Transporte: No asignado</span>
+                      )}
+                      {sale.agencia && <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{sale.agencia}</span>}
                     </div>
                   )}
                 </div>
@@ -1209,7 +1299,7 @@ export default function Despachos() {
                           onChange={(e) => assignCarrier(sale.id, e.target.value)}
                         >
                           <option value="">Seleccionar Transportista...</option>
-                          {carriers.map(c => (
+                          {availableCarriers.map(c => (
                             <option key={c} value={c}>{c}</option>
                           ))}
                         </select>
@@ -1236,7 +1326,7 @@ export default function Despachos() {
                             onChange={(e) => assignCarrier(sale.id, e.target.value)}
                           >
                             <option value="">Seleccionar Transportista...</option>
-                            {carriers.map(c => (
+                            {availableCarriers.map(c => (
                               <option key={c} value={c}>{c}</option>
                             ))}
                           </select>
@@ -1465,15 +1555,37 @@ export default function Despachos() {
                     )}
                     <td className="px-6 py-5 text-xs font-bold">
                       {sale.transportista ? (
-                        <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-100 inline-flex items-center gap-1">
-                          <Truck size={12} /> {sale.transportista}
-                        </span>
-                      ) : sale.agencia ? (
-                        <span className="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-lg border border-purple-100 inline-flex items-center gap-1">
-                          <Building2 size={12} /> {sale.agencia}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-100 inline-flex items-center gap-1">
+                            <Truck size={12} /> {sale.transportista}
+                          </span>
+                          {sale.agencia && (
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              Destino: {sale.agencia}
+                            </span>
+                          )}
+                        </div>
                       ) : (
-                        <span className="text-slate-400 italic">No asignado</span>
+                        <div className="flex flex-col gap-1 items-start">
+                          {suggestCarrierForSale(sale.agencia, sale.tipoDespacho, sale.direccion) ? (
+                            <button
+                              type="button"
+                              onClick={() => assignCarrier(sale.id, suggestCarrierForSale(sale.agencia, sale.tipoDespacho, sale.direccion)!)}
+                              className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg inline-flex items-center gap-1 transition-colors text-left"
+                              title="Clic para asignar transportista sugerido"
+                            >
+                              <Sparkles size={11} className="text-indigo-600 shrink-0" />
+                              <span>Sugerido: {suggestCarrierForSale(sale.agencia, sale.tipoDespacho, sale.direccion)} (Asignar)</span>
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 italic">No asignado</span>
+                          )}
+                          {sale.agencia && (
+                            <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 font-bold">
+                              Agencia: {sale.agencia}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-5 text-right">

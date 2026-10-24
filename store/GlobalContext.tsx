@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, SalaryDeduction, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord, ValeEntrada, ValeEntradaItem, LabelPrintLog, LabelPrintProduct, DeletedSaleRecord } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
+import { DEFAULT_CARRIERS, suggestCarrierForSale } from '../utils/carrierUtils';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
@@ -458,6 +459,7 @@ interface StoreContextType {
   updateDispatchItems: (saleId: string, quantity: number) => void;
   assignCarrier: (saleId: string, carrier: string) => void;
   assignAgency: (saleId: string, agency: string) => void;
+  autoAssignPendingCarriers: () => Promise<number>;
   refreshSales: () => Promise<Sale[]>;
   addCarrier: (name: string) => void;
   removeCarrier: (name: string) => void;
@@ -696,14 +698,10 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   
   const [carriers, setCarriers] = useState<string[]>(() => {
     const saved = safeLocalStorage.getItem('mdf_carriers');
-    return saved ? JSON.parse(saved) : [
-      'Isaias Peralta',
-      'Anthony Mendez',
-      'Ariel Echeverria',
-      'Gonzalo Duarte',
-      'Transportes Tamarindo',
-      'Transportes Runn'
-    ];
+    const parsed = saved ? JSON.parse(saved) : [];
+    // Ensure all default carriers are present
+    const combined = Array.from(new Set([...DEFAULT_CARRIERS, ...parsed]));
+    return combined.length > 0 ? combined : DEFAULT_CARRIERS;
   });
   
   const [adjustments, setAdjustments] = useState<CommissionAdjustment[]>(() => {
@@ -1149,8 +1147,11 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       nextNumeroVenta++;
     }
 
+    const resolvedCarrier = saleData.transportista || suggestCarrierForSale(saleData.agencia, saleData.tipoDespacho, saleData.direccion) || undefined;
+
     const newSale: Sale = {
       ...saleData,
+      transportista: resolvedCarrier,
       esMayorista: isMayorista,
       items: saleData.tipoVenta === SaleType.NOTA_VENTA ? items : saleData.items,
       total,
@@ -1527,13 +1528,52 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const assignAgency = (saleId: string, agency: string) => {
     const sale = sales.find(s => s.id === saleId);
     if (sale) {
-      const updatedSale: Sale = { ...sale, agencia: agency };
+      const autoCarrier = !sale.transportista ? suggestCarrierForSale(agency, sale.tipoDespacho, sale.direccion) : null;
+      const updatedSale: Sale = { 
+        ...sale, 
+        agencia: agency,
+        ...(autoCarrier ? { transportista: autoCarrier } : {})
+      };
       setSales(prev => prev.map(s => s.id === saleId ? updatedSale : s));
       setDoc(doc(db, 'sales', saleId), cleanUndefined(updatedSale)).catch(err => {
         console.error("Error al asignar agencia:", err);
         setSales(prev => prev.map(s => s.id === saleId ? sale : s));
       });
     }
+  };
+
+  const autoAssignPendingCarriers = async (): Promise<number> => {
+    const pendingToAssign = sales.filter(s => 
+      !s.transportista && 
+      (s.status === SaleStatus.PENDIENTE || (s.status as any) === 'Pendiente')
+    );
+
+    const updates: { id: string; carrier: string }[] = [];
+    for (const s of pendingToAssign) {
+      const suggested = suggestCarrierForSale(s.agencia, s.tipoDespacho, s.direccion);
+      if (suggested) {
+        updates.push({ id: s.id, carrier: suggested });
+      }
+    }
+
+    if (updates.length === 0) return 0;
+
+    // Optimistically update local sales state
+    const updateMap = new Map(updates.map(u => [u.id, u.carrier]));
+    setSales(prev => prev.map(s => updateMap.has(s.id) ? { ...s, transportista: updateMap.get(s.id)! } : s));
+
+    // Batch update Firestore in chunks of 400
+    const batchSize = 400;
+    for (let i = 0; i < updates.length; i += batchSize) {
+      const batch = writeBatch(db);
+      const chunk = updates.slice(i, i + batchSize);
+      for (const item of chunk) {
+        batch.update(doc(db, 'sales', item.id), { transportista: item.carrier });
+      }
+      await batch.commit();
+    }
+
+    return updates.length;
   };
 
   const addCarrier = (name: string) => {
@@ -3536,7 +3576,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, revertDispatchToPending, setSaleDispatchStatus, markDepartureNotificationAsSent, triggerDispatchWebhook, testDispatchWebhook, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, revertDispatchToPending, setSaleDispatchStatus, markDepartureNotificationAsSent, triggerDispatchWebhook, testDispatchWebhook, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, autoAssignPendingCarriers, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       incidents, addIncident, updateIncident, addIncidentHistoryEvent, addIncidentComment, addIncidentAttachment, deleteIncident,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, updatePurchase, removePurchase, addAbono, updateAbono, removeAbono,
