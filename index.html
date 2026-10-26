@@ -46,11 +46,27 @@
         }
 
         @media print {
-            .no-print { display: none !important; }
+            .no-print, .no-print * { display: none !important; }
             .print-only { display: block !important; }
             * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+            }
+            html, body, #root, #root > div, main {
+                height: auto !important;
+                min-height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                position: static !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+            }
+            .lg\:ml-64 {
+                margin-left: 0 !important;
+            }
+            aside {
+                display: none !important;
             }
         }
 

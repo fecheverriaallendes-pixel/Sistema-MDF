@@ -28,7 +28,7 @@ export default function Proveedores() {
   return (
     <div className="space-y-6 animate-in fade-in duration-300 max-w-7xl mx-auto pb-16">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 no-print">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-lg text-[10px] font-black uppercase tracking-wider">
@@ -49,7 +49,7 @@ export default function Proveedores() {
       </div>
 
       {/* Tabs Selector Navigation */}
-      <div className="bg-white p-2 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap gap-2">
+      <div className="bg-white p-2 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap gap-2 no-print">
         <button
           onClick={() => setActiveTab('USA_CONTAINERS')}
           className={`flex-1 min-w-[200px] flex items-center justify-center gap-2.5 py-3.5 px-5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all ${
