@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { ReportModal } from '../components/ReportModal';
 import { SupplierFjReport } from '../components/dashboard/SupplierFjReport';
 import { FardolandiaPartnerReport } from '../components/dashboard/FardolandiaPartnerReport';
+import { PonyMetricsReport } from '../components/dashboard/PonyMetricsReport';
 import { 
   TrendingUp, 
   Package, 
@@ -380,6 +381,9 @@ export default function Dashboard() {
 
       {/* SECCIÓN ESPECIAL ADMINISTRADOR: INFORME Y CONTROL COMERCIAL FARDOLANDIA (LAUTARO JOFRÉ) */}
       <FardolandiaPartnerReport sales={sales} stock={stock} currentUser={currentUser} />
+
+      {/* SECCIÓN EXCLUSIVA ADMINISTRADOR MAESTRO: CONTROL Y AUDITORÍA ETIQUETA PONY */}
+      <PonyMetricsReport sales={sales} stock={stock} currentUser={currentUser} />
 
       {/* SECCIÓN DEDICADA: CONTROL OPERATIVO DE JUNTA COMPRA (COMPACTA Y OPTIMIZADA) */}
       <div className="bg-white p-6 md:p-8 rounded-[40px] border-2 border-indigo-100 shadow-xl overflow-hidden relative">
