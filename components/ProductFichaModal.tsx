@@ -32,6 +32,8 @@ interface ProductFichaModalProps {
   onClose: () => void;
   onEdit?: (item: StockItem) => void;
   canEdit?: boolean;
+  isPublic?: boolean;
+  hideSellerGuide?: boolean;
 }
 
 export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
@@ -39,7 +41,9 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
   isOpen,
   onClose,
   onEdit,
-  canEdit = false
+  canEdit = false,
+  isPublic = false,
+  hideSellerGuide = false
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -52,12 +56,13 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
   const tallas = item.tallas || 'Sin especificar';
   const pesoVal = item.pesoKg || item.peso;
   const peso = pesoVal ? `${pesoVal} KG APROX` : 'Sin especificar';
-  const descripcion = item.descripcion || 'Sin descripción registrada por ahora. Puedes agregarla editando el producto en Inventario Stock.';
-  const consejo = item.consejoVenta || 'Sin advertencias específicas registradas.';
+  const descripcion = item.descripcion || 'Sin descripción registrada por ahora.';
+  const consejo = item.consejoVenta;
   const piezas = item.piezasAprox;
   const detalles = item.detallesPrendas;
 
   const qualityStyle = getQualityBadgeStyle(item.calidad);
+  const showSellerGuide = !isPublic && !hideSellerGuide && Boolean(consejo && consejo.trim().length > 0);
 
   const handleCopy = () => {
     const pitch = formatFardoPitchWhatsApp(item);
@@ -68,6 +73,11 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
   };
 
   const handleWhatsAppShare = () => {
+    if (isPublic) {
+      const msg = `Hola! Me interesa el fardo: ${item.tipo} (${item.codigo}) - $${item.precioSugerido?.toLocaleString('es-CL')}\n¿Tienen disponibilidad para despacho?`;
+      window.open(`https://wa.me/56964035464?text=${encodeURIComponent(msg)}`, '_blank');
+      return;
+    }
     const pitch = formatFardoPitchWhatsApp(item);
     const encoded = encodeURIComponent(pitch);
     window.open(`https://wa.me/?text=${encoded}`, '_blank');
@@ -215,19 +225,21 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
             )}
           </div>
 
-          {/* Guía y Tip para Vendedoras (Evitar Reclamos Postventa) */}
-          <div className="bg-amber-50/80 border border-amber-200 rounded-3xl p-5 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-black text-amber-900 uppercase tracking-wider">
-              <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-              <span>Guía para la Vendedora (Evitar reclamos en Post-Venta)</span>
+          {/* Guía y Tip para Vendedoras (Solo visible en vistas internas, nunca para clientes) */}
+          {showSellerGuide && (
+            <div className="bg-amber-50/80 border border-amber-200 rounded-3xl p-5 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-black text-amber-900 uppercase tracking-wider">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <span>Guía para la Vendedora (Evitar reclamos en Post-Venta)</span>
+              </div>
+              <p className="text-xs text-amber-800 font-medium leading-relaxed">
+                {consejo}
+              </p>
+              <div className="pt-2 text-[10px] font-bold text-amber-700/90 italic">
+                ℹ️ Vender con información transparente reduce devoluciones y fideliza al cliente.
+              </div>
             </div>
-            <p className="text-xs text-amber-800 font-medium leading-relaxed">
-              {consejo}
-            </p>
-            <div className="pt-2 text-[10px] font-bold text-amber-700/90 italic">
-              ℹ️ Vender con información transparente reduce devoluciones y fideliza al cliente.
-            </div>
-          </div>
+          )}
 
           {/* Quick Actions */}
           <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
@@ -240,7 +252,7 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
               }`}
             >
               {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
-              {copied ? '¡Ficha Copiada al Portapapeles!' : 'Copiar Ficha para Cliente'}
+              {copied ? '¡Información Copiada!' : (isPublic ? 'Copiar Información' : 'Copiar Ficha para Cliente')}
             </button>
 
             <button
@@ -248,7 +260,7 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
               className="w-full sm:w-auto py-3.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/20 active:scale-95"
             >
               <MessageCircle size={16} />
-              Enviar por WhatsApp
+              {isPublic ? 'Consultar por WhatsApp' : 'Enviar por WhatsApp'}
             </button>
 
             {canEdit && onEdit && (

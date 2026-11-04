@@ -400,11 +400,13 @@ export default function CatalogoPublico() {
         <PoliticasSectionInline />
       </main>
 
-      {/* Modal Ficha Técnica */}
+      {/* Modal Ficha Técnica (Vista para Clientes: sin tips internos de venta) */}
       <ProductFichaModal
         item={selectedFichaItem}
         isOpen={Boolean(selectedFichaItem)}
         onClose={() => setSelectedFichaItem(null)}
+        isPublic={true}
+        hideSellerGuide={true}
       />
 
       {/* Footer */}
