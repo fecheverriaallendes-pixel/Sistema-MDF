@@ -21,7 +21,9 @@ import { StockItem } from '../types';
 import { 
   formatFardoPitchWhatsApp, 
   getSeasonBadgeStyle, 
-  getQualityBadgeStyle 
+  getQualityBadgeStyle,
+  parseTemporadas,
+  formatSeasonDisplay
 } from '../utils/productCharacteristics';
 
 interface ProductFichaModalProps {
@@ -43,7 +45,8 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
 
   if (!isOpen || !item) return null;
 
-  const temporada = item.temporada || 'Sin especificar';
+  const seasonsList = parseTemporadas(item.temporada);
+  const temporadaDisplay = seasonsList.length > 0 ? formatSeasonDisplay(item.temporada) : 'Sin especificar';
   const generoSegmento = item.generoSegmento || item.estilo || 'Sin especificar';
   const calidad = item.calidad || 'Sin especificar';
   const tallas = item.tallas || 'Sin especificar';
@@ -54,7 +57,6 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
   const piezas = item.piezasAprox;
   const detalles = item.detallesPrendas;
 
-  const seasonStyle = getSeasonBadgeStyle(item.temporada);
   const qualityStyle = getQualityBadgeStyle(item.calidad);
 
   const handleCopy = () => {
@@ -120,15 +122,27 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             
             {/* Temporada */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col">
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col justify-between">
               <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                <Calendar size={13} className="text-blue-500" /> Temporada
+                <Calendar size={13} className="text-blue-500" /> {seasonsList.length > 1 ? 'Temporadas' : 'Temporada'}
               </div>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="text-base">{seasonStyle.icon}</span>
-                <span className="font-black text-xs text-slate-900 uppercase">
-                  {temporada}
-                </span>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {seasonsList.length > 0 ? (
+                  seasonsList.map((s) => {
+                    const st = getSeasonBadgeStyle(s);
+                    return (
+                      <span 
+                        key={s} 
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black uppercase tracking-wider border shadow-xs ${st.bg} ${st.text} ${st.border}`}
+                      >
+                        <span>{st.icon}</span>
+                        <span>{s}</span>
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="font-black text-xs text-slate-400 uppercase">Sin especificar</span>
+                )}
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp, Sparkles, ChevronRight, Truck, FileText, Ruler, Scale, Compass, ShieldCheck, Wand2, PackageCheck, CheckCircle2, RotateCcw } from 'lucide-react';
+import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp, Sparkles, ChevronRight, Truck, FileText, Ruler, Scale, Compass, ShieldCheck, Wand2, PackageCheck, CheckCircle2, RotateCcw, Check } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 import { smartSearchMatch } from '../utils/search';
@@ -16,7 +16,11 @@ import {
   CALIDADES_OPTIONS, 
   TALLAS_COMUNES, 
   PESOS_COMUNES,
-  getSeasonBadgeStyle
+  getSeasonBadgeStyle,
+  parseTemporadas,
+  toggleTemporada,
+  formatSeasonDisplay,
+  matchesSeason
 } from '../utils/productCharacteristics';
 
 function parseLocalDate(dateStr: string): Date {
@@ -209,8 +213,7 @@ export default function Stock() {
           ? item.stockActual < 0 
           : itemCategory === categoryFilter;
       
-      const itemTemporada = item.temporada || '';
-      const matchesTemporada = temporadaFilter === 'TODOS' || itemTemporada === temporadaFilter;
+      const matchesTemporada = temporadaFilter === 'TODOS' || matchesSeason(item.temporada, temporadaFilter);
 
       const qty = item.stockActual ?? 0;
       const matchesStockQty = stockQtyFilter === 'TODOS'
@@ -661,7 +664,21 @@ export default function Stock() {
                             <FileText size={10} /> Ficha
                           </button>
                         </div>
-                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">{item.proveedor}</span>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{item.proveedor}</span>
+                          {item.temporada && (
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {parseTemporadas(item.temporada).map(t => {
+                                const st = getSeasonBadgeStyle(t);
+                                return (
+                                  <span key={t} className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${st.bg} ${st.text} ${st.border}`}>
+                                    {st.icon} {t}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -833,10 +850,17 @@ export default function Stock() {
                   </div>
                 </div>
 
-                {/* Temporada */}
+                {/* Temporada (Permite selección múltiple) */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Temporada</label>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                        Temporada / Estación
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        Puedes seleccionar más de una estación (ej: Invierno + Media Temporada)
+                      </span>
+                    </div>
                     {newBale.temporada && (
                       <button
                         type="button"
@@ -848,21 +872,36 @@ export default function Stock() {
                     )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {TEMPORADAS_OPTIONS.map(temp => (
-                      <button
-                        key={temp}
-                        type="button"
-                        onClick={() => setNewBale({...newBale, temporada: newBale.temporada === temp ? '' : temp})}
-                        className={`py-3 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border ${
-                          newBale.temporada === temp 
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {temp}
-                      </button>
-                    ))}
+                    {TEMPORADAS_OPTIONS.map(temp => {
+                      const isSelected = parseTemporadas(newBale.temporada).includes(temp);
+                      const sStyle = getSeasonBadgeStyle(temp);
+                      return (
+                        <button
+                          key={temp}
+                          type="button"
+                          onClick={() => setNewBale({
+                            ...newBale,
+                            temporada: toggleTemporada(newBale.temporada, temp)
+                          })}
+                          className={`py-3 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
+                            isSelected 
+                              ? `${sStyle.bg} ${sStyle.text} ${sStyle.border} ring-2 ring-blue-500 shadow-sm font-black` 
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span>{sStyle.icon}</span>
+                          <span>{temp}</span>
+                          {isSelected && <Check size={14} className="text-blue-600 stroke-[3]" />}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {newBale.temporada && (
+                    <div className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5 pt-1">
+                      <span className="text-slate-400">Seleccionado:</span>
+                      <span className="text-blue-700 font-extrabold">{formatSeasonDisplay(newBale.temporada)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Tallas / Rango de Edad */}
@@ -1097,10 +1136,17 @@ export default function Stock() {
                   </div>
                 </div>
 
-                {/* Temporada */}
+                {/* Temporada (Permite selección múltiple) */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Temporada</label>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                        Temporada / Estación
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        Puedes seleccionar más de una estación (ej: Invierno + Media Temporada)
+                      </span>
+                    </div>
                     {editingItem.temporada && (
                       <button
                         type="button"
@@ -1112,21 +1158,36 @@ export default function Stock() {
                     )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {TEMPORADAS_OPTIONS.map(temp => (
-                      <button
-                        key={temp}
-                        type="button"
-                        onClick={() => setEditingItem({...editingItem, temporada: editingItem.temporada === temp ? '' : temp})}
-                        className={`py-3 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border ${
-                          editingItem.temporada === temp 
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {temp}
-                      </button>
-                    ))}
+                    {TEMPORADAS_OPTIONS.map(temp => {
+                      const isSelected = parseTemporadas(editingItem.temporada).includes(temp);
+                      const sStyle = getSeasonBadgeStyle(temp);
+                      return (
+                        <button
+                          key={temp}
+                          type="button"
+                          onClick={() => setEditingItem({
+                            ...editingItem,
+                            temporada: toggleTemporada(editingItem.temporada, temp)
+                          })}
+                          className={`py-3 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
+                            isSelected 
+                              ? `${sStyle.bg} ${sStyle.text} ${sStyle.border} ring-2 ring-blue-500 shadow-sm font-black` 
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span>{sStyle.icon}</span>
+                          <span>{temp}</span>
+                          {isSelected && <Check size={14} className="text-blue-600 stroke-[3]" />}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {editingItem.temporada && (
+                    <div className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5 pt-1">
+                      <span className="text-slate-400">Seleccionado:</span>
+                      <span className="text-blue-700 font-extrabold">{formatSeasonDisplay(editingItem.temporada)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Tallas / Rango de Edad */}

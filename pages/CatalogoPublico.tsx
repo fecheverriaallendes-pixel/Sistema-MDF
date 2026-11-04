@@ -29,7 +29,10 @@ import { PoliticasModal, PoliticasSectionInline } from '../components/PoliticasM
 import { ProductFichaModal } from '../components/ProductFichaModal';
 import { 
   getSeasonBadgeStyle,
-  TEMPORADAS_OPTIONS 
+  TEMPORADAS_OPTIONS,
+  parseTemporadas,
+  matchesSeason,
+  formatSeasonDisplay
 } from '../utils/productCharacteristics';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
@@ -63,8 +66,7 @@ export default function CatalogoPublico() {
       const itemCategory = item.categoria || 'FARDO';
       const matchesFilter = activeFilter === 'TODOS' || itemCategory === activeFilter;
 
-      const itemTemporada = item.temporada || '';
-      const matchesTemporada = temporadaFilter === 'TODOS' || itemTemporada === temporadaFilter;
+      const matchesTemporada = temporadaFilter === 'TODOS' || matchesSeason(item.temporada, temporadaFilter);
 
       const matchesProvider = providerFilter === 'TODOS' || (item.proveedor || '').toUpperCase() === providerFilter;
       
@@ -74,7 +76,7 @@ export default function CatalogoPublico() {
 
   const handleWhatsAppInquiry = (item: StockItem) => {
     let details = '';
-    if (item.temporada) details += `\n• Temporada: ${item.temporada}`;
+    if (item.temporada) details += `\n• Temporada: ${formatSeasonDisplay(item.temporada)}`;
     const gen = item.generoSegmento || item.estilo;
     if (gen) details += `\n• Género/Segmento: ${gen}`;
     if (item.tallas) details += `\n• Tallas/Edades: ${item.tallas}`;
@@ -254,14 +256,13 @@ export default function CatalogoPublico() {
         {filteredStock.length > 0 ? (
           <div className="grid grid-cols-1 gap-5">
             {filteredStock.map((item) => {
-              const temporada = item.temporada;
+              const temporadasList = parseTemporadas(item.temporada);
               const tallas = item.tallas || 'A consultar';
               const pesoVal = item.pesoKg || item.peso;
               const peso = pesoVal ? `${pesoVal} KG APROX` : 'A consultar';
               const genero = item.generoSegmento || item.estilo || 'A consultar';
               const calidad = item.calidad || 'A consultar';
               const descripcion = item.descripcion;
-              const seasonStyle = getSeasonBadgeStyle(temporada);
 
               return (
                 <div 
@@ -279,10 +280,17 @@ export default function CatalogoPublico() {
                         <h3 className="text-lg font-black text-slate-900 uppercase italic leading-tight">{item.tipo}</h3>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        {temporada && (
-                          <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-wider border ${seasonStyle.bg} ${seasonStyle.text} ${seasonStyle.border}`}>
-                            {seasonStyle.icon} {temporada}
-                          </span>
+                        {temporadasList.length > 0 && (
+                          <div className="flex flex-wrap gap-1 justify-end">
+                            {temporadasList.map(t => {
+                              const st = getSeasonBadgeStyle(t);
+                              return (
+                                <span key={t} className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${st.bg} ${st.text} ${st.border}`}>
+                                  {st.icon} {t}
+                                </span>
+                              );
+                            })}
+                          </div>
                         )}
                         <span className="text-[8px] font-bold text-slate-400 uppercase">
                           {item.unidad}

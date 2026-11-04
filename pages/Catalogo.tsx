@@ -47,7 +47,10 @@ import {
   getSeasonBadgeStyle, 
   getQualityBadgeStyle,
   TEMPORADAS_OPTIONS,
-  GENEROS_SEGMENTOS_OPTIONS
+  GENEROS_SEGMENTOS_OPTIONS,
+  parseTemporadas,
+  matchesSeason,
+  formatSeasonDisplay
 } from '../utils/productCharacteristics';
 
 // Extend jsPDF interface for autotable
@@ -75,14 +78,14 @@ const TableHeader = () => (
 );
 
 const ProductRow: React.FC<{ item: StockItem; onOpenFicha: (item: StockItem) => void }> = ({ item, onOpenFicha }) => {
-  const temporada = item.temporada;
+  const temporadasList = parseTemporadas(item.temporada);
   const tallas = item.tallas;
   const pesoVal = item.pesoKg || item.peso;
   const genero = item.generoSegmento || item.estilo;
   const calidad = item.calidad;
   const desc = item.descripcion;
 
-  const hasAnySpec = !!(temporada || tallas || pesoVal || genero || calidad);
+  const hasAnySpec = !!(temporadasList.length > 0 || tallas || pesoVal || genero || calidad);
 
   return (
     <tr className="border-b border-slate-100 print:border-slate-200 hover:bg-slate-50 transition-colors">
@@ -108,7 +111,14 @@ const ProductRow: React.FC<{ item: StockItem; onOpenFicha: (item: StockItem) => 
           </div>
           {hasAnySpec && (
             <div className="flex flex-wrap items-center gap-1 text-[8px] font-bold text-slate-600">
-              {temporada && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 uppercase">{temporada}</span>}
+              {temporadasList.map(t => {
+                const st = getSeasonBadgeStyle(t);
+                return (
+                  <span key={t} className={`px-1.5 py-0.5 rounded ${st.bg} ${st.text} border ${st.border} uppercase`}>
+                    {st.icon} {t}
+                  </span>
+                );
+              })}
               {genero && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 uppercase">{genero}</span>}
               {tallas && <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 uppercase">Tallas: {tallas}</span>}
               {pesoVal && <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">{pesoVal} KG</span>}
@@ -168,8 +178,7 @@ export default function Catalogo() {
       const itemCategory = item.categoria || 'FARDO';
       const matchesCategory = categoryFilter === 'TODOS' || itemCategory === categoryFilter;
 
-      const itemTemporada = item.temporada || '';
-      const matchesTemporada = temporadaFilter === 'TODOS' || itemTemporada === temporadaFilter;
+      const matchesTemporada = temporadaFilter === 'TODOS' || matchesSeason(item.temporada, temporadaFilter);
 
       const itemGenero = item.generoSegmento || item.estilo || '';
       const matchesGenero = generoFilter === 'TODOS' || itemGenero === generoFilter;
@@ -557,6 +566,7 @@ export default function Catalogo() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 print:grid-cols-2 print:gap-4">
             {sortedAndFilteredStock.map(item => {
               const temporada = item.temporada;
+              const temporadasList = parseTemporadas(item.temporada);
               const tallas = item.tallas || 'Sin especificar';
               const pesoVal = item.pesoKg || item.peso;
               const peso = pesoVal ? `${pesoVal} KG APROX` : 'Sin especificar';
@@ -564,7 +574,6 @@ export default function Catalogo() {
               const calidad = item.calidad || 'Sin especificar';
               const descripcion = item.descripcion;
               const consejo = item.consejoVenta;
-              const seasonStyle = getSeasonBadgeStyle(temporada);
 
               return (
                 <div key={item.id} className="digital-card bg-white rounded-[36px] border-2 border-slate-100 shadow-xl overflow-hidden flex flex-col group hover:border-emerald-400 hover:shadow-2xl transition-all print:break-inside-avoid print:shadow-none print:border print:rounded-2xl print:mb-4 print:w-full print:inline-block">
@@ -575,12 +584,15 @@ export default function Catalogo() {
                       <span className="font-mono font-black text-xs text-emerald-400 bg-white/10 px-2.5 py-1 rounded-full uppercase tracking-wider print:bg-slate-100 print:text-slate-800">
                         {item.codigo}
                       </span>
-                      <div className="flex items-center gap-1.5">
-                        {temporada && (
-                          <span className="px-2.5 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-wider text-slate-200 border border-white/10 print:border-slate-200 print:text-slate-700">
-                            {seasonStyle.icon} {temporada}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {temporadasList.map(t => {
+                          const sStyle = getSeasonBadgeStyle(t);
+                          return (
+                            <span key={t} className="px-2.5 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-wider text-slate-200 border border-white/10 print:border-slate-200 print:text-slate-700">
+                              {sStyle.icon} {t}
+                            </span>
+                          );
+                        })}
                         <span className="px-2 py-1 bg-white/10 rounded-full text-[9px] font-black uppercase tracking-widest text-slate-300 print:hidden">
                           {item.unidad || 'FARDO'}
                         </span>
