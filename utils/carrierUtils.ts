@@ -25,14 +25,19 @@ export function suggestCarrierForSale(
   const dir = (direccion || '').trim().toUpperCase();
   const tipo = (tipoDespacho || '').trim().toUpperCase();
 
-  // Local pickup
-  if (
-    tipo.includes('RETIRO') ||
-    ag.includes('RETIRO') ||
-    ag.includes('LOCAL') ||
-    dir.includes('RETIRO LOCAL') ||
-    dir.includes('RETIRADO LOCAL')
-  ) {
+  // Local pickup (only if explicitly marked as local warehouse pickup)
+  const isExplicitLocalPickup =
+    tipo === 'RETIRO' ||
+    tipo === 'RETIRO EN BODEGA' ||
+    ag === 'RETIRO' ||
+    ag === 'RETIRO LOCAL' ||
+    ag === 'RETIRO BODEGA' ||
+    ag === 'RETIRO EN BODEGA' ||
+    dir === 'RETIRO LOCAL' ||
+    dir === 'RETIRADO LOCAL' ||
+    dir === 'RETIRO EN BODEGA';
+
+  if (isExplicitLocalPickup && tipo !== 'AGENCIA' && tipo !== 'DOMICILIO') {
     return 'Retiro local';
   }
 

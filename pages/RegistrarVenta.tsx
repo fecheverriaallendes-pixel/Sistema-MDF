@@ -28,11 +28,21 @@ import {
   Store,
   Trash2,
   Search,
-  AlertCircle
+  AlertCircle,
+  BookOpen,
+  ShieldCheck,
+  Sun,
+  Snowflake,
+  CloudSun,
+  Calendar,
+  Weight,
+  Shirt
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
-import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType } from '../types';
+import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType, StockItem } from '../types';
 import RutClientLookupModal from '../components/RutClientLookupModal';
+import ProductFichaModal from '../components/ProductFichaModal';
+import { getSeasonBadgeStyle, getQualityBadgeStyle } from '../utils/productCharacteristics';
 import { cleanRut, formatRut, exactMatchRut, validateRut, getUnifiedClients, UnifiedClient } from '../utils/rutUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 
@@ -48,6 +58,7 @@ export default function RegistrarVenta() {
   const [detectedClientConflict, setDetectedClientConflict] = useState<UnifiedClient | null>(null);
   const [items, setItems] = useState<{codigoFardo: string, cantidad: number, valorUnitario: number, esManual?: boolean, tipoComision?: CommissionType, esMayorista?: boolean}[]>([]);
   const [newItem, setNewItem] = useState({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
+  const [viewingFichaItem, setViewingFichaItem] = useState<StockItem | null>(null);
 
   const unifiedClients = useMemo(() => {
     return getUnifiedClients(customers, sales);
@@ -365,6 +376,7 @@ export default function RegistrarVenta() {
 
   const selectedStockItem = formData.codigoFardo ? stock.find(s => s.codigo === formData.codigoFardo.trim().toUpperCase()) : null;
   const selectedNewItemStock = newItem.codigoFardo ? stock.find(s => s.codigo === newItem.codigoFardo.trim().toUpperCase()) : null;
+  const activeFardoItem = (mode === 'NOTA_VENTA' ? selectedNewItemStock : selectedStockItem) || null;
   const isJuntaSelected = formData.juntaCompra === 'JUNTA COMPRA';
 
   return (
@@ -892,6 +904,115 @@ export default function RegistrarVenta() {
             )}
           </div>
 
+          {/* Ficha Técnica y Guía de Venta para evitar errores post-venta */}
+          {activeFardoItem && (
+            <div className="p-6 bg-gradient-to-br from-indigo-50/90 via-sky-50/60 to-purple-50/50 border-2 border-indigo-200/80 rounded-[32px] shadow-sm animate-in fade-in duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                    <BookOpen size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black uppercase tracking-wider text-indigo-950">
+                        Guía de Venta • Ficha del Fardo
+                      </span>
+                      <span className="text-[10px] bg-indigo-100 text-indigo-700 font-black px-2 py-0.5 rounded-full">
+                        {activeFardoItem.codigo}
+                      </span>
+                      {activeFardoItem.proveedor && (
+                        <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
+                          {activeFardoItem.proveedor}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-black text-slate-900 mt-0.5">
+                      {activeFardoItem.tipo}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingFichaItem(activeFardoItem)}
+                  className="self-start sm:self-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20 active:scale-95 shrink-0"
+                >
+                  <Sparkles size={14} />
+                  <span>Ver Ficha Completa & WhatsApp</span>
+                </button>
+              </div>
+
+              {/* Especificaciones clave para la vendedora */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3.5">
+                {/* Temporada */}
+                <div className="p-3 bg-white/95 border border-slate-200/80 rounded-2xl flex flex-col justify-center">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Temporada</span>
+                  <span className={`text-xs font-black mt-1 px-2.5 py-0.5 rounded-lg inline-block w-fit ${getSeasonBadgeStyle(activeFardoItem.temporada)}`}>
+                    {activeFardoItem.temporada || 'Sin especificar'}
+                  </span>
+                </div>
+
+                {/* Tallas / Edades */}
+                <div className="p-3 bg-white/95 border border-slate-200/80 rounded-2xl flex flex-col justify-center">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Tallas / Edades</span>
+                  <span className="text-xs font-black text-slate-800 mt-1 truncate" title={activeFardoItem.tallas || 'Sin especificar'}>
+                    {activeFardoItem.tallas || 'Sin especificar'}
+                  </span>
+                </div>
+
+                {/* Peso / Piezas */}
+                <div className="p-3 bg-white/95 border border-slate-200/80 rounded-2xl flex flex-col justify-center">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Peso & Unidades</span>
+                  <span className="text-xs font-black text-slate-800 mt-1">
+                    {(activeFardoItem.pesoKg || activeFardoItem.peso) ? `${activeFardoItem.pesoKg || activeFardoItem.peso} kg • ` : ''}{activeFardoItem.piezasAprox ? `~${activeFardoItem.piezasAprox} pzas` : (activeFardoItem.unidad || 'FARDO')}
+                  </span>
+                </div>
+
+                {/* Género / Segmento & Calidad */}
+                <div className="p-3 bg-white/95 border border-slate-200/80 rounded-2xl flex flex-col justify-center">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Género & Calidad</span>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className="text-xs font-black text-slate-800">
+                      {activeFardoItem.generoSegmento || activeFardoItem.estilo || 'Sin especificar'}
+                    </span>
+                    {activeFardoItem.calidad && (
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${getQualityBadgeStyle(activeFardoItem.calidad)}`}>
+                        {activeFardoItem.calidad}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ¿Qué trae realmente este fardo? */}
+              {(activeFardoItem.descripcion || activeFardoItem.detallesPrendas) && (
+                <div className="mt-3 p-3.5 bg-white/95 border border-indigo-100 rounded-2xl">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-indigo-700 flex items-center gap-1.5 mb-1">
+                    <Package size={13} />
+                    <span>¿Qué trae realmente este fardo? (Explicar a la clienta):</span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-700 leading-relaxed">
+                    {activeFardoItem.detallesPrendas || activeFardoItem.descripcion}
+                  </p>
+                </div>
+              )}
+
+              {/* Advertencia / Consejo Vendedora */}
+              {activeFardoItem.consejoVenta && (
+                <div className="mt-2.5 p-3.5 bg-amber-500/10 border border-amber-300 rounded-2xl flex items-start gap-2.5">
+                  <AlertCircle size={17} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <span className="font-black text-amber-950 uppercase tracking-wide">
+                      ⚠️ Ojo Vendedora (Evita reclamos en post-venta):
+                    </span>
+                    <p className="font-bold text-amber-800 mt-0.5 leading-relaxed">
+                      {activeFardoItem.consejoVenta}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Opciones de Despacho Detalladas para NOTA DE VENTA */}
           {mode === 'NOTA_VENTA' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8 sm:p-10 bg-amber-50/30 rounded-[40px] border-2 border-amber-100 animate-in fade-in slide-in-from-top duration-500">
@@ -1001,6 +1122,15 @@ export default function RegistrarVenta() {
         onSelectClient={handleSelectClientFromLookup}
         initialRut={formData.rut}
       />
+
+      {/* Modal de Ficha Técnica del Fardo */}
+      {viewingFichaItem && (
+        <ProductFichaModal 
+          isOpen={!!viewingFichaItem}
+          onClose={() => setViewingFichaItem(null)}
+          item={viewingFichaItem}
+        />
+      )}
     </div>
   );
 }

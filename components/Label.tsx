@@ -30,27 +30,43 @@ export const getAgenciaODestino = (sale: Sale): string => {
   const junta = (sale.juntaCompra || '').trim().toUpperCase();
   const tipoDespachoRaw = (sale.tipoDespacho || '').toString().trim().toUpperCase();
 
-  // 1. If juntaCompra or tipoDespacho or agencia is a Retiro
-  if (
-    junta.includes('RETIRO') || 
+  // 1. If it's explicitly an AGENCIA dispatch, preserve the agency text!
+  // Even if the seller wrote "TVP RETIRO EN SUCURSAL" or "STARKEN RETIRO EN AGENCIA",
+  // this is a shipment via an external agency, NEVER a local warehouse pickup.
+  if (sale.tipoDespacho === DispatchType.AGENCIA || tipoDespachoRaw === 'AGENCIA') {
+    if (agencia && agencia !== 'DOMICILIO') {
+      return agencia;
+    }
+    return 'AGENCIA';
+  }
+
+  // 2. Explicit warehouse pickup detection
+  const isExplicitBodegaPickup = 
     sale.tipoDespacho === DispatchType.RETIRO || 
-    tipoDespachoRaw.includes('RETIRO') || 
-    agencia.includes('RETIRO')
-  ) {
+    tipoDespachoRaw === 'RETIRO' || 
+    tipoDespachoRaw === 'RETIRO EN BODEGA' ||
+    junta === 'RETIRO BODEGA' ||
+    junta === 'RETIRO EN BODEGA' ||
+    agencia === 'RETIRO' ||
+    agencia === 'RETIRO BODEGA' ||
+    agencia === 'RETIRO EN BODEGA' ||
+    agencia === 'RETIRO LOCAL';
+
+  if (isExplicitBodegaPickup) {
     return 'RETIRO EN BODEGA';
   }
 
-  // 2. If agencia is explicitly set and not 'DOMICILIO'
+  // 3. If agencia is explicitly set and not 'DOMICILIO'
   if (agencia && agencia !== 'DOMICILIO') {
     return agencia;
   }
 
-  // 3. If tipoDespacho is AGENCIA
-  if (sale.tipoDespacho === DispatchType.AGENCIA || tipoDespachoRaw === 'AGENCIA') {
-    return 'AGENCIA';
+  // 4. Junta compra retiro fallback
+  if (junta.includes('RETIRO')) {
+    return 'RETIRO EN BODEGA';
   }
 
-  // 4. Default fallback for domicilio
+  // 5. Default fallback for domicilio
   return 'DOMICILIO';
 };
 
@@ -69,7 +85,7 @@ export const Label = ({
     variante: sale.variante
   };
   const destinoText = getAgenciaODestino(sale);
-  const isRetiro = destinoText.includes('RETIRO');
+  const isRetiro = destinoText === 'RETIRO EN BODEGA' || destinoText === 'RETIRO LOCAL' || sale.tipoDespacho === DispatchType.RETIRO;
   const hasMultipleBultos = Boolean(displayItem.bultoTotal && displayItem.bultoTotal > 1);
   const isIndividualBulto = hasMultipleBultos && displayItem.cantidad === 1;
   

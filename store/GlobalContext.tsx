@@ -1737,13 +1737,13 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
 
     const newId = code; // ID is the code
-    await setDoc(doc(db, 'stock', newId), { 
+    await setDoc(doc(db, 'stock', newId), cleanUndefined({ 
       ...item, 
       codigo: code, 
       id: newId, 
       disponible: item.stockActual > 0,
       categoria: item.categoria || 'FARDO'
-    });
+    }));
 
     await addStockHistoryEvent({
       productId: code,
@@ -1770,7 +1770,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       const newCode = updatedData.codigo.trim().toUpperCase();
       if (newCode !== item.codigo) {
         // Create new doc with new ID (code)
-        const newItem = { ...item, ...updatedData, codigo: newCode, id: newCode, disponible: (updatedData.stockActual ?? item.stockActual) > 0 };
+        const newItem = cleanUndefined({ ...item, ...updatedData, codigo: newCode, id: newCode, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
         await setDoc(doc(db, 'stock', newCode), newItem);
         // Delete old doc
         await deleteDoc(doc(db, 'stock', id));
@@ -1788,7 +1788,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
     }
 
-    await setDoc(doc(db, 'stock', id), { ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 });
+    await setDoc(doc(db, 'stock', id), cleanUndefined({ ...item, ...updatedData, disponible: (updatedData.stockActual ?? item.stockActual) > 0 }));
     
     if (diff !== 0) {
       await addStockHistoryEvent({

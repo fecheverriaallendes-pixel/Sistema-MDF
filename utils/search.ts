@@ -34,9 +34,18 @@ export const smartSearchMatch = (item: StockItem, searchTerm: string): boolean =
   const categoria = item.categoria || '';
   const unidad = item.unidad || '';
   const observaciones = item.observaciones || '';
+  const descripcion = item.descripcion || '';
+  const temporada = item.temporada || '';
+  const tallas = item.tallas || '';
+  const pesoKg = item.pesoKg !== undefined ? `${item.pesoKg}kg ${item.pesoKg}` : '';
+  const generoSegmento = item.generoSegmento || '';
+  const estilo = item.estilo || '';
+  const calidad = item.calidad || '';
+  const piezasAprox = item.piezasAprox || '';
+  const consejoVenta = item.consejoVenta || '';
 
   const combinedText = normalizeText(
-    `${codigo} ${codigoClean} ${tipo} ${proveedor} ${categoria} ${unidad} ${observaciones}`
+    `${codigo} ${codigoClean} ${tipo} ${proveedor} ${categoria} ${unidad} ${observaciones} ${descripcion} ${temporada} ${tallas} ${pesoKg} ${generoSegmento} ${estilo} ${calidad} ${piezasAprox} ${consejoVenta}`
   );
 
   // Every token must be present in the combined item text

@@ -1,12 +1,23 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp, Sparkles, ChevronRight, Truck, FileText } from 'lucide-react';
+import { PackagePlus, Search, Package, FileUp, X, Download, Tag, Boxes, Edit3, Trash2, Save, AlertTriangle, Layers, Square, Filter, History, Calendar, User, ArrowUpRight, ArrowDownLeft, TrendingUp, Sparkles, ChevronRight, Truck, FileText, Ruler, Scale, Compass, ShieldCheck, Wand2, PackageCheck, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { StaffRole, StockItem } from '../types';
 import { smartSearchMatch } from '../utils/search';
 import { ValeEntradaModal } from '../components/stock/ValeEntradaModal';
 import { HistorialValesTab } from '../components/stock/HistorialValesTab';
+import { ProductFichaModal } from '../components/ProductFichaModal';
+import { 
+  inferCharacteristicsFromTitle, 
+  TEMPORADAS_OPTIONS, 
+  GENEROS_SEGMENTOS_OPTIONS,
+  ESTILOS_OPTIONS, 
+  CALIDADES_OPTIONS, 
+  TALLAS_COMUNES, 
+  PESOS_COMUNES,
+  getSeasonBadgeStyle
+} from '../utils/productCharacteristics';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -33,8 +44,11 @@ export default function Stock() {
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('TODOS');
   const [categoryFilter, setCategoryFilter] = useState<'TODOS' | 'FARDO' | 'LOTE' | 'NEGATIVO'>('TODOS');
+  const [temporadaFilter, setTemporadaFilter] = useState<string>('TODOS');
+  const [stockQtyFilter, setStockQtyFilter] = useState<'TODOS' | 'CON_STOCK' | 'SIN_STOCK' | 'BAJO' | 'NEGATIVO'>('TODOS');
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
+  const [selectedFichaItem, setSelectedFichaItem] = useState<StockItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<StockItem | null>(null);
   const [historyTab, setHistoryTab] = useState<'TODOS' | 'INGRESOS' | 'SALIDAS'>('TODOS');
@@ -53,16 +67,26 @@ export default function Stock() {
     }
   }, [location]);
   
-  const [newBale, setNewBale] = useState({ 
+  const [newBale, setNewBale] = useState<Partial<StockItem>>({ 
     codigo: '', 
     tipo: '', 
     proveedor: '', 
     precioCosto: 0, 
     precioSugerido: 0, 
     stockActual: 1,
-    unidad: 'FARDO' as 'FARDO' | 'PIEZA' | 'MEDIO FARDO' | 'LOTE',
-    categoria: 'FARDO' as 'FARDO' | 'LOTE',
-    peso: 0
+    unidad: 'FARDO',
+    categoria: 'FARDO',
+    peso: 0,
+    descripcion: '',
+    temporada: '',
+    tallas: '',
+    pesoKg: '',
+    generoSegmento: '',
+    estilo: '',
+    calidad: '',
+    piezasAprox: '',
+    detallesPrendas: '',
+    consejoVenta: ''
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,6 +176,28 @@ export default function Stock() {
     return ['TODOS', ...Array.from(new Set(providers))].sort();
   }, [stock]);
 
+  // Contadores de stock para los filtros
+  const stockCounts = useMemo(() => {
+    let conStock = 0;
+    let sinStock = 0;
+    let bajoStock = 0;
+    let negativos = 0;
+
+    stock.forEach(item => {
+      const qty = item.stockActual ?? 0;
+      if (qty > 0) {
+        conStock++;
+        if (qty <= 3) bajoStock++;
+      } else if (qty === 0) {
+        sinStock++;
+      } else {
+        negativos++;
+      }
+    });
+
+    return { conStock, sinStock, bajoStock, negativos };
+  }, [stock]);
+
   const filteredStock = useMemo(() => {
     return stock.filter(item => {
       const matchesSearch = smartSearchMatch(item, searchTerm);
@@ -162,9 +208,24 @@ export default function Stock() {
         : categoryFilter === 'NEGATIVO' 
           ? item.stockActual < 0 
           : itemCategory === categoryFilter;
-      return matchesSearch && matchesProvider && matchesCategory;
+      
+      const itemTemporada = item.temporada || '';
+      const matchesTemporada = temporadaFilter === 'TODOS' || itemTemporada === temporadaFilter;
+
+      const qty = item.stockActual ?? 0;
+      const matchesStockQty = stockQtyFilter === 'TODOS'
+        ? true
+        : stockQtyFilter === 'CON_STOCK'
+          ? qty > 0
+          : stockQtyFilter === 'SIN_STOCK'
+            ? qty === 0
+            : stockQtyFilter === 'BAJO'
+              ? qty > 0 && qty <= 3
+              : qty < 0;
+
+      return matchesSearch && matchesProvider && matchesCategory && matchesTemporada && matchesStockQty;
     });
-  }, [stock, searchTerm, providerFilter, categoryFilter]);
+  }, [stock, searchTerm, providerFilter, categoryFilter, temporadaFilter, stockQtyFilter]);
 
   const juntaCompraStats = useMemo(() => {
     const isJunta = (s: any) => Boolean(s.juntaCompra && s.juntaCompra.trim().toUpperCase().includes('JUNTA'));
@@ -246,8 +307,38 @@ export default function Stock() {
         return;
     }
 
-    addStockItem({ ...newBale, codigo: finalCodigo, proveedor: (newBale.proveedor || '').toUpperCase() });
-    setNewBale({ codigo: '', tipo: '', proveedor: '', precioCosto: 0, precioSugerido: 0, stockActual: 1, unidad: 'FARDO' });
+    addStockItem({ 
+      ...newBale, 
+      codigo: finalCodigo, 
+      tipo: newBale.tipo || '',
+      proveedor: (newBale.proveedor || '').toUpperCase(),
+      precioCosto: Number(newBale.precioCosto) || 0,
+      precioSugerido: Number(newBale.precioSugerido) || 0,
+      stockActual: Number(newBale.stockActual) || 1,
+      unidad: newBale.unidad || 'FARDO',
+      categoria: newBale.categoria || 'FARDO'
+    } as any);
+    setNewBale({ 
+      codigo: '', 
+      tipo: '', 
+      proveedor: '', 
+      precioCosto: 0, 
+      precioSugerido: 0, 
+      stockActual: 1, 
+      unidad: 'FARDO',
+      categoria: 'FARDO',
+      peso: 0,
+      descripcion: '',
+      temporada: '',
+      tallas: '',
+      pesoKg: '',
+      generoSegmento: '',
+      estilo: '',
+      calidad: '',
+      piezasAprox: '',
+      detallesPrendas: '',
+      consejoVenta: ''
+    });
     setIsAdding(false);
     playSound('success');
   };
@@ -366,69 +457,153 @@ export default function Stock() {
             </div>
           )}
 
-      <div className="flex flex-col lg:flex-row gap-6 items-center justify-between w-full">
-        <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
-          <div className="flex bg-slate-100 p-2 rounded-[32px] shadow-sm">
-            {(['TODOS', 'FARDO', 'LOTE', 'NEGATIVO'] as const).map((cat) => (
+      <div className="space-y-4 w-full">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Categorías */}
+            <div className="flex bg-slate-100 p-1.5 rounded-[28px] shadow-sm">
+              {(['TODOS', 'FARDO', 'LOTE', 'NEGATIVO'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => { 
+                    setCategoryFilter(cat); 
+                    if (cat === 'NEGATIVO' && stockQtyFilter === 'CON_STOCK') {
+                      setStockQtyFilter('TODOS');
+                    }
+                    playSound('transition'); 
+                  }}
+                  className={`px-5 md:px-7 py-3 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${
+                    categoryFilter === cat ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {cat === 'TODOS' ? 'Todos' : cat === 'FARDO' ? 'Fardos' : cat === 'LOTE' ? 'Lotes' : '⚠️ Negativos'}
+                </button>
+              ))}
+            </div>
+
+            {/* Filtro rápido de Cantidad / Stock */}
+            <div className="flex bg-slate-100 p-1.5 rounded-[28px] shadow-sm items-center flex-wrap gap-1">
+              {[
+                { id: 'TODOS', label: 'Todo Stock', badge: stock.length },
+                { id: 'CON_STOCK', label: 'Solo con Stock (>0)', badge: stockCounts.conStock, icon: '✅' },
+                { id: 'SIN_STOCK', label: 'Agotados (0)', badge: stockCounts.sinStock, icon: '🚫' },
+                { id: 'BAJO', label: 'Bajo (1-3)', badge: stockCounts.bajoStock, icon: '⚠️' },
+              ].map((stk) => (
+                <button
+                  key={stk.id}
+                  type="button"
+                  onClick={() => { setStockQtyFilter(stk.id as any); playSound('click'); }}
+                  className={`px-4 py-2.5 rounded-[20px] font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${
+                    stockQtyFilter === stk.id 
+                      ? 'bg-emerald-600 text-white shadow-md' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  }`}
+                >
+                  {stk.icon && <span className="text-xs">{stk.icon}</span>}
+                  <span>{stk.label}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    stockQtyFilter === stk.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {stk.badge}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {categoryFilter === 'NEGATIVO' && filteredStock.length > 0 && canModify && (
               <button
-                key={cat}
                 type="button"
-                onClick={() => { setCategoryFilter(cat); playSound('transition'); }}
-                className={`px-6 md:px-8 py-4 rounded-[24px] font-black text-xs uppercase tracking-widest transition-all ${
-                  categoryFilter === cat ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-900'
-                }`}
+                onClick={async () => {
+                  const confirmReset = window.confirm(`⚠️ ¿Estás seguro de que deseas reajustar los ${filteredStock.length} productos con stock negativo a 0?\n\nEsta acción modificará su stock actual directamente en la base de datos.`);
+                  if (confirmReset) {
+                    try {
+                      for (const item of filteredStock) {
+                        await updateStockItem(item.id, { stockActual: 0 });
+                      }
+                      playSound('success');
+                      alert("✅ Corrección masiva exitosa: Todos los productos con stock negativo han sido reajustados a 0.");
+                    } catch (err) {
+                      console.error("Error updating negative stocks:", err);
+                      alert("Error al corregir algunos artículos. Revisa la consola.");
+                    }
+                  }
+                }}
+                className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-[22px] shadow-md shadow-red-600/20 flex items-center gap-2 transition-all active:scale-95 animate-pulse"
               >
-                {cat === 'TODOS' ? 'Todos' : cat === 'FARDO' ? 'Fardos' : cat === 'LOTE' ? 'Lotes' : '⚠️ Negativos'}
+                <AlertTriangle size={16} /> Corregir Negativos a 0
               </button>
-            ))}
+            )}
           </div>
 
-          {categoryFilter === 'NEGATIVO' && filteredStock.length > 0 && canModify && (
+          {(searchTerm || categoryFilter !== 'TODOS' || providerFilter !== 'TODOS' || temporadaFilter !== 'TODOS' || stockQtyFilter !== 'TODOS') && (
             <button
               type="button"
-              onClick={async () => {
-                const confirmReset = window.confirm(`⚠️ ¿Estás seguro de que deseas reajustar los ${filteredStock.length} productos con stock negativo a 0?\n\nEsta acción modificará su stock actual directamente en la base de datos.`);
-                if (confirmReset) {
-                  try {
-                    for (const item of filteredStock) {
-                      await updateStockItem(item.id, { stockActual: 0 });
-                    }
-                    playSound('success');
-                    alert("✅ Corrección masiva exitosa: Todos los productos con stock negativo han sido reajustados a 0.");
-                  } catch (err) {
-                    console.error("Error updating negative stocks:", err);
-                    alert("Error al corregir algunos artículos. Revisa la consola.");
-                  }
-                }
+              onClick={() => {
+                setSearchTerm('');
+                setCategoryFilter('TODOS');
+                setProviderFilter('TODOS');
+                setTemporadaFilter('TODOS');
+                setStockQtyFilter('TODOS');
+                playSound('click');
               }}
-              className="px-6 py-4 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-[24px] shadow-md shadow-red-600/20 flex items-center gap-2 transition-all active:scale-95 animate-pulse"
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-full text-xs font-black uppercase tracking-wider transition-all"
             >
-              <AlertTriangle size={16} /> Corregir Negativos a 0
+              <RotateCcw size={14} /> Limpiar Filtros ({filteredStock.length}/{stock.length})
             </button>
           )}
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 flex-1 w-full">
-          <div className="relative group flex-1">
-            <Search className="absolute left-8 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={24} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+          <div className="relative group">
+            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
             <input 
               type="text" 
               placeholder="Buscar por código o producto..."
-              className="w-full pl-20 pr-10 py-6 rounded-[32px] border-2 border-slate-100 focus:border-blue-400 outline-none transition-all shadow-sm text-xl font-bold"
+              className="w-full pl-16 pr-6 py-5 rounded-[28px] border-2 border-slate-100 focus:border-blue-400 outline-none transition-all shadow-sm text-base font-bold"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          <div className="relative min-w-[280px]">
-            <Filter className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+
+          <div className="relative">
+            <PackageCheck className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <select 
-              className="w-full pl-16 pr-8 py-6 rounded-[32px] border-2 border-slate-100 bg-white font-black text-sm uppercase tracking-widest outline-none focus:border-blue-400 appearance-none shadow-sm cursor-pointer"
+              className="w-full pl-14 pr-8 py-5 rounded-[28px] border-2 border-slate-100 bg-white font-black text-xs uppercase tracking-wider outline-none focus:border-blue-400 appearance-none shadow-sm cursor-pointer"
+              value={stockQtyFilter}
+              onChange={(e) => { setStockQtyFilter(e.target.value as any); playSound('click'); }}
+            >
+              <option value="TODOS">📦 CANTIDAD: TODOS ({stock.length})</option>
+              <option value="CON_STOCK">✅ SOLO CON STOCK &gt;0 ({stockCounts.conStock})</option>
+              <option value="SIN_STOCK">🚫 AGOTADOS = 0 ({stockCounts.sinStock})</option>
+              <option value="BAJO">⚠️ STOCK BAJO 1-3 ({stockCounts.bajoStock})</option>
+              <option value="NEGATIVO">🚨 NEGATIVOS &lt;0 ({stockCounts.negativos})</option>
+            </select>
+          </div>
+          
+          <div className="relative">
+            <Calendar className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <select 
+              className="w-full pl-14 pr-8 py-5 rounded-[28px] border-2 border-slate-100 bg-white font-black text-xs uppercase tracking-wider outline-none focus:border-blue-400 appearance-none shadow-sm cursor-pointer"
+              value={temporadaFilter}
+              onChange={(e) => { setTemporadaFilter(e.target.value); playSound('click'); }}
+            >
+              <option value="TODOS">TEMPORADA: TODAS</option>
+              {TEMPORADAS_OPTIONS.map(temp => (
+                <option key={temp} value={temp}>{temp.toUpperCase()}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="relative">
+            <Filter className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <select 
+              className="w-full pl-14 pr-8 py-5 rounded-[28px] border-2 border-slate-100 bg-white font-black text-xs uppercase tracking-wider outline-none focus:border-blue-400 appearance-none shadow-sm cursor-pointer"
               value={providerFilter}
               onChange={(e) => { setProviderFilter(e.target.value); playSound('click'); }}
             >
               {uniqueProviders.map(p => (
-                <option key={`${p}-option`} value={p}>{p === 'TODOS' ? 'Filtrar: TODOS LOS PROVEEDORES' : `Proveedor: ${p}`}</option>
+                <option key={`${p}-option`} value={p}>{p === 'TODOS' ? 'PROVEEDORES: TODOS' : `PROVEEDOR: ${p}`}</option>
               ))}
             </select>
           </div>
@@ -471,12 +646,22 @@ export default function Stock() {
                   <td className="px-8 py-6 font-mono font-black text-slate-400 uppercase text-xs tracking-widest">{item.codigo}</td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform ${item.stockActual < 3 ? 'bg-red-100 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform ${item.stockActual < 3 ? 'bg-red-100 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
                         <Package size={22} />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-black text-slate-900 uppercase text-sm tracking-tighter leading-none">{item.tipo}</span>
-                        <span className="text-[9px] font-bold text-blue-500 uppercase mt-1 tracking-widest">{item.proveedor}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-slate-900 uppercase text-sm tracking-tighter leading-none">{item.tipo}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedFichaItem(item)}
+                            className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all shadow-sm"
+                            title="Ver Ficha Técnica"
+                          >
+                            <FileText size={10} /> Ficha
+                          </button>
+                        </div>
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">{item.proveedor}</span>
                       </div>
                     </div>
                   </td>
@@ -504,17 +689,24 @@ export default function Stock() {
                   {canModify && (
                     <td className="px-8 py-6 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        <button 
+                          onClick={() => { setSelectedFichaItem(item); playSound('click'); }} 
+                          className="p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                          title="Ver Ficha Técnica"
+                        >
+                          <FileText size={16} />
+                        </button>
                         {currentUser?.rol === StaffRole.ADMIN && (
                           <button 
                             onClick={() => { setSelectedHistoryItem(item); setHistoryTab('TODOS'); playSound('click'); }} 
-                            className="p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                            className="p-3 bg-purple-50 text-purple-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
                             title="Ver Historial de Movimientos"
                           >
                             <History size={16} />
                           </button>
                         )}
-                        <button onClick={() => setEditingItem(item)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"><Edit3 size={16} /></button>
-                        <button onClick={() => setDeletingId(item.id)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
+                        <button onClick={() => setEditingItem(item)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm" title="Editar Producto y Ficha"><Edit3 size={16} /></button>
+                        <button onClick={() => setDeletingId(item.id)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm" title="Eliminar"><Trash2 size={16} /></button>
                       </div>
                     </td>
                   )}
@@ -601,21 +793,23 @@ export default function Stock() {
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Código Identificador (Opcional)</label>
-                  <input className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-indigo-500 outline-none font-black text-xl uppercase" placeholder="MDF-XXXX" value={newBale.codigo} onChange={(e) => setNewBale({...newBale, codigo: e.target.value.toUpperCase()})}/>
+                  <input className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-indigo-500 outline-none font-black text-xl uppercase" placeholder="MDF-XXXX" value={newBale.codigo || ''} onChange={(e) => setNewBale({...newBale, codigo: e.target.value.toUpperCase()})}/>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Cant. Inicial ({newBale.unidad})</label>
                   <input required type="number" onWheel={(e) => e.currentTarget.blur()} onFocus={(e) => e.target.select()} className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-indigo-500 outline-none font-black text-xl" value={newBale.stockActual === 0 ? '' : newBale.stockActual} onChange={(e) => setNewBale({...newBale, stockActual: e.target.value === '' ? 0 : Number(e.target.value)})}/>
                 </div>
               </div>
+
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Descripción del Producto</label>
-                <input required className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-bold text-lg" placeholder="Ej: Abrigo Lana Hombre..." value={newBale.tipo} onChange={(e) => setNewBale({...newBale, tipo: e.target.value})}/>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Nombre del Producto / Fardo</label>
+                <input required className="w-full px-7 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-emerald-500 outline-none font-bold text-lg" placeholder="Ej: Abrigo Lana Hombre IM..." value={newBale.tipo || ''} onChange={(e) => setNewBale({...newBale, tipo: e.target.value})}/>
               </div>
+
               <div className="grid grid-cols-3 gap-6">
                 <div className="col-span-1 space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Proveedor (IM, CANADA...)</label>
-                  <input required className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold uppercase focus:border-emerald-500 outline-none" value={newBale.proveedor} onChange={(e) => setNewBale({...newBale, proveedor: e.target.value.toUpperCase()})}/>
+                  <input required className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold uppercase focus:border-emerald-500 outline-none" value={newBale.proveedor || ''} onChange={(e) => setNewBale({...newBale, proveedor: e.target.value.toUpperCase()})}/>
                 </div>
                 <div className="col-span-1 space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Costo ($)</label>
@@ -626,6 +820,177 @@ export default function Stock() {
                   <input required type="number" className="w-full px-6 py-4 bg-emerald-500 text-white rounded-2xl font-black" value={newBale.precioSugerido || ''} onChange={(e) => setNewBale({...newBale, precioSugerido: Number(e.target.value)})}/>
                 </div>
               </div>
+
+              {/* Ficha Técnica y Características para Vendedoras y Post-Venta */}
+              <div className="bg-slate-50 border-2 border-slate-200/80 rounded-[32px] p-6 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={18} className="text-indigo-600" />
+                    <div>
+                      <h4 className="font-black text-sm text-slate-900 uppercase tracking-tight">Ficha Técnica y Características del Fardo</h4>
+                      <p className="text-[11px] text-slate-500 font-medium">Información oficial para que las vendedoras informen bien al cliente y no haya reclamos</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Temporada */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Temporada</label>
+                    {newBale.temporada && (
+                      <button
+                        type="button"
+                        onClick={() => setNewBale({...newBale, temporada: ''})}
+                        className="text-[10px] font-bold text-red-500 hover:underline"
+                      >
+                        Limpiar selección
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {TEMPORADAS_OPTIONS.map(temp => (
+                      <button
+                        key={temp}
+                        type="button"
+                        onClick={() => setNewBale({...newBale, temporada: newBale.temporada === temp ? '' : temp})}
+                        className={`py-3 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border ${
+                          newBale.temporada === temp 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {temp}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tallas / Rango de Edad */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tallas o Rango de Edad (Ej: 2 a 8 años, S a XL)</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-3.5 bg-white rounded-xl border border-slate-200 font-bold text-sm outline-none focus:border-indigo-500"
+                    placeholder="Ej: 2 a 8 años (Infantil), S a XL (Adulto), etc."
+                    value={newBale.tallas || ''}
+                    onChange={(e) => setNewBale({...newBale, tallas: e.target.value})}
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {TALLAS_COMUNES.map(talla => (
+                      <button
+                        key={talla}
+                        type="button"
+                        onClick={() => setNewBale({...newBale, tallas: talla})}
+                        className="text-[9px] font-black px-2.5 py-1 bg-white hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 transition-colors uppercase"
+                      >
+                        {talla}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Peso Real en KG */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Peso del Fardo (KG)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {PESOS_COMUNES.map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setNewBale({...newBale, pesoKg: newBale.pesoKg === p ? '' : p, peso: newBale.pesoKg === p ? 0 : p})}
+                        className={`px-5 py-2.5 rounded-xl font-black text-xs transition-all border ${
+                          (newBale.pesoKg === p || newBale.peso === p)
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p} KG
+                      </button>
+                    ))}
+                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                      <input 
+                        type="number"
+                        placeholder="Otro KG"
+                        className="w-20 font-black text-xs outline-none"
+                        value={newBale.pesoKg || ''}
+                        onChange={(e) => setNewBale({...newBale, pesoKg: Number(e.target.value), peso: Number(e.target.value)})}
+                      />
+                      <span className="text-[10px] font-black text-slate-400">KG</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Género / Segmento & Calidad */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">GÉNERO / SEGMENTO</label>
+                    <select
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 font-black text-xs uppercase outline-none focus:border-indigo-500"
+                      value={newBale.generoSegmento || newBale.estilo || ''}
+                      onChange={(e) => setNewBale({...newBale, generoSegmento: e.target.value, estilo: e.target.value})}
+                    >
+                      <option value="">-- Sin seleccionar --</option>
+                      {GENEROS_SEGMENTOS_OPTIONS.map(gen => (
+                        <option key={gen} value={gen}>{gen}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Calidad</label>
+                    <select
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 font-black text-xs uppercase outline-none focus:border-indigo-500"
+                      value={newBale.calidad || ''}
+                      onChange={(e) => setNewBale({...newBale, calidad: e.target.value})}
+                    >
+                      <option value="">-- Sin seleccionar --</option>
+                      {CALIDADES_OPTIONS.map(cal => (
+                        <option key={cal} value={cal}>{cal}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Cantidad Aprox de Prendas */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Cantidad Aproximada de Prendas (Opcional)</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-3 bg-white rounded-xl border border-slate-200 font-bold text-xs outline-none focus:border-indigo-500"
+                    placeholder="Ej: 120 a 140 prendas aprox."
+                    value={newBale.piezasAprox || ''}
+                    onChange={(e) => setNewBale({...newBale, piezasAprox: e.target.value})}
+                  />
+                </div>
+
+                {/* Descripción Detallada */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">¿Qué trae realmente este producto? (Descripción en Catálogo)</label>
+                  <textarea 
+                    rows={3}
+                    className="w-full px-5 py-3.5 bg-white rounded-2xl border border-slate-200 font-medium text-xs outline-none focus:border-indigo-500 resize-none leading-relaxed"
+                    placeholder="Explicar qué tipo de prendas vienen, si vienen más deportivas o casuales, cómo viene el surtido..."
+                    value={newBale.descripcion || ''}
+                    onChange={(e) => setNewBale({...newBale, descripcion: e.target.value})}
+                  />
+                </div>
+
+                {/* Consejo para Vendedoras */}
+                <div className="space-y-2 bg-amber-50 p-4 rounded-2xl border border-amber-200">
+                  <div className="flex items-center gap-2 text-amber-900 text-xs font-black uppercase tracking-wider">
+                    <AlertTriangle size={14} className="text-amber-600" />
+                    <span>Guía de Venta / Advertencia para Vendedoras</span>
+                  </div>
+                  <textarea 
+                    rows={2}
+                    className="w-full px-4 py-2.5 bg-white rounded-xl border border-amber-300 font-medium text-xs outline-none focus:border-amber-500 resize-none"
+                    placeholder="Ej: Aclarar al cliente que las tallas van de 2 a 8 años y no trae ropa de adulto..."
+                    value={newBale.consejoVenta || ''}
+                    onChange={(e) => setNewBale({...newBale, consejoVenta: e.target.value})}
+                  />
+                </div>
+
+              </div>
+
               <button type="submit" className="w-full py-7 bg-slate-900 text-white rounded-[32px] font-black text-2xl shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-4 active:scale-95">
                 <Boxes size={32} /> CONFIRMAR EN BODEGA
               </button>
@@ -637,40 +1002,41 @@ export default function Stock() {
       {/* Modal Editar */}
       {editingItem && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[56px] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-300">
-            <div className="p-12 bg-blue-600 text-white flex items-center justify-between">
+          <div className="bg-white rounded-[56px] shadow-2xl w-full max-w-3xl overflow-hidden animate-in zoom-in duration-300 border border-slate-100">
+            <div className="p-8 sm:p-10 bg-slate-900 text-white flex items-center justify-between">
               <div>
-                <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Control de Inventario</p>
-                <h3 className="text-4xl font-black uppercase tracking-tighter italic">Editar Fardo/Pieza</h3>
+                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em] mb-1">Control de Inventario & Ficha</p>
+                <h3 className="text-3xl font-black uppercase tracking-tighter italic">Editar Fardo y Características</h3>
               </div>
-              <button onClick={() => setEditingItem(null)} className="p-4 hover:bg-white/10 rounded-full transition-colors"><X size={36} /></button>
+              <button onClick={() => setEditingItem(null)} className="p-3 hover:bg-white/10 rounded-full transition-colors"><X size={28} /></button>
             </div>
-            <form onSubmit={handleUpdate} className="p-12 space-y-8 overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-4">
+            <form onSubmit={handleUpdate} className="p-8 sm:p-10 space-y-6 overflow-y-auto max-h-[75vh]">
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Categoría de Producto</label>
-                  <div className="flex bg-slate-100 p-2 rounded-[28px] shadow-inner">
+                  <div className="flex bg-slate-100 p-1.5 rounded-[24px] shadow-inner">
                     <button 
                       type="button"
                       onClick={() => setEditingItem({...editingItem, categoria: 'FARDO'})}
-                      className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${editingItem.categoria === 'FARDO' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-500'}`}
+                      className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all ${editingItem.categoria === 'FARDO' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-500'}`}
                     >
-                      <Layers size={20} /> Fardo
+                      <Layers size={18} /> Fardo
                     </button>
                     <button 
                       type="button"
                       onClick={() => setEditingItem({...editingItem, categoria: 'LOTE'})}
-                      className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[22px] font-black text-xs uppercase tracking-widest transition-all ${(editingItem.categoria || (editingItem as any).unidad === 'LOTE' ? 'LOTE' : 'FARDO') === 'LOTE' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-500'}`}
+                      className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all ${(editingItem.categoria || (editingItem as any).unidad === 'LOTE' ? 'LOTE' : 'FARDO') === 'LOTE' ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-500'}`}
                     >
-                      <Boxes size={20} /> Lote
+                      <Boxes size={18} /> Lote
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Tipo de Unidad</label>
                   <select 
-                    className="w-full px-7 py-5 bg-slate-100 rounded-[28px] font-black text-xs uppercase tracking-widest outline-none border-2 border-transparent"
+                    className="w-full px-6 py-4 bg-slate-100 rounded-[24px] font-black text-xs uppercase tracking-widest outline-none border-2 border-transparent"
                     value={editingItem.unidad}
                     onChange={(e) => setEditingItem({...editingItem, unidad: e.target.value as any})}
                   >
@@ -682,59 +1048,215 @@ export default function Stock() {
                 </div>
               </div>
 
-              {editingItem.categoria === 'LOTE' && (
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Peso del Lote (Kgs)</label>
-                  <div className="flex gap-4">
-                    {[10, 20].map(w => (
-                      <button
-                        key={w}
-                        type="button"
-                        onClick={() => setEditingItem({...editingItem, peso: w})}
-                        className={`flex-1 py-5 rounded-[24px] font-black text-xl transition-all ${editingItem.peso === w ? 'bg-amber-500 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400'}`}
-                      >
-                        {w} KG
-                      </button>
-                    ))}
-                    <input 
-                      type="number" 
-                      placeholder="Otro..." 
-                      className="flex-1 px-8 py-5 bg-slate-50 rounded-[28px] border-2 border-transparent focus:border-amber-500 outline-none font-black text-xl"
-                      value={editingItem.peso || ''}
-                      onChange={(e) => setEditingItem({...editingItem, peso: Number(e.target.value)})}
-                    />
-                  </div>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-2 gap-8">
+              {/* Nombre / Título del Fardo */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Nombre del Producto / Fardo</label>
+                <input 
+                  required 
+                  className="w-full px-7 py-4 bg-slate-50 rounded-[24px] border-2 border-transparent focus:border-indigo-500 outline-none font-bold text-lg uppercase" 
+                  value={editingItem.tipo || ''} 
+                  onChange={(e) => setEditingItem({...editingItem, tipo: e.target.value})}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Código Identificador</label>
-                  <input required className="w-full px-7 py-5 bg-slate-50 rounded-[28px] font-black text-xl uppercase outline-none focus:border-blue-500 border-2 border-transparent" value={editingItem.codigo} onChange={(e) => setEditingItem({...editingItem, codigo: e.target.value.toUpperCase()})}/>
+                  <input required className="w-full px-6 py-4 bg-slate-50 rounded-[24px] font-black text-lg uppercase outline-none focus:border-indigo-500 border-2 border-transparent" value={editingItem.codigo} onChange={(e) => setEditingItem({...editingItem, codigo: e.target.value.toUpperCase()})}/>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Stock Físico Actual</label>
-                  <input required type="number" className="w-full px-7 py-5 bg-slate-50 rounded-[28px] font-black text-xl outline-none focus:border-blue-500 border-2 border-transparent" value={editingItem.stockActual} onChange={(e) => setEditingItem({...editingItem, stockActual: Number(e.target.value)})}/>
+                  <input required type="number" className="w-full px-6 py-4 bg-slate-50 rounded-[24px] font-black text-lg outline-none focus:border-indigo-500 border-2 border-transparent" value={editingItem.stockActual} onChange={(e) => setEditingItem({...editingItem, stockActual: Number(e.target.value)})}/>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Proveedor de Origen</label>
-                <input required className="w-full px-7 py-5 bg-slate-50 rounded-[28px] font-black text-xl uppercase outline-none focus:border-blue-500 border-2 border-transparent" placeholder="IM, BETA, CANADA..." value={editingItem.proveedor} onChange={(e) => setEditingItem({...editingItem, proveedor: e.target.value.toUpperCase()})}/>
-              </div>
-
-              <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-1 space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Proveedor</label>
+                  <input required className="w-full px-5 py-4 bg-slate-50 rounded-[20px] font-black text-sm uppercase outline-none focus:border-indigo-500 border-2 border-transparent" placeholder="IM, BETA..." value={editingItem.proveedor} onChange={(e) => setEditingItem({...editingItem, proveedor: e.target.value.toUpperCase()})}/>
+                </div>
+                <div className="col-span-1 space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Costo ($)</label>
-                  <input type="number" className="w-full px-7 py-5 bg-slate-50 rounded-[28px] font-bold outline-none focus:border-blue-500 border-2 border-transparent" value={editingItem.precioCosto || ''} onChange={(e) => setEditingItem({...editingItem, precioCosto: Number(e.target.value)})}/>
+                  <input type="number" className="w-full px-5 py-4 bg-slate-50 rounded-[20px] font-bold text-sm outline-none focus:border-indigo-500 border-2 border-transparent" value={editingItem.precioCosto || ''} onChange={(e) => setEditingItem({...editingItem, precioCosto: Number(e.target.value)})}/>
                 </div>
-                <div className="space-y-2">
+                <div className="col-span-1 space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 block">Venta Sugerida ($)</label>
-                  <input required type="number" className="w-full px-7 py-5 bg-slate-50 rounded-[28px] font-black text-blue-600 outline-none focus:border-blue-500 border-2 border-transparent" value={editingItem.precioSugerido} onChange={(e) => setEditingItem({...editingItem, precioSugerido: Number(e.target.value)})}/>
+                  <input required type="number" className="w-full px-5 py-4 bg-emerald-500 text-white rounded-[20px] font-black text-base outline-none focus:border-emerald-600 border-2 border-transparent" value={editingItem.precioSugerido} onChange={(e) => setEditingItem({...editingItem, precioSugerido: Number(e.target.value)})}/>
                 </div>
               </div>
-              <button type="submit" className="w-full py-7 bg-blue-600 text-white rounded-[32px] font-black text-2xl shadow-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-4 active:scale-95">
-                <Save size={32} /> ACTUALIZAR REGISTRO
+
+              {/* Ficha Técnica y Características Detalladas */}
+              <div className="bg-slate-50 border-2 border-slate-200/80 rounded-[32px] p-6 space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={18} className="text-indigo-600" />
+                    <div>
+                      <h4 className="font-black text-sm text-slate-900 uppercase tracking-tight">Ficha Técnica y Características del Fardo</h4>
+                      <p className="text-[11px] text-slate-500 font-medium">Define qué trae realmente el producto para el catálogo y las vendedoras</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Temporada */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Temporada</label>
+                    {editingItem.temporada && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingItem({...editingItem, temporada: ''})}
+                        className="text-[10px] font-bold text-red-500 hover:underline"
+                      >
+                        Limpiar selección
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {TEMPORADAS_OPTIONS.map(temp => (
+                      <button
+                        key={temp}
+                        type="button"
+                        onClick={() => setEditingItem({...editingItem, temporada: editingItem.temporada === temp ? '' : temp})}
+                        className={`py-3 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border ${
+                          editingItem.temporada === temp 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {temp}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tallas / Rango de Edad */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Tallas o Rango de Edad (Ej: 2 a 8 años, S a XL)</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-3.5 bg-white rounded-xl border border-slate-200 font-bold text-sm outline-none focus:border-indigo-500"
+                    placeholder="Ej: 2 a 8 años (Infantil), S a XL (Adulto), etc."
+                    value={editingItem.tallas || ''}
+                    onChange={(e) => setEditingItem({...editingItem, tallas: e.target.value})}
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {TALLAS_COMUNES.map(talla => (
+                      <button
+                        key={talla}
+                        type="button"
+                        onClick={() => setEditingItem({...editingItem, tallas: talla})}
+                        className="text-[9px] font-black px-2.5 py-1 bg-white hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 transition-colors uppercase"
+                      >
+                        {talla}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Peso Real en KG */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Peso del Fardo (KG)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {PESOS_COMUNES.map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setEditingItem({...editingItem, pesoKg: editingItem.pesoKg === p ? '' : p, peso: editingItem.pesoKg === p ? 0 : p})}
+                        className={`px-5 py-2.5 rounded-xl font-black text-xs transition-all border ${
+                          (editingItem.pesoKg === p || editingItem.peso === p)
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p} KG
+                      </button>
+                    ))}
+                    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
+                      <input 
+                        type="number"
+                        placeholder="Otro KG"
+                        className="w-20 font-black text-xs outline-none"
+                        value={editingItem.pesoKg || editingItem.peso || ''}
+                        onChange={(e) => setEditingItem({...editingItem, pesoKg: Number(e.target.value), peso: Number(e.target.value)})}
+                      />
+                      <span className="text-[10px] font-black text-slate-400">KG</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Género / Segmento & Calidad */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">GÉNERO / SEGMENTO</label>
+                    <select
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 font-black text-xs uppercase outline-none focus:border-indigo-500"
+                      value={editingItem.generoSegmento || editingItem.estilo || ''}
+                      onChange={(e) => setEditingItem({...editingItem, generoSegmento: e.target.value, estilo: e.target.value})}
+                    >
+                      <option value="">-- Sin seleccionar --</option>
+                      {GENEROS_SEGMENTOS_OPTIONS.map(gen => (
+                        <option key={gen} value={gen}>{gen}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Calidad</label>
+                    <select
+                      className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 font-black text-xs uppercase outline-none focus:border-indigo-500"
+                      value={editingItem.calidad || ''}
+                      onChange={(e) => setEditingItem({...editingItem, calidad: e.target.value})}
+                    >
+                      <option value="">-- Sin seleccionar --</option>
+                      {CALIDADES_OPTIONS.map(cal => (
+                        <option key={cal} value={cal}>{cal}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Cantidad Aprox de Prendas */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Cantidad Aproximada de Prendas (Opcional)</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-3 bg-white rounded-xl border border-slate-200 font-bold text-xs outline-none focus:border-indigo-500"
+                    placeholder="Ej: 120 a 140 prendas aprox."
+                    value={editingItem.piezasAprox || ''}
+                    onChange={(e) => setEditingItem({...editingItem, piezasAprox: e.target.value})}
+                  />
+                </div>
+
+                {/* Descripción Detallada */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">¿Qué trae realmente este producto? (Descripción en Catálogo)</label>
+                  <textarea 
+                    rows={3}
+                    className="w-full px-5 py-3.5 bg-white rounded-2xl border border-slate-200 font-medium text-xs outline-none focus:border-indigo-500 resize-none leading-relaxed"
+                    placeholder="Explicar qué tipo de prendas vienen, si vienen más deportivas o casuales, cómo viene el surtido..."
+                    value={editingItem.descripcion || ''}
+                    onChange={(e) => setEditingItem({...editingItem, descripcion: e.target.value})}
+                  />
+                </div>
+
+                {/* Consejo para Vendedoras */}
+                <div className="space-y-2 bg-amber-50 p-4 rounded-2xl border border-amber-200">
+                  <div className="flex items-center gap-2 text-amber-900 text-xs font-black uppercase tracking-wider">
+                    <AlertTriangle size={14} className="text-amber-600" />
+                    <span>Guía de Venta / Advertencia para Vendedoras</span>
+                  </div>
+                  <textarea 
+                    rows={2}
+                    className="w-full px-4 py-2.5 bg-white rounded-xl border border-amber-300 font-medium text-xs outline-none focus:border-amber-500 resize-none"
+                    placeholder="Ej: Aclarar al cliente que las tallas van de 2 a 8 años y no trae ropa de adulto..."
+                    value={editingItem.consejoVenta || ''}
+                    onChange={(e) => setEditingItem({...editingItem, consejoVenta: e.target.value})}
+                  />
+                </div>
+
+              </div>
+
+              <button type="submit" className="w-full py-6 bg-slate-900 text-white rounded-[28px] font-black text-xl shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-3 active:scale-95">
+                <Save size={24} /> GUARDAR CAMBIOS DE INVENTARIO Y FICHA
               </button>
             </form>
           </div>
@@ -939,6 +1461,15 @@ export default function Stock() {
           }}
         />
       )}
+
+      {/* Modal Ficha Técnica y Características del Fardo */}
+      <ProductFichaModal
+        item={selectedFichaItem}
+        isOpen={Boolean(selectedFichaItem)}
+        onClose={() => setSelectedFichaItem(null)}
+        onEdit={(it) => setEditingItem(it)}
+        canEdit={canModify}
+      />
     </div>
   );
 }

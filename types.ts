@@ -415,6 +415,18 @@ export interface StockItem {
   peso?: number; // Para lotes (10 o 20 kgs)
   promocion?: boolean;
   observaciones?: string;
+
+  // Características y ficha técnica detallada del fardo
+  descripcion?: string; // Explicación completa del producto y qué trae realmente
+  temporada?: 'Invierno' | 'Verano' | 'Media Temporada' | 'Todo el Año' | string;
+  tallas?: string; // Ej: "0 a 2 años", "2 a 8 años", "4 a 14 años", "S a XL", "Estándar Adulto", etc.
+  pesoKg?: number | string; // Ej: 45, 40, 25, 20
+  generoSegmento?: 'INFANTIL' | 'MIXTO' | 'MUJER' | 'HOMBRE' | 'OTROS' | string; // Género / Segmento
+  estilo?: string; // Compatibilidad histórica con género/segmento
+  calidad?: 'Premium / 1ra Selección' | 'Crema / Oro' | 'Estándar / Comercial' | 'Segunda' | 'Retorno' | string;
+  piezasAprox?: string; // Ej: "120 a 140 prendas"
+  detallesPrendas?: string; // Ej: "Polerones canguro con capucha, polos algodón..."
+  consejoVenta?: string; // Tips y advertencias para que las vendedoras vendan bien y no haya reclamos en post-venta
 }
 
 export interface Sale {
