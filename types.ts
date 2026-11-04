@@ -423,7 +423,7 @@ export interface StockItem {
   pesoKg?: number | string; // Ej: 45, 40, 25, 20
   generoSegmento?: 'INFANTIL' | 'MIXTO' | 'MUJER' | 'HOMBRE' | 'OTROS' | string; // Género / Segmento
   estilo?: string; // Compatibilidad histórica con género/segmento
-  calidad?: 'Premium / 1ra Selección' | 'Crema / Oro' | 'Estándar / Comercial' | 'Segunda' | 'Retorno' | string;
+  calidad?: 'premium/ crema' | 'primera' | 'primera / segunda' | 'segunda' | 'Std' | string;
   piezasAprox?: string; // Ej: "120 a 140 prendas"
   detallesPrendas?: string; // Ej: "Polerones canguro con capucha, polos algodón..."
   consejoVenta?: string; // Tips y advertencias para que las vendedoras vendan bien y no haya reclamos en post-venta

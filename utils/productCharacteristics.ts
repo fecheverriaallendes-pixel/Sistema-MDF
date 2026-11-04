@@ -19,11 +19,11 @@ export const GENEROS_SEGMENTOS_OPTIONS = [
 export const ESTILOS_OPTIONS = GENEROS_SEGMENTOS_OPTIONS;
 
 export const CALIDADES_OPTIONS = [
-  'Premium / 1ra Selección',
-  'Crema / Oro',
-  'Estándar / Comercial',
-  'Segunda Selección',
-  'Retorno'
+  'premium/ crema',
+  'primera',
+  'primera / segunda',
+  'segunda',
+  'Std'
 ] as const;
 
 export const PESOS_COMUNES = [45, 40, 25, 20, 10];
@@ -117,11 +117,14 @@ export function getSeasonBadgeStyle(temporada?: string): { bg: string; text: str
  * Badge color styling based on Quality
  */
 export function getQualityBadgeStyle(calidad?: string): { bg: string; text: string; border: string } {
-  const norm = (calidad || '').toLowerCase();
-  if (norm.includes('crema') || norm.includes('oro')) {
+  const norm = (calidad || '').toLowerCase().trim();
+  if (norm.includes('crema') || norm.includes('premium')) {
     return { bg: 'bg-amber-100', text: 'text-amber-900', border: 'border-amber-300' };
   }
-  if (norm.includes('premium') || norm.includes('1ra')) {
+  if (norm.includes('primera / segunda') || norm.includes('primera/segunda') || norm.includes('1ra / 2da')) {
+    return { bg: 'bg-teal-100', text: 'text-teal-900', border: 'border-teal-300' };
+  }
+  if (norm.includes('primera') || norm.includes('1ra')) {
     return { bg: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300' };
   }
   if (norm.includes('segunda') || norm.includes('2da')) {

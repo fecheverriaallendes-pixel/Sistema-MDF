@@ -148,7 +148,7 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
                 <Scale size={13} className="text-emerald-500" /> Peso Real
               </div>
               <span className="mt-1 font-black text-xs text-slate-900 uppercase">
-                {peso} KG APROX
+                {peso}
               </span>
             </div>
 
