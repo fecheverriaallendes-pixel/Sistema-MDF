@@ -33,7 +33,8 @@ import {
   Check,
   Truck,
   RotateCcw,
-  X
+  X,
+  ImageDown
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
@@ -52,7 +53,7 @@ import {
   matchesSeason,
   formatSeasonDisplay
 } from '../utils/productCharacteristics';
-import { getBlackFridayOffer, getBlackFridayStats } from '../utils/blackFridayOffers';
+import { BLACK_FRIDAY_OG_IMAGE_SRC, getBlackFridayOffer, getBlackFridayStats } from '../utils/blackFridayOffers';
 import { BlackFridayLogo } from '../components/BlackFridayLogo';
 
 // Extend jsPDF interface for autotable
@@ -390,6 +391,16 @@ export default function Catalogo() {
     });
   };
 
+  const handleDownloadBlackFridayBanner = () => {
+    playSound('click');
+    const link = document.createElement('a');
+    link.href = BLACK_FRIDAY_OG_IMAGE_SRC;
+    link.download = 'El-Mundo-del-Fardo-Black-Friday.jpg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const today = new Date().toLocaleDateString('es-CL');
 
   return (
@@ -435,6 +446,15 @@ export default function Catalogo() {
             >
               <Share2 size={18} />
               {showCopyFeedback ? '¡Link Copiado!' : 'Compartir Link'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadBlackFridayBanner}
+              className="flex items-center gap-2 px-5 py-4 bg-zinc-950 hover:bg-zinc-800 text-amber-300 border border-amber-400/40 rounded-[24px] font-black text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95"
+              title="Descargar imagen El Mundo del Fardo Black Friday para WhatsApp"
+            >
+              <ImageDown size={18} />
+              Imagen BF
             </button>
             <button 
               onClick={() => setShowPoliticas(true)}
