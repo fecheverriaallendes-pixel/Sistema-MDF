@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive, RotateCcw, Send, ShieldAlert, Lock, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Phone, CheckCircle2, AlertCircle, X, Save, MapPin, CreditCard, UserCheck, Tag, Info, FileEdit, BadgeDollarSign, Truck, Building2, Home, Package, Trash2, Camera, Archive, RotateCcw, Send, ShieldAlert, Lock, Printer, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, SaleType, Sale, DispatchType, StaffRole } from '../types';
 import { smartTextMatch } from '../utils/search';
@@ -14,6 +14,7 @@ import { PrintLabelsModal } from '../components/PrintLabelsModal';
 import { getTotalBultos, generateIndividualLabels } from '../utils/labelUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
 import { matchesCarrierSearch } from '../utils/carrierUtils';
+import { getPendingSalesForClient } from '../utils/clientPendingSales';
 
 function parseLocalDate(dateStr: string): Date {
   if (!dateStr) return new Date();
@@ -483,7 +484,7 @@ export default function Ventas() {
                           </button>
                         </div>
                         {(sale.datosCompletos || sale.tipoVenta === SaleType.NOTA_VENTA) && (
-                          <div className="flex gap-2 justify-center text-xs font-bold items-center">
+                          <div className="flex gap-2 justify-center text-xs font-bold items-center flex-wrap">
                             <button onClick={() => { handlePrint(sale, 'FACTURA'); }} className="text-blue-500 hover:text-blue-700">Factura</button>
                             <button 
                               onClick={() => { setLabelModalSale(sale); playSound('click'); }} 
@@ -500,6 +501,21 @@ export default function Ventas() {
                                 </span>
                               )}
                             </button>
+                            {sale.status === SaleStatus.PENDIENTE && (() => {
+                              const cp = getPendingSalesForClient(sale, sales);
+                              if (!cp.hasPendingPurchases) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => { setLabelModalSale(sale); playSound('warning'); }}
+                                  className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-rose-800 bg-rose-100 hover:bg-rose-200 border border-rose-300 px-1.5 py-0.5 rounded-md transition-all shadow-xs"
+                                  title={`Clienta con ${cp.totalPendingCount + 1} compras pendientes (${cp.distinctVendedoras.join(', ')}). Clic para ver y consolidar`}
+                                >
+                                  <AlertTriangle size={10} className="text-rose-600 shrink-0" />
+                                  <span>{cp.totalPendingCount + 1} Compras</span>
+                                </button>
+                              );
+                            })()}
                           </div>
                         )}
                         {isAdmin && (sale.status === SaleStatus.ENVIADO || sale.enviado) && (

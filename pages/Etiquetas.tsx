@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Printer, ArrowLeft, CheckCircle2, AlertCircle, User, X, Boxes, Layers, SlidersHorizontal, Settings2, RotateCcw, Calendar, Search } from 'lucide-react';
+import { Printer, ArrowLeft, CheckCircle2, AlertCircle, User, X, Boxes, Layers, SlidersHorizontal, Settings2, RotateCcw, Calendar, Search, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store/GlobalContext';
 import { Sale, SaleType, SaleStatus, CommissionType, StaffRole } from '../types';
@@ -9,6 +9,7 @@ import { PrintLabelsModal } from '../components/PrintLabelsModal';
 import { HistorialEtiquetasTab } from '../components/etiquetas/HistorialEtiquetasTab';
 import { getTotalBultos, generateIndividualLabels, generateGroupedLabels } from '../utils/labelUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
+import { getPendingSalesForClient } from '../utils/clientPendingSales';
 
 const LOGO_URL = "https://i.ibb.co/qMyZQHYg/logo-sin-fondo-1.png";
 
@@ -184,6 +185,14 @@ export default function Etiquetas() {
   };
 
   const handlePrintSingle = (sale: Sale, mode: 'INDIVIDUAL' | 'GROUPED' = 'INDIVIDUAL') => {
+    // If the customer has other undispatched pending sales, redirect to detailed modal with alert
+    const clientPending = getPendingSalesForClient(sale, sales);
+    if (clientPending.hasPendingPurchases) {
+      setModalSale(sale);
+      playSound('warning');
+      return;
+    }
+
     const currentEtiquetador = etiquetadorName.trim() || currentUser?.nombre || '';
     if (!currentEtiquetador) {
       setPendingSaleId(sale.id);
@@ -339,6 +348,26 @@ export default function Etiquetas() {
             </div>
           </div>
 
+          {/* Global Multi-Purchase Warning Banner */}
+          {readyToPrint.some(s => getPendingSalesForClient(s, sales).hasPendingPurchases) && (
+            <div className="bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-transparent border-2 border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <AlertTriangle size={22} className="animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black uppercase text-rose-950 tracking-tight flex items-center gap-2">
+                    <span>¡Atención: Clientas con compras múltiples pendientes por WhatsApp!</span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-200 text-rose-900">Riesgo Despacho Parcial</span>
+                  </h4>
+                  <p className="text-[11px] text-rose-900/90 font-medium mt-0.5">
+                    Hay ventas en cola de clientas que compraron con distintas vendedoras. Revisa las tarjetas con alerta roja antes de imprimir para consolidar y no despachar por partes.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Grid of Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center no-print pb-20">
             {showDemo && (
@@ -356,6 +385,7 @@ export default function Etiquetas() {
               const isNotaVenta = sale.tipoVenta === SaleType.NOTA_VENTA;
               const salePrints = getSalePrintLogs(sale.id);
               const printsCount = salePrints.length;
+              const clientPending = getPendingSalesForClient(sale, sales);
 
               return (
                 <div key={sale.id} className="relative group animate-in fade-in slide-from-bottom duration-500 w-full flex flex-col items-center bg-white rounded-3xl p-3 border-2 border-slate-100 shadow-sm hover:shadow-md transition-all">
@@ -398,6 +428,26 @@ export default function Etiquetas() {
                       </span>
                     )}
                   </div>
+
+                  {/* Client Multi-Purchase Warning Badge */}
+                  {clientPending.hasPendingPurchases && (
+                    <button
+                      type="button"
+                      onClick={() => { setModalSale(sale); playSound('warning'); }}
+                      className="w-full mb-2 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-xl text-left text-[10px] font-black text-rose-950 flex items-center justify-between gap-1 shadow-xs transition-all group-hover:border-rose-400"
+                      title="Esta clienta tiene otras compras pendientes con distintas vendedoras. Haz clic para ver y consolidar."
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <AlertTriangle size={13} className="text-rose-600 shrink-0 animate-bounce" />
+                        <span className="truncate">
+                          ¡Clienta con {clientPending.totalPendingCount + 1} compras pendientes!
+                        </span>
+                      </div>
+                      <span className="bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase shrink-0">
+                        Ver Alerta
+                      </span>
+                    </button>
+                  )}
 
                   {/* Thermal Preview Box */}
                   <div className={`relative bg-white p-2 border-2 border-dashed ${sale.impresa ? 'border-emerald-300' : 'border-slate-200'} rounded-2xl hover:border-emerald-400 transition-all shadow-md scale-[0.42] origin-top -mb-[85mm] overflow-hidden`}>

@@ -13,7 +13,14 @@ import {
   AlertCircle, 
   Truck,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle,
+  Link2,
+  Users,
+  CheckCircle2,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Sale, StockItem, SaleType } from '../types';
 import { 
@@ -27,6 +34,11 @@ import {
 import { Label, getAgenciaODestino } from './Label';
 import { useStore } from '../store/GlobalContext';
 import { isLautaroOrFardolandia, getPartnerInfo } from '../utils/partnerUtils';
+import { 
+  getPendingSalesForClient, 
+  consolidateSales, 
+  PendingSalesAnalysis 
+} from '../utils/clientPendingSales';
 
 interface PrintLabelsModalProps {
   sale: Sale | null;
@@ -45,7 +57,14 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
   onClose,
   onPrintComplete
 }) => {
-  const { currentUser, updateSale, playSound, addLabelPrintLog, getSalePrintLogs } = useStore();
+  const { currentUser, updateSale, playSound, addLabelPrintLog, getSalePrintLogs, sales } = useStore();
+
+  // Active sale currently in focus inside the modal (can switch between client's sales)
+  const [activeSale, setActiveSale] = useState<Sale | null>(sale);
+  const [isConsolidatedMode, setIsConsolidatedMode] = useState(false);
+  const [dismissAlert, setDismissAlert] = useState(false);
+  const [showRelatedList, setShowRelatedList] = useState(true);
+  const [consolidationSuccessNotice, setConsolidationSuccessNotice] = useState<string | null>(null);
 
   const [printMode, setPrintMode] = useState<PrintMode>('INDIVIDUAL');
   const [etiquetador, setEtiquetador] = useState('');
@@ -58,54 +77,82 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
   const [reprintReason, setReprintReason] = useState('Copia adicional solicitada');
   const [customReprintNote, setCustomReprintNote] = useState('');
 
-  // Initialize etiquetador with current user name or sale etiquetador
+  // Keep activeSale in sync when sale prop changes or modal opens
   useEffect(() => {
     if (sale) {
-      setEtiquetador(sale.etiquetador || currentUser?.nombre || '');
+      setActiveSale(sale);
+      setIsConsolidatedMode(false);
+      setDismissAlert(false);
+      setShowRelatedList(true);
+      setConsolidationSuccessNotice(null);
     }
-  }, [sale, currentUser]);
+  }, [sale, isOpen]);
+
+  // Current effective sale to render
+  const effectiveSale = activeSale || sale;
+
+  // Initialize etiquetador with current user name or sale etiquetador
+  useEffect(() => {
+    if (effectiveSale) {
+      setEtiquetador(effectiveSale.etiquetador || currentUser?.nombre || '');
+    }
+  }, [effectiveSale, currentUser]);
+
+  // Analyze pending/undispatched sales for this customer across other WhatsApp sellers
+  const pendingAnalysis = useMemo<PendingSalesAnalysis>(() => {
+    return getPendingSalesForClient(effectiveSale, sales);
+  }, [effectiveSale, sales]);
 
   const totalBultos = useMemo(() => {
-    if (!sale) return 1;
-    return getTotalBultos(sale);
-  }, [sale]);
+    if (!effectiveSale) return 1;
+    return getTotalBultos(effectiveSale);
+  }, [effectiveSale]);
 
   const itemsList = useMemo(() => {
-    if (!sale) return [];
-    return getSaleItemsList(sale);
-  }, [sale]);
+    if (!effectiveSale) return [];
+    return getSaleItemsList(effectiveSale);
+  }, [effectiveSale]);
 
   const individualLabels = useMemo(() => {
-    if (!sale) return [];
-    return generateIndividualLabels(sale, stock);
-  }, [sale, stock]);
+    if (!effectiveSale) return [];
+    return generateIndividualLabels(effectiveSale, stock);
+  }, [effectiveSale, stock]);
 
   const groupedLabels = useMemo(() => {
-    if (!sale) return [];
-    return generateGroupedLabels(sale, stock);
-  }, [sale, stock]);
+    if (!effectiveSale) return [];
+    return generateGroupedLabels(effectiveSale, stock);
+  }, [effectiveSale, stock]);
+
+  // Consolidated labels across ALL pending sales of this client
+  const consolidatedLabels = useMemo(() => {
+    if (!pendingAnalysis.hasPendingPurchases) return [];
+    if (printMode === 'GROUPED') {
+      return pendingAnalysis.allGroupSales.flatMap(s => generateGroupedLabels(s, stock));
+    }
+    return pendingAnalysis.allGroupSales.flatMap(s => generateIndividualLabels(s, stock));
+  }, [pendingAnalysis, printMode, stock]);
 
   const salePrintLogs = useMemo(() => {
-    if (!sale) return [];
-    return getSalePrintLogs(sale.id);
-  }, [sale, getSalePrintLogs]);
+    if (!effectiveSale) return [];
+    return getSalePrintLogs(effectiveSale.id);
+  }, [effectiveSale, getSalePrintLogs]);
 
-  const isReprint = salePrintLogs.length > 0 || Boolean(sale?.impresa);
+  const isReprint = salePrintLogs.length > 0 || Boolean(effectiveSale?.impresa);
   const currentPrintAttemptNumber = salePrintLogs.length + 1;
 
   const productsToDeliver = useMemo(() => {
-    if (!sale) return [];
-    const list = getSaleItemsList(sale);
+    if (!effectiveSale) return [];
+    const list = getSaleItemsList(effectiveSale);
     return list.map(item => ({
       codigo: item.codigoFardo,
       descripcion: getProductDescription(item.codigoFardo, stock),
       cantidad: item.cantidad
     }));
-  }, [sale, stock]);
+  }, [effectiveSale, stock]);
 
   // Reset selections when sale changes or modal opens
   useEffect(() => {
-    if (isOpen && sale) {
+    if (isOpen && effectiveSale) {
       setPrintMode('INDIVIDUAL');
       setPreviewIndex(0);
       setCustomSelectedIds(individualLabels.map(l => l.id));
@@ -115,11 +162,16 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
       setReprintReason('Copia adicional solicitada');
       setCustomReprintNote('');
     }
-  }, [isOpen, sale, individualLabels, totalBultos]);
+  }, [isOpen, effectiveSale, individualLabels, totalBultos]);
 
-  // Labels currently active for printing based on mode
+  // Labels currently active for printing based on mode and consolidated state
   const activeLabelsToPrint = useMemo<GeneratedLabel[]>(() => {
-    if (!sale) return [];
+    if (!effectiveSale) return [];
+
+    if (isConsolidatedMode && consolidatedLabels.length > 0) {
+      return consolidatedLabels;
+    }
+
     if (printMode === 'INDIVIDUAL') {
       return individualLabels;
     }
@@ -131,7 +183,7 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
       return individualLabels.filter(l => selectedSet.has(l.id));
     }
     return individualLabels;
-  }, [printMode, individualLabels, groupedLabels, customSelectedIds, sale]);
+  }, [isConsolidatedMode, consolidatedLabels, printMode, individualLabels, groupedLabels, customSelectedIds, effectiveSale]);
 
   // Ensure previewIndex is within valid range
   useEffect(() => {
@@ -142,10 +194,10 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
 
   const currentPreviewLabel = activeLabelsToPrint[previewIndex] || activeLabelsToPrint[0] || null;
 
-  if (!isOpen || !sale) return null;
+  if (!isOpen || !effectiveSale) return null;
 
-  const destinoText = getAgenciaODestino(sale);
-  const isNotaVenta = sale.tipoVenta === SaleType.NOTA_VENTA;
+  const destinoText = getAgenciaODestino(effectiveSale);
+  const isNotaVenta = effectiveSale.tipoVenta === SaleType.NOTA_VENTA;
 
   // Custom selection helpers
   const handleToggleSelectId = (id: string) => {
@@ -175,6 +227,15 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
     setCustomSelectedIds(matching.map(l => l.id));
   };
 
+  // Action: Consolidate all sales under JUNTA COMPRA
+  const handleConsolidateAll = () => {
+    if (!pendingAnalysis.hasPendingPurchases) return;
+    const saleNums = consolidateSales(pendingAnalysis.allGroupSales, updateSale);
+    playSound('success');
+    setConsolidationSuccessNotice(`¡Ventas ${saleNums} unificadas bajo JUNTA COMPRA! Bodega ahora las despachará en un solo bulto/envío consolidado.`);
+    setIsConsolidatedMode(true);
+  };
+
   const handleExecutePrint = async () => {
     if (activeLabelsToPrint.length === 0) {
       alert('⚠️ No hay etiquetas seleccionadas para imprimir.');
@@ -188,32 +249,72 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
       ? (customReprintNote.trim() || reprintReason)
       : undefined;
 
-    const productosResumen = productsToDeliver
-      .map(p => `${p.codigo} (${p.cantidad > 1 ? `x${p.cantidad}` : '1'})`)
-      .join(', ');
+    if (isConsolidatedMode && pendingAnalysis.hasPendingPurchases) {
+      // Print logs and updates for ALL sales in the consolidated group
+      for (const s of pendingAnalysis.allGroupSales) {
+        const sItems = getSaleItemsList(s);
+        const sProds = sItems.map(item => ({
+          codigo: item.codigoFardo,
+          descripcion: getProductDescription(item.codigoFardo, stock),
+          cantidad: item.cantidad
+        }));
+        const sResumen = sProds.map(p => `${p.codigo} (${p.cantidad > 1 ? `x${p.cantidad}` : '1'})`).join(', ');
+        const sBultos = getTotalBultos(s);
 
-    try {
-      await addLabelPrintLog({
-        saleId: sale.id,
-        numeroVenta: sale.numeroVenta,
-        cliente: sale.cliente,
-        vendedor: sale.vendedor,
-        impresoPor: etiquetadorName,
-        cantidadEtiquetas: activeLabelsToPrint.length,
-        modoImpresion: printMode,
-        bultosTotales: totalBultos,
-        productosEntregados: productsToDeliver,
-        productosResumen,
-        entregaMultiplesProductos: productsToDeliver.length > 1 || (printMode === 'GROUPED' && totalBultos > 1),
-        motivoReimpresion: finalReason,
-        agenciaODestino: destinoText
-      });
-    } catch (err) {
-      console.error("Error al registrar print log:", err);
-    }
+        try {
+          await addLabelPrintLog({
+            saleId: s.id,
+            numeroVenta: s.numeroVenta,
+            cliente: s.cliente,
+            vendedor: s.vendedor,
+            impresoPor: etiquetadorName,
+            cantidadEtiquetas: sBultos,
+            modoImpresion: 'CONSOLIDADO',
+            bultosTotales: sBultos,
+            productosEntregados: sProds,
+            productosResumen: sResumen,
+            entregaMultiplesProductos: true,
+            motivoReimpresion: finalReason ? `${finalReason} (Despacho Consolidado)` : 'Despacho Consolidado Multicompras WhatsApp',
+            agenciaODestino: getAgenciaODestino(s)
+          });
+        } catch (err) {
+          console.error("Error al registrar print log consolidado:", err);
+        }
 
-    if (onPrintComplete) {
-      onPrintComplete(sale.id, etiquetadorName);
+        updateSale(s.id, { impresa: true, etiquetador: etiquetadorName });
+        if (onPrintComplete) {
+          onPrintComplete(s.id, etiquetadorName);
+        }
+      }
+    } else {
+      // Standard print for the current sale
+      const productosResumen = productsToDeliver
+        .map(p => `${p.codigo} (${p.cantidad > 1 ? `x${p.cantidad}` : '1'})`)
+        .join(', ');
+
+      try {
+        await addLabelPrintLog({
+          saleId: effectiveSale.id,
+          numeroVenta: effectiveSale.numeroVenta,
+          cliente: effectiveSale.cliente,
+          vendedor: effectiveSale.vendedor,
+          impresoPor: etiquetadorName,
+          cantidadEtiquetas: activeLabelsToPrint.length,
+          modoImpresion: printMode,
+          bultosTotales: totalBultos,
+          productosEntregados: productsToDeliver,
+          productosResumen,
+          entregaMultiplesProductos: productsToDeliver.length > 1 || (printMode === 'GROUPED' && totalBultos > 1),
+          motivoReimpresion: finalReason,
+          agenciaODestino: destinoText
+        });
+      } catch (err) {
+        console.error("Error al registrar print log:", err);
+      }
+
+      if (onPrintComplete) {
+        onPrintComplete(effectiveSale.id, etiquetadorName);
+      }
     }
 
     // Trigger print
@@ -238,25 +339,33 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
                 <Printer size={24} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
                     Impresión de Etiquetas Térmicas
                   </h3>
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase bg-emerald-100 text-emerald-800">
-                    Venta #{sale.numeroVenta}
+                    Venta #{effectiveSale.numeroVenta}
                   </span>
-                  {isLautaroOrFardolandia(sale) && (
+                  {isConsolidatedMode && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase bg-indigo-600 text-white shadow-xs animate-pulse flex items-center gap-1">
+                      <Boxes size={12} /> Despacho Consolidado ({pendingAnalysis.allGroupSales.length} ventas)
+                    </span>
+                  )}
+                  {isLautaroOrFardolandia(effectiveSale) && (
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase bg-purple-100 text-purple-800 border border-purple-200">
                       Partner Fardolandia
                     </span>
                   )}
                 </div>
-                <p className="text-slate-500 text-xs font-semibold flex items-center gap-2 mt-0.5">
-                  <span>{sale.cliente}</span>
+                <p className="text-slate-500 text-xs font-semibold flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="font-bold text-slate-800">{effectiveSale.cliente}</span>
+                  {effectiveSale.rut && <span className="font-mono text-slate-600">RUT: {effectiveSale.rut}</span>}
                   <span>•</span>
                   <span className="font-bold text-slate-700">{destinoText}</span>
                   <span>•</span>
-                  <span className="font-mono text-slate-600">{sale.fecha}</span>
+                  <span className="font-mono text-slate-600">{effectiveSale.fecha}</span>
+                  <span>•</span>
+                  <span className="text-violet-700 font-bold bg-violet-50 px-2 py-0.5 rounded-md">Vendedora: {effectiveSale.vendedor || 'General'}</span>
                 </p>
               </div>
             </div>
@@ -271,6 +380,214 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
 
           {/* Modal Content Body */}
           <div className="p-6 overflow-y-auto flex-1 space-y-6">
+
+            {/* ALERTA CRÍTICA: CLIENTA CON OTRAS COMPRAS PENDIENTES DE DESPACHO */}
+            {pendingAnalysis.hasPendingPurchases && !dismissAlert && (
+              <div className="bg-gradient-to-br from-rose-50 via-amber-50 to-orange-50 border-2 border-rose-300/90 rounded-3xl p-5 shadow-lg shadow-rose-500/5 animate-in slide-in-from-top-3 duration-300 space-y-4">
+                
+                {/* Notice Header */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md animate-bounce">
+                      <AlertTriangle size={24} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-black uppercase text-rose-950 tracking-tight flex items-center gap-1.5">
+                          🚨 ¡ALERTA: CLIENTA CON {pendingAnalysis.totalPendingCount} COMPRA(S) ADICIONAL(ES) SIN DESPACHAR!
+                        </span>
+                        <span className="bg-rose-200 text-rose-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                          Riesgo de despacho incompleto
+                        </span>
+                      </div>
+                      <p className="text-xs text-rose-900/90 font-medium mt-0.5">
+                        Esta clienta ({effectiveSale.cliente}) tiene <strong>{pendingAnalysis.totalPendingBultos} fardos/bultos más</strong> en sistema que aún <strong>NO han sido despachados</strong>.
+                        {pendingAnalysis.hasDifferentVendedora && (
+                          <span className="block mt-0.5 text-rose-950 font-bold">
+                            ⚠️ ¡Atención! Estas ventas fueron emitidas por distintas vendedoras ({pendingAnalysis.distinctVendedoras.join(', ')}). Cada una imprimió o generó su venta por WhatsApp por separado.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowRelatedList(!showRelatedList)}
+                      className="px-3 py-1.5 rounded-xl bg-white/90 border border-rose-200 text-rose-900 text-xs font-black hover:bg-white transition-all shadow-xs flex items-center gap-1.5"
+                    >
+                      {showRelatedList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      {showRelatedList ? 'Minimizar Detalle' : `Ver ${pendingAnalysis.totalPendingCount} Compras`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDismissAlert(true)}
+                      className="p-1.5 text-rose-400 hover:text-rose-700 hover:bg-white/80 rounded-lg transition-colors"
+                      title="Ocultar alerta por ahora"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Feedback Toast if Consolidated Just Now */}
+                {consolidationSuccessNotice && (
+                  <div className="p-3 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                    <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+                    <span>{consolidationSuccessNotice}</span>
+                  </div>
+                )}
+
+                {/* List of Other Pending Sales for This Client */}
+                {showRelatedList && (
+                  <div className="space-y-2 pt-2 border-t border-rose-200/70">
+                    <div className="flex items-center justify-between text-[11px] font-black text-rose-950 uppercase tracking-wider">
+                      <span>Compras activas pendientes de esta clienta:</span>
+                      <span className="text-rose-700">Total en espera: {pendingAnalysis.totalGroupBultos} bultos (${pendingAnalysis.totalGroupMonto.toLocaleString('es-CL')})</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                      {/* Current sale card */}
+                      <div className="p-3 bg-white rounded-2xl border-2 border-emerald-400/80 shadow-xs flex flex-col justify-between">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="font-black text-xs text-slate-900 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Venta #{effectiveSale.numeroVenta} (Venta Actual)
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 uppercase">
+                            En Pantalla
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 space-y-0.5">
+                          <p><strong className="text-slate-800">Vendedora:</strong> {effectiveSale.vendedor || 'General'} • <span className="font-mono text-[10px]">{effectiveSale.fecha}</span></p>
+                          <p><strong className="text-slate-800">Mercadería:</strong> {totalBultos} {totalBultos === 1 ? 'fardo' : 'fardos'} • ${effectiveSale.total.toLocaleString('es-CL')}</p>
+                          <p className="text-[10px] text-slate-500 truncate">Destino: {destinoText}</p>
+                        </div>
+                      </div>
+
+                      {/* Related other sales */}
+                      {pendingAnalysis.relatedSales.map(({ sale: otherSale, bultos: otherBultos, esMismaVendedora, matchReason }) => {
+                        const otherDestino = getAgenciaODestino(otherSale);
+                        const otherItems = getSaleItemsList(otherSale);
+                        return (
+                          <div 
+                            key={otherSale.id}
+                            className="p-3 bg-white rounded-2xl border border-rose-200 hover:border-rose-400 transition-all shadow-xs flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-black text-xs text-slate-900">
+                                  Venta #{otherSale.numeroVenta}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  {otherSale.impresa ? (
+                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-800 uppercase" title={`Ya impresa por ${otherSale.etiquetador || 'otro usuario'}`}>
+                                      Etiqueta Ya Impresa
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-black bg-slate-100 text-slate-700 uppercase">
+                                      Sin Imprimir
+                                    </span>
+                                  )}
+                                  <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-rose-100 text-rose-800 font-mono">
+                                    {matchReason}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="text-[11px] text-slate-600 space-y-0.5">
+                                <p className="flex items-center gap-1.5">
+                                  <strong className="text-slate-800">Vendedora:</strong> 
+                                  <span className={`px-1.5 py-0.2 rounded font-black text-[10px] ${esMismaVendedora ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-900'}`}>
+                                    {otherSale.vendedor || 'General'}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-slate-400">{otherSale.fecha}</span>
+                                </p>
+                                <p>
+                                  <strong className="text-slate-800">Mercadería:</strong> {otherBultos} {otherBultos === 1 ? 'fardo' : 'fardos'} ({otherItems.map(i => i.codigoFardo).join(', ')}) • ${otherSale.total.toLocaleString('es-CL')}
+                                </p>
+                                <p className="text-[10px] text-slate-500 truncate">
+                                  Destino: {otherDestino}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-semibold text-slate-400">
+                                {otherSale.juntaCompra?.toUpperCase().includes('JUNTA') ? '📦 Ya en Junta Compra' : '🚚 Despacho Inmediato'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveSale(otherSale);
+                                  playSound('click');
+                                }}
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center gap-1"
+                              >
+                                <ExternalLink size={10} />
+                                Ver Venta #{otherSale.numeroVenta}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Operational Action Buttons Bar */}
+                    <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Action 1: Consolidate under JUNTA COMPRA */}
+                        <button
+                          type="button"
+                          onClick={handleConsolidateAll}
+                          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+                          title="Marca todas las ventas de la clienta como JUNTA COMPRA para que bodega las arme y despache juntas"
+                        >
+                          <Link2 size={15} />
+                          <span>1. Consolidar Todo en JUNTA COMPRA</span>
+                        </button>
+
+                        {/* Action 2: Toggle Consolidated Multi-Sale Printing */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsConsolidatedMode(!isConsolidatedMode);
+                            playSound('click');
+                          }}
+                          className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 border-2 ${
+                            isConsolidatedMode
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20'
+                              : 'bg-white hover:bg-rose-50 text-rose-900 border-rose-300'
+                          }`}
+                          title="Prepara e imprime las etiquetas de TODAS las ventas pendientes de la clienta en una sola tirada térmica"
+                        >
+                          <Printer size={15} />
+                          <span>
+                            {isConsolidatedMode 
+                              ? `✓ Imprimiendo Todo el Pedido (${consolidatedLabels.length} etiquetas)` 
+                              : `2. Imprimir Todas las Ventas Juntas (${pendingAnalysis.totalGroupBultos} fardos)`}
+                          </span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDismissAlert(true);
+                          setIsConsolidatedMode(false);
+                        }}
+                        className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline self-center sm:self-auto"
+                      >
+                        Despachar solo Venta #{effectiveSale.numeroVenta} por separado
+                      </button>
+                    </div>
+
+                  </div>
+                )}
+
+              </div>
+            )}
             
             {/* Top Banner: Package Summary */}
             <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -286,6 +603,11 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
                     {isNotaVenta && (
                       <span className="text-[10px] font-black uppercase bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
                         Nota de Venta ({itemsList.length} {itemsList.length === 1 ? 'ítem' : 'ítems'})
+                      </span>
+                    )}
+                    {isConsolidatedMode && (
+                      <span className="text-[10px] font-black uppercase bg-indigo-600 text-white px-2 py-0.5 rounded-full">
+                        Consolidado ({pendingAnalysis.totalGroupBultos} bultos totales)
                       </span>
                     )}
                   </div>
@@ -812,9 +1134,14 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
           {/* Modal Footer / Action Bar */}
           <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className={`w-3 h-3 rounded-full animate-pulse ${isConsolidatedMode ? 'bg-indigo-600' : 'bg-emerald-500'}`}></span>
               <p className="text-xs font-bold text-slate-700">
                 Se enviarán <strong className="text-slate-900 font-black">{activeLabelsToPrint.length} etiquetas térmicas</strong> a la impresora (100x150mm).
+                {isConsolidatedMode && (
+                  <span className="ml-2 font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                    Pedido Consolidado ({pendingAnalysis.allGroupSales.length} ventas)
+                  </span>
+                )}
               </p>
             </div>
 
@@ -831,10 +1158,16 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
                 type="button"
                 disabled={activeLabelsToPrint.length === 0 || isPrinting}
                 onClick={handleExecutePrint}
-                className="flex-1 sm:flex-none px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 active:scale-95"
+                className={`flex-1 sm:flex-none px-8 py-3.5 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 ${
+                  isConsolidatedMode 
+                    ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25' 
+                    : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 disabled:bg-slate-300'
+                }`}
               >
                 <Printer size={18} />
-                {activeLabelsToPrint.length === 1 
+                {isConsolidatedMode
+                  ? `Imprimir Todo el Pedido (${activeLabelsToPrint.length} Etiquetas)`
+                  : activeLabelsToPrint.length === 1 
                   ? 'Imprimir 1 Etiqueta' 
                   : `Imprimir ${activeLabelsToPrint.length} Etiquetas`}
               </button>
@@ -846,18 +1179,21 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
 
       {/* Hidden Thermal Print Container */}
       <div className="hidden print-only">
-        {activeLabelsToPrint.map((lbl) => (
-          <div key={lbl.id} className="label-container">
-            <Label 
-              sale={{
-                ...sale,
-                etiquetador: etiquetador.trim() || sale.etiquetador || currentUser?.nombre || 'BODEGA'
-              }} 
-              stock={stock} 
-              item={lbl.item} 
-            />
-          </div>
-        ))}
+        {activeLabelsToPrint.map((lbl) => {
+          const lblSale = lbl.sale || effectiveSale;
+          return (
+            <div key={lbl.id} className="label-container">
+              <Label 
+                sale={{
+                  ...lblSale,
+                  etiquetador: etiquetador.trim() || lblSale.etiquetador || currentUser?.nombre || 'BODEGA'
+                }} 
+                stock={stock} 
+                item={lbl.item} 
+              />
+            </div>
+          );
+        })}
       </div>
 
       <style>{`

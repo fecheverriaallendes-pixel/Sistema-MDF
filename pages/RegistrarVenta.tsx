@@ -36,15 +36,17 @@ import {
   CloudSun,
   Calendar,
   Weight,
-  Shirt
+  Shirt,
+  AlertTriangle
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
-import { SaleType, SaleStatus, StaffRole, CommissionType, DispatchType, StockItem } from '../types';
+import { Sale, SaleType, SaleStatus, StaffRole, CommissionType, DispatchType, StockItem } from '../types';
 import RutClientLookupModal from '../components/RutClientLookupModal';
 import ProductFichaModal from '../components/ProductFichaModal';
 import { getSeasonBadgeStyle, getQualityBadgeStyle } from '../utils/productCharacteristics';
 import { cleanRut, formatRut, exactMatchRut, validateRut, getUnifiedClients, UnifiedClient } from '../utils/rutUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
+import { getPendingSalesForClient } from '../utils/clientPendingSales';
 
 export default function RegistrarVenta() {
   const { stock, staff, customers, sales, addSale, playSound, currentUser } = useStore();
@@ -379,6 +381,22 @@ export default function RegistrarVenta() {
   const activeFardoItem = (mode === 'NOTA_VENTA' ? selectedNewItemStock : selectedStockItem) || null;
   const isJuntaSelected = formData.juntaCompra === 'JUNTA COMPRA';
 
+  // Check if this client already has pending undispatched sales in the system
+  const clientPendingInSales = useMemo(() => {
+    if (!formData.cliente.trim() && !formData.rut.trim() && !formData.telefono.trim()) {
+      return null;
+    }
+    const dummySale: Partial<Sale> = {
+      id: 'new_temp_sale',
+      cliente: formData.cliente,
+      rut: formData.rut,
+      telefono: formData.telefono,
+      vendedor: formData.vendedor || currentUser?.nombre || ''
+    };
+    const res = getPendingSalesForClient(dummySale as Sale, sales);
+    return res.hasPendingPurchases ? res : null;
+  }, [formData.cliente, formData.rut, formData.telefono, formData.vendedor, currentUser?.nombre, sales]);
+
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
@@ -597,6 +615,75 @@ export default function RegistrarVenta() {
               <textarea required={mode !== 'QUICK'} className="w-full px-7 py-4 bg-slate-50 border-2 border-slate-100 rounded-[24px] font-black text-lg uppercase resize-none h-24" placeholder="CALLE, NÚMERO, COMUNA, CIUDAD" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value.toUpperCase()})}/>
             </div>
           </div>
+
+          {/* Banner de Alerta: Clienta con compras pendientes de despacho (WhatsApp multicompra) */}
+          {clientPendingInSales && (
+            <div className="p-5 rounded-[28px] bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-amber-500/5 border-2 border-amber-300 shadow-sm space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                  <AlertTriangle size={22} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs font-black uppercase text-amber-950 tracking-tight">
+                      ¡Aviso WhatsApp: Esta clienta ya tiene {clientPendingInSales.totalPendingCount} compra(s) pendiente(s) de despacho!
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-200 text-amber-900">
+                      Coincidencia Cliente
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-900/90 font-medium mt-0.5">
+                    Tiene <strong>{clientPendingInSales.totalPendingBultos} fardos/bultos</strong> en espera de despacho en bodega.
+                    {clientPendingInSales.hasDifferentVendedora && (
+                      <span className="block mt-0.5 font-bold text-amber-950">
+                        ⚠️ Estas compras fueron ingresadas por distintas vendedoras ({clientPendingInSales.distinctVendedoras.join(', ')}).
+                      </span>
+                    )}
+                  </p>
+                  
+                  {/* List of other sales */}
+                  <div className="mt-2.5 space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {clientPendingInSales.relatedSales.map(({ sale: s, bultos, esMismaVendedora, matchReason }) => (
+                      <div key={s.id} className="p-2.5 bg-white/95 rounded-xl border border-amber-200 text-xs flex items-center justify-between shadow-2xs">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-slate-900">Venta #{s.numeroVenta}</span>
+                            <span className="text-slate-500 font-bold">({bultos} {bultos === 1 ? 'fardo' : 'fardos'})</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${esMismaVendedora ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-800'}`}>
+                              Vendedora: {s.vendedor || 'General'}
+                            </span>
+                            <span className="font-mono text-[9px] text-slate-400 font-bold bg-slate-50 px-1 py-0.5 rounded">
+                              {matchReason}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-black text-slate-800">${(s.total || 0).toLocaleString('es-CL')}</span>
+                          <span className="text-[10px] text-slate-400 font-medium ml-2">{s.fecha}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, juntaCompra: 'JUNTA COMPRA' }));
+                        playSound('success');
+                      }}
+                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase shadow-xs transition-colors flex items-center gap-1.5 active:scale-95"
+                    >
+                      <Boxes size={14} /> Activar JUNTA COMPRA para Consolidar
+                    </button>
+                    <span className="text-[10px] text-amber-800/80 font-semibold italic">
+                      Recomendado: así bodega agrupa todos sus fardos y no despacha por partes.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Selector de Modalidad: JUNTA COMPRA / DESPACHO INMEDIATO / RETIRO */}
           <div className={`p-6 sm:p-7 rounded-[32px] border-2 transition-all ${isJuntaSelected ? 'bg-indigo-50/70 border-indigo-200 shadow-md' : 'bg-slate-50 border-slate-100'}`}>

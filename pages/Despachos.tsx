@@ -41,7 +41,10 @@ import {
   Smartphone,
   Globe,
   X,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle,
+  Link2,
+  Users
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
 import { SaleStatus, Sale, DispatchType, DispatchStatus, StaffRole } from '../types';
@@ -59,6 +62,9 @@ import {
   matchesCarrierFilter, 
   matchesCarrierSearch 
 } from '../utils/carrierUtils';
+import { getPendingSalesForClient, PendingSalesAnalysis, consolidateSales } from '../utils/clientPendingSales';
+import { getAgenciaODestino } from '../components/Label';
+import { getTotalBultos } from '../utils/labelUtils';
 
 function parseLocalDate(dateStr?: string | null): Date {
   if (!dateStr) return new Date();
@@ -171,6 +177,10 @@ export default function Despachos() {
     message: string;
     type: 'success' | 'info';
     sale?: Sale;
+  } | null>(null);
+  const [multiDispatchWarning, setMultiDispatchWarning] = useState<{
+    sale: Sale;
+    pendingAnalysis: PendingSalesAnalysis;
   } | null>(null);
 
   const handleUpdateDeliveryStatus = (saleId: string, status: DispatchStatus) => {
@@ -506,7 +516,7 @@ export default function Despachos() {
     }
   };
 
-  const handleConfirmDispatch = async (sale: Sale) => {
+  const handleConfirmDispatch = async (sale: Sale, forceSingle: boolean = false) => {
     const requiredQty = sale.cantidad || 1;
     if ((sale.itemsDespachados || 0) !== requiredQty) {
       alert(`Error: La cantidad verificada (${sale.itemsDespachados || 0}) no coincide con la venta (${requiredQty}).`);
@@ -517,7 +527,18 @@ export default function Despachos() {
       return;
     }
 
+    // Check if the client has other undispatched pending sales
+    if (!forceSingle) {
+      const clientPending = getPendingSalesForClient(sale, allSales);
+      if (clientPending.hasPendingPurchases) {
+        setMultiDispatchWarning({ sale, pendingAnalysis: clientPending });
+        playSound('warning');
+        return;
+      }
+    }
+
     setVerifyingSaleId(null);
+    setMultiDispatchWarning(null);
 
     const isLocal = sale.tipoDespacho === DispatchType.RETIRO || (sale.juntaCompra && sale.juntaCompra !== 'DESPACHO INMEDIATO');
 
@@ -535,8 +556,37 @@ export default function Despachos() {
     playSound('success');
   };
 
-  const handleQuickWithdrawal = (sale: Sale) => {
+  const handleConfirmConsolidatedDispatch = (groupSales: Sale[]) => {
+    setVerifyingSaleId(null);
+    setMultiDispatchWarning(null);
+
+    groupSales.forEach(s => {
+      markAsSent(s.id);
+    });
+
+    const saleNumbers = groupSales.map(s => `#${s.numeroVenta}`).join(', ');
+    setDispatchToast({
+      title: `¡Despacho Consolidado Confirmado!`,
+      message: `Se despacharon todas las ventas (${saleNumbers}) de ${groupSales[0]?.cliente} juntas.`,
+      type: 'success',
+      sale: groupSales[0]
+    });
+    playSound('success');
+  };
+
+  const handleQuickWithdrawal = (sale: Sale, forceSingle: boolean = false) => {
     if (!sale) return;
+
+    if (!forceSingle) {
+      const clientPending = getPendingSalesForClient(sale, allSales);
+      if (clientPending.hasPendingPurchases) {
+        setMultiDispatchWarning({ sale, pendingAnalysis: clientPending });
+        playSound('warning');
+        return;
+      }
+    }
+
+    setMultiDispatchWarning(null);
     markAsSent(sale.id);
     setDispatchToast({
       title: `¡Retiro Confirmado!`,
@@ -1093,6 +1143,34 @@ export default function Despachos() {
                       <User size={12} className="text-violet-500 shrink-0" />
                       <span>Vendedor: <strong className="text-slate-700 font-bold">{sale.vendedor || 'No asignado'}</strong></span>
                     </p>
+
+                    {/* Multi-sale pending alert badge */}
+                    {(() => {
+                      if (sale.status !== SaleStatus.PENDIENTE) return null;
+                      const clientPending = getPendingSalesForClient(sale, allSales);
+                      if (!clientPending.hasPendingPurchases) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMultiDispatchWarning({ sale, pendingAnalysis: clientPending });
+                            playSound('warning');
+                          }}
+                          className="mt-2 w-full p-2 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-xl flex items-center justify-between text-left text-[10px] font-black text-rose-950 transition-colors shadow-xs"
+                          title="Esta clienta tiene otras compras sin despachar en sistema. Clic para ver y consolidar."
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <AlertTriangle size={13} className="text-rose-600 shrink-0 animate-bounce" />
+                            <span className="truncate">
+                              ¡Multi-compra: {clientPending.totalPendingCount + 1} ventas ({clientPending.distinctVendedoras.join(', ')})!
+                            </span>
+                          </div>
+                          <span className="bg-rose-600 text-white px-2 py-0.5 rounded-md text-[9px] uppercase font-black shrink-0">
+                            Revisar
+                          </span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1749,6 +1827,140 @@ export default function Despachos() {
         />
       )}
 
+
+      {/* Modal de Alerta de Despacho Parcial / Múltiples Ventas del Mismo Cliente */}
+      {multiDispatchWarning && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 z-[200] animate-in fade-in duration-200">
+          <div 
+            className="bg-white rounded-[36px] w-full max-w-2xl shadow-2xl border-2 border-rose-300 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-rose-900 via-rose-950 to-slate-950 text-white flex items-start justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-lg animate-bounce">
+                  <AlertTriangle size={26} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-500 text-white">
+                      Alerta Logística Crítica
+                    </span>
+                    {multiDispatchWarning.sale.rut && (
+                      <span className="text-rose-200 text-xs font-mono font-bold">
+                        RUT: {multiDispatchWarning.sale.rut}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight mt-0.5">
+                    ¿Despacho Parcial o Consolidado?
+                  </h3>
+                  <p className="text-xs text-rose-200 font-medium">
+                    Clienta: <strong className="text-white">{multiDispatchWarning.sale.cliente}</strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMultiDispatchWarning(null)}
+                className="p-2 text-rose-300 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-950 space-y-1">
+                <p className="font-black text-sm">
+                  ⚠️ Esta clienta tiene {multiDispatchWarning.pendingAnalysis.totalPendingCount} venta(s) más pendientes de despacho en bodega.
+                </p>
+                <p className="text-rose-900/90 font-medium">
+                  {multiDispatchWarning.pendingAnalysis.hasDifferentVendedora 
+                    ? `Fueron emitidas por distintas vendedoras (${multiDispatchWarning.pendingAnalysis.distinctVendedoras.join(', ')}). Si confirmas solo la Venta #${multiDispatchWarning.sale.numeroVenta}, la clienta recibirá solo una parte de sus productos y el resto quedará botado en bodega o pagará doble flete.`
+                    : 'Si confirmas solo esta venta, la clienta recibirá un despacho incompleto.'}
+                </p>
+              </div>
+
+              {/* Group Sales Breakdown */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-black uppercase text-slate-700">
+                  <span>Todas las ventas de la clienta en bodega:</span>
+                  <span className="text-indigo-600 font-bold">{multiDispatchWarning.pendingAnalysis.totalGroupBultos} bultos en total</span>
+                </div>
+
+                <div className="space-y-2">
+                  {multiDispatchWarning.pendingAnalysis.allGroupSales.map(s => {
+                    const isTriggerSale = s.id === multiDispatchWarning.sale.id;
+                    const bultos = getTotalBultos(s);
+                    return (
+                      <div 
+                        key={s.id}
+                        className={`p-3.5 rounded-2xl border-2 flex items-center justify-between ${
+                          isTriggerSale 
+                            ? 'bg-amber-50/70 border-amber-300' 
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-sm text-slate-900">Venta #{s.numeroVenta}</span>
+                            {isTriggerSale && (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-200 text-amber-900">
+                                Seleccionada para salida
+                              </span>
+                            )}
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                              Vendedora: {s.vendedor || 'General'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 mt-0.5">
+                            <strong className="text-slate-800">{bultos} fardo(s)</strong> • Destino: {getAgenciaODestino(s)}
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="font-mono font-black text-xs text-slate-900">${(s.total || 0).toLocaleString('es-CL')}</span>
+                          <p className="text-[10px] text-slate-400 font-semibold">{s.fecha}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMultiDispatchWarning(null)}
+                className="px-5 py-3 rounded-2xl text-xs font-black uppercase text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Cancelar y Revisar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleConfirmDispatch(multiDispatchWarning.sale, true)}
+                className="px-5 py-3 rounded-2xl text-xs font-black uppercase text-rose-700 bg-rose-100 hover:bg-rose-200 transition-colors"
+              >
+                Despachar ÚNICAMENTE Venta #{multiDispatchWarning.sale.numeroVenta} (Parcial)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleConfirmConsolidatedDispatch(multiDispatchWarning.pendingAnalysis.allGroupSales)}
+                className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 active:scale-95"
+              >
+                <Truck size={16} />
+                <span>Despachar TODO el Pedido ({multiDispatchWarning.pendingAnalysis.allGroupSales.length} Ventas Juntas)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Gestión de Status de Entrega */}
       {deliveryStatusModalSale && (

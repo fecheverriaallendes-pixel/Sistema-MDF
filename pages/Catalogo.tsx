@@ -52,6 +52,8 @@ import {
   matchesSeason,
   formatSeasonDisplay
 } from '../utils/productCharacteristics';
+import { getBlackFridayOffer, getBlackFridayStats } from '../utils/blackFridayOffers';
+import { BlackFridayLogo } from '../components/BlackFridayLogo';
 
 // Extend jsPDF interface for autotable
 declare module 'jspdf' {
@@ -86,21 +88,27 @@ const ProductRow: React.FC<{ item: StockItem; onOpenFicha: (item: StockItem) => 
   const desc = item.descripcion;
 
   const hasAnySpec = !!(temporadasList.length > 0 || tallas || pesoVal || genero || calidad);
+  const bfOffer = getBlackFridayOffer(item);
 
   return (
-    <tr className="border-b border-slate-100 print:border-slate-200 hover:bg-slate-50 transition-colors">
+    <tr className={`border-b border-slate-100 print:border-slate-200 transition-colors ${bfOffer ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-slate-50'}`}>
       <td className="px-2 py-2 font-mono font-bold text-slate-400 text-[10px] uppercase align-top">
         {item.codigo.replace('MDF-','')}
       </td>
       <td className="px-2 py-2 product-detail-cell align-top">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-black text-slate-900 uppercase text-[11px] leading-tight italic">
               {item.tipo}
             </span>
             <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
               ({item.proveedor})
             </span>
+            {bfOffer && (
+              <span className="px-1.5 py-0.5 bg-zinc-950 text-amber-300 rounded text-[8px] font-black uppercase tracking-wider">
+                BLACK FRIDAY -{bfOffer.porcentajeDescuento}%{bfOffer.promoExtra ? ` • ${bfOffer.promoExtra}` : ''}
+              </span>
+            )}
             <button
               onClick={() => onOpenFicha(item)}
               className="no-print px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 rounded text-[8px] font-black uppercase tracking-wider transition-colors"
@@ -132,8 +140,21 @@ const ProductRow: React.FC<{ item: StockItem; onOpenFicha: (item: StockItem) => 
           )}
         </div>
       </td>
-      <td className="px-2 py-2 text-right font-black text-slate-900 text-xs align-top">
-        ${item.precioSugerido.toLocaleString('es-CL')}
+      <td className="px-2 py-2 text-right align-top tabular-nums">
+        {bfOffer ? (
+          <div className="flex flex-col items-end leading-tight">
+            <span className="text-[9px] font-bold text-slate-400 line-through">
+              ${bfOffer.precioOriginal.toLocaleString('es-CL')}
+            </span>
+            <span className="font-black text-red-600 text-xs">
+              ${bfOffer.precioOferta.toLocaleString('es-CL')}
+            </span>
+          </div>
+        ) : (
+          <span className="font-black text-slate-900 text-xs">
+            ${item.precioSugerido.toLocaleString('es-CL')}
+          </span>
+        )}
       </td>
       <td className="px-2 py-2 text-center align-top">
         <span className={`font-black text-[10px] ${item.stockActual < 5 ? 'text-red-600' : 'text-slate-900'}`}>
@@ -152,6 +173,7 @@ export default function Catalogo() {
   const [categoryFilter, setCategoryFilter] = useState<'TODOS' | 'FARDO' | 'LOTE'>('TODOS');
   const [temporadaFilter, setTemporadaFilter] = useState('TODOS');
   const [generoFilter, setGeneroFilter] = useState('TODOS');
+  const [onlyBlackFriday, setOnlyBlackFriday] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOption>('alpha-asc');
 
   const searchParams = new URLSearchParams(location.search);
@@ -162,6 +184,9 @@ export default function Catalogo() {
   const [selectedFichaItem, setSelectedFichaItem] = useState<StockItem | null>(null);
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
 
+  const availableStock = useMemo(() => stock.filter(item => item.stockActual > 0), [stock]);
+  const bfStats = useMemo(() => getBlackFridayStats(availableStock), [availableStock]);
+
   const uniqueProviders = useMemo(() => {
     const providers = stock.map(item => (item.proveedor || '').trim().toUpperCase()).filter(Boolean);
     return ['TODOS', ...Array.from(new Set(providers))].sort();
@@ -171,6 +196,8 @@ export default function Catalogo() {
     let result = stock.filter(item => {
       // Ocultar productos con stock 0
       if (item.stockActual <= 0) return false;
+
+      if (onlyBlackFriday && !getBlackFridayOffer(item)) return false;
 
       const matchesSearch = smartSearchMatch(item, searchTerm);
       const matchesProvider = providerFilter === 'TODOS' || (item.proveedor || '').toUpperCase() === providerFilter;
@@ -199,7 +226,7 @@ export default function Catalogo() {
         default: return 0;
       }
     });
-  }, [stock, searchTerm, providerFilter, categoryFilter, temporadaFilter, generoFilter, sortOrder]);
+  }, [stock, searchTerm, providerFilter, categoryFilter, temporadaFilter, generoFilter, onlyBlackFriday, sortOrder]);
 
   const handlePrint = () => {
     playSound('success');
@@ -231,7 +258,7 @@ export default function Catalogo() {
           
           pdf.setFontSize(9);
           pdf.setFont('helvetica', 'normal');
-          pdf.text('LISTA OFICIAL DE PRECIOS', 14, 26);
+          pdf.text(onlyBlackFriday ? 'OFERTAS OFICIALES BLACK FRIDAY' : 'LISTA OFICIAL DE PRECIOS', 14, 26);
           
           pdf.setFontSize(8);
           pdf.text(`FECHA DE EMISIÓN: ${todayStr}`, 196, 18, { align: 'right' });
@@ -243,17 +270,21 @@ export default function Catalogo() {
           for (let i = 0; i < onlyWithStock.length; i += 2) {
             const left = onlyWithStock[i];
             const right = onlyWithStock[i+1];
+            const leftOffer = getBlackFridayOffer(left);
+            const rightOffer = right ? getBlackFridayOffer(right) : null;
+            const leftPrice = leftOffer ? leftOffer.precioOferta : (left.precioSugerido || 0);
+            const rightPrice = right ? (rightOffer ? rightOffer.precioOferta : (right.precioSugerido || 0)) : 0;
             
             pairedRows.push([
               (left.codigo || '').replace('MDF-', ''),
               (left.tipo || '').toUpperCase().substring(0, 28),
               (left.stockActual || 0).toString(),
-              `$ ${(left.precioSugerido || 0).toLocaleString('es-CL')}`,
+              `$ ${leftPrice.toLocaleString('es-CL')}`,
               '', // Espaciador
               right ? (right.codigo || '').replace('MDF-', '') : '',
               right ? (right.tipo || '').toUpperCase().substring(0, 28) : '',
               right ? (right.stockActual || 0).toString() : '',
-              right ? `$ ${(right.precioSugerido || 0).toLocaleString('es-CL')}` : ''
+              right ? `$ ${rightPrice.toLocaleString('es-CL')}` : ''
             ]);
           }
 
@@ -351,7 +382,8 @@ export default function Catalogo() {
 
   const handleShareLink = () => {
     playSound('success');
-    const catalogUrl = `${window.location.origin}${window.location.pathname}#/catalogo-publico`;
+    const querySuffix = onlyBlackFriday ? '?blackfriday=1' : '';
+    const catalogUrl = `${window.location.origin}${window.location.pathname}#/catalogo-publico${querySuffix}`;
     navigator.clipboard.writeText(catalogUrl).then(() => {
       setShowCopyFeedback(true);
       setTimeout(() => setShowCopyFeedback(false), 3000);
@@ -478,9 +510,33 @@ export default function Catalogo() {
           </div>
         </div>
 
-        {/* Barra de Filtros Rápidos: Temporada y Proveedor */}
+        {/* Barra de Filtros Rápidos: Black Friday, Temporada y Proveedor */}
         <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
           <div className="flex flex-wrap items-center gap-4">
+            {/* Filtro Black Friday */}
+            {bfStats.count > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOnlyBlackFriday(prev => !prev);
+                  playSound('click');
+                }}
+                className={`flex items-center gap-2.5 pl-1.5 pr-4 py-1.5 rounded-2xl font-black text-[11px] uppercase tracking-wider transition-all whitespace-nowrap shrink-0 ${
+                  onlyBlackFriday
+                    ? 'bg-zinc-950 text-amber-300 ring-2 ring-amber-400 shadow-lg shadow-zinc-950/20'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-white border border-amber-400/40 shadow-sm'
+                }`}
+              >
+                <BlackFridayLogo size="xs" />
+                <span>Black Friday ({bfStats.count})</span>
+                {onlyBlackFriday && (
+                  <span className="px-1.5 py-0.5 bg-amber-400 text-zinc-950 rounded text-[9px] font-black">
+                    ACTIVO
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Temporadas */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[9px] font-black uppercase text-slate-400 flex items-center gap-1 shrink-0">
@@ -524,7 +580,7 @@ export default function Catalogo() {
             </div>
           </div>
 
-          {(searchTerm || categoryFilter !== 'TODOS' || temporadaFilter !== 'TODOS' || generoFilter !== 'TODOS' || providerFilter !== 'TODOS') && (
+          {(searchTerm || categoryFilter !== 'TODOS' || temporadaFilter !== 'TODOS' || generoFilter !== 'TODOS' || providerFilter !== 'TODOS' || onlyBlackFriday) && (
             <button
               type="button"
               onClick={() => {
@@ -533,6 +589,7 @@ export default function Catalogo() {
                 setTemporadaFilter('TODOS');
                 setGeneroFilter('TODOS');
                 setProviderFilter('TODOS');
+                setOnlyBlackFriday(false);
                 playSound('click');
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full text-[9px] font-black uppercase tracking-wider transition-all"
@@ -574,12 +631,26 @@ export default function Catalogo() {
               const calidad = item.calidad || 'Sin especificar';
               const descripcion = item.descripcion;
               const consejo = item.consejoVenta;
+              const bfOffer = getBlackFridayOffer(item);
 
               return (
-                <div key={item.id} className="digital-card bg-white rounded-[36px] border-2 border-slate-100 shadow-xl overflow-hidden flex flex-col group hover:border-emerald-400 hover:shadow-2xl transition-all print:break-inside-avoid print:shadow-none print:border print:rounded-2xl print:mb-4 print:w-full print:inline-block">
+                <div key={item.id} className={`digital-card bg-white rounded-[36px] border-2 shadow-xl overflow-hidden flex flex-col group transition-all print:break-inside-avoid print:shadow-none print:border print:rounded-2xl print:mb-4 print:w-full print:inline-block ${bfOffer ? 'border-zinc-900 ring-1 ring-amber-400/40' : 'border-slate-100 hover:border-emerald-400 hover:shadow-2xl'}`}>
                   
                   {/* Top Bar with Code & Season */}
-                  <div className="p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white relative print:bg-white print:text-slate-900 print:border-b print:p-3">
+                  <div className={`p-5 text-white relative print:bg-white print:text-slate-900 print:border-b print:p-3 ${bfOffer ? 'bg-zinc-950 border-b border-amber-400/35' : 'bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950'}`}>
+                    {bfOffer && (
+                      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-white/10">
+                        <div className="flex items-center gap-2">
+                          <BlackFridayLogo size="xs" />
+                          <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                            Black Friday
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 bg-amber-400 text-zinc-950 rounded-md text-[10px] font-black tabular-nums">
+                          -{bfOffer.porcentajeDescuento}% OFF
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <span className="font-mono font-black text-xs text-emerald-400 bg-white/10 px-2.5 py-1 rounded-full uppercase tracking-wider print:bg-slate-100 print:text-slate-800">
                         {item.codigo}
@@ -612,9 +683,25 @@ export default function Catalogo() {
                         <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-black uppercase tracking-widest print:text-[8px] print:py-0.5">
                           {item.proveedor}
                         </span>
-                        <div className="text-3xl font-black text-slate-900 tracking-tighter print:text-xl">
-                          ${item.precioSugerido.toLocaleString('es-CL')}
-                        </div>
+                        {bfOffer ? (
+                          <div className="text-right tabular-nums">
+                            <div className="text-xs font-bold text-slate-400 line-through">
+                              ${bfOffer.precioOriginal.toLocaleString('es-CL')}
+                            </div>
+                            <div className="text-3xl font-black text-red-600 tracking-tighter leading-none print:text-xl">
+                              ${bfOffer.precioOferta.toLocaleString('es-CL')}
+                            </div>
+                            {bfOffer.promoExtra && (
+                              <div className="mt-1 inline-block px-2 py-0.5 bg-zinc-950 text-amber-300 rounded text-[9px] font-black uppercase">
+                                {bfOffer.promoExtra}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-3xl font-black text-slate-900 tracking-tighter print:text-xl tabular-nums">
+                            ${item.precioSugerido.toLocaleString('es-CL')}
+                          </div>
+                        )}
                       </div>
 
                       {/* Specifications Grid */}

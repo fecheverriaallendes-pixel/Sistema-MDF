@@ -25,6 +25,8 @@ import {
   parseTemporadas,
   formatSeasonDisplay
 } from '../utils/productCharacteristics';
+import { getBlackFridayOffer } from '../utils/blackFridayOffers';
+import { BlackFridayLogo } from './BlackFridayLogo';
 
 interface ProductFichaModalProps {
   item: StockItem | null;
@@ -63,6 +65,7 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
 
   const qualityStyle = getQualityBadgeStyle(item.calidad);
   const showSellerGuide = !isPublic && !hideSellerGuide && Boolean(consejo && consejo.trim().length > 0);
+  const bfOffer = getBlackFridayOffer(item);
 
   const handleCopy = () => {
     const pitch = formatFardoPitchWhatsApp(item);
@@ -74,7 +77,10 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
 
   const handleWhatsAppShare = () => {
     if (isPublic) {
-      const msg = `Hola! Me interesa el fardo: ${item.tipo} (${item.codigo}) - $${item.precioSugerido?.toLocaleString('es-CL')}\n¿Tienen disponibilidad para despacho?`;
+      const priceText = bfOffer
+        ? `Oferta Black Friday $${bfOffer.precioOferta.toLocaleString('es-CL')} (antes $${bfOffer.precioOriginal.toLocaleString('es-CL')}${bfOffer.promoExtra ? ` • ${bfOffer.promoExtra}` : ''})`
+        : `$${item.precioSugerido?.toLocaleString('es-CL')}`;
+      const msg = `Hola! Me interesa el fardo: ${item.tipo} (${item.codigo}) - ${priceText}\n¿Tienen disponibilidad para despacho?`;
       window.open(`https://wa.me/56964035464?text=${encodeURIComponent(msg)}`, '_blank');
       return;
     }
@@ -115,14 +121,48 @@ export const ProductFichaModal: React.FC<ProductFichaModalProps> = ({
             {item.tipo}
           </h2>
 
-          <div className="flex items-baseline gap-3 mt-3">
-            <span className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tighter">
-              ${item.precioSugerido?.toLocaleString('es-CL')}
-            </span>
-            <span className="text-xs text-slate-400 font-bold uppercase">
-              • Stock: {item.stockActual} unidades disponibles
-            </span>
-          </div>
+          {bfOffer ? (
+            <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <BlackFridayLogo size="sm" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm sm:text-base font-bold text-slate-400 line-through tabular-nums">
+                      ${bfOffer.precioOriginal.toLocaleString('es-CL')}
+                    </span>
+                    <span className="text-xs font-black text-amber-400 uppercase tracking-wider tabular-nums">
+                      -{bfOffer.porcentajeDescuento}% OFF
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="text-3xl sm:text-4xl font-black text-amber-400 tracking-tighter tabular-nums">
+                      ${bfOffer.precioOferta.toLocaleString('es-CL')}
+                    </span>
+                    <span className="text-xs font-bold text-emerald-300 tabular-nums">
+                      Ahorras ${bfOffer.ahorro.toLocaleString('es-CL')}
+                    </span>
+                  </div>
+                  {bfOffer.promoExtra && (
+                    <p className="text-xs font-black text-white mt-1 uppercase tracking-wide">
+                      Promo especial: <span className="text-amber-300">{bfOffer.promoExtra}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+              <span className="text-xs text-slate-300 font-bold uppercase tabular-nums">
+                Stock: {item.stockActual} disponibles
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-3 mt-3">
+              <span className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tighter tabular-nums">
+                ${item.precioSugerido?.toLocaleString('es-CL')}
+              </span>
+              <span className="text-xs text-slate-400 font-bold uppercase tabular-nums">
+                • Stock: {item.stockActual} unidades disponibles
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Content Body */}

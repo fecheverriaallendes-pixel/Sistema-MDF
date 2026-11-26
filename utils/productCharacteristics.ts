@@ -1,4 +1,5 @@
 import { StockItem } from '../types';
+import { getBlackFridayOffer } from './blackFridayOffers';
 
 export const TEMPORADAS_OPTIONS = [
   'Invierno',
@@ -222,15 +223,20 @@ export function formatFardoPitchWhatsApp(item: StockItem): string {
 
   const specs = `${temporada}${genero}${tallas}${peso}${calidad}${piezas}${detalles}`;
 
-  return `📦 *FICHA TÉCNICA OFICIAL - CUADERNO MDF* 📦
+  const bfOffer = getBlackFridayOffer(item);
+  const priceBlock = bfOffer
+    ? `🖤 *OFERTA BLACK FRIDAY (-${bfOffer.porcentajeDescuento}%):* ~$${bfOffer.precioOriginal.toLocaleString('es-CL')}~ ➡️ *$${bfOffer.precioOferta.toLocaleString('es-CL')}*${bfOffer.promoExtra ? ` (${bfOffer.promoExtra})` : ''}`
+    : `💰 *Valor:* $${item.precioSugerido?.toLocaleString('es-CL')}`;
+
+  return `📦 *FICHA TÉCNICA OFICIAL - EL MUNDO DEL FARDO* 📦
 ━━━━━━━━━━━━━━━━━━━━
 🏷️ *Producto:* ${item.tipo}
 🔢 *Código:* ${item.codigo}
-💰 *Valor:* $${item.precioSugerido?.toLocaleString('es-CL')}
+${priceBlock}
 📦 *Formato:* ${item.unidad || 'FARDO'}${pesoVal ? ` • ${pesoVal} KG` : ''}
 
 ${specs ? `📋 *DETALLES Y CARACTERÍSTICAS:*\n${specs}` : ''}${desc}
-⚠️ *Políticas Cuaderno MDF:* Ropa americana seleccionada en origen. Te brindamos información 100% transparente para que tu inversión sea segura.
+⚠️ *Políticas El Mundo del Fardo:* Ropa americana seleccionada en origen. Te brindamos información 100% transparente para que tu inversión sea segura.
 ━━━━━━━━━━━━━━━━━━━━
 ¿Te gustaría reservarlo o tienes alguna consulta adicional? 😊`;
 }
