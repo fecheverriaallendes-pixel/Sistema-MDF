@@ -149,6 +149,38 @@ export function getBlackFridayOffer(item: StockItem | null | undefined): BlackFr
   };
 }
 
+export const BLACK_FRIDAY_COMMISSION_START_DATE = '2026-11-26';
+
+export function isBlackFridayCode(codigo?: string): boolean {
+  if (!BLACK_FRIDAY_ACTIVE || !codigo) return false;
+  return OFFERS_BY_CODE.has(codigo.trim().toUpperCase());
+}
+
+export function isBlackFridaySaleDate(fecha?: string): boolean {
+  if (!BLACK_FRIDAY_ACTIVE) return false;
+  if (!fecha) return true;
+  const trimmed = String(fecha).trim();
+  // Normalizar YYYY-MM-DD desde ISO o formato estándar
+  const isoMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    return isoMatch[1] >= BLACK_FRIDAY_COMMISSION_START_DATE;
+  }
+  // Formato DD/MM/YYYY o DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (dmyMatch) {
+    const iso = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
+    return iso >= BLACK_FRIDAY_COMMISSION_START_DATE;
+  }
+  return false;
+}
+
+export function shouldApplyBlackFridayPromoCommission(
+  codigo?: string,
+  fecha?: string
+): boolean {
+  return isBlackFridayCode(codigo) && isBlackFridaySaleDate(fecha);
+}
+
 export function getBlackFridayStats(items: StockItem[]): {
   count: number;
   maxDiscountPercent: number;

@@ -35,6 +35,7 @@ import {
   Scissors
 } from 'lucide-react';
 import { useStore } from '../store/GlobalContext';
+import { shouldApplyBlackFridayPromoCommission } from '../utils/blackFridayOffers';
 import {
   StaffMember,
   StaffRole,
@@ -288,6 +289,8 @@ export default function Sueldos() {
           finalTipo = CommissionType.LOTE;
         } else if (variantUpper.includes('MEDIO')) {
           finalTipo = CommissionType.MEDIO_FARDO;
+        } else if (shouldApplyBlackFridayPromoCommission(uppercaseCode, s.fecha)) {
+          finalTipo = CommissionType.FARDO_PROMO;
         }
 
         if (!finalTipo) {

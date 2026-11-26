@@ -43,6 +43,7 @@ import { useStore } from '../store/GlobalContext';
 import { Sale, SaleType, SaleStatus, StaffRole, CommissionType, DispatchType, StockItem } from '../types';
 import RutClientLookupModal from '../components/RutClientLookupModal';
 import ProductFichaModal from '../components/ProductFichaModal';
+import { getBlackFridayOffer, isBlackFridayCode } from '../utils/blackFridayOffers';
 import { getSeasonBadgeStyle, getQualityBadgeStyle } from '../utils/productCharacteristics';
 import { cleanRut, formatRut, exactMatchRut, validateRut, getUnifiedClients, UnifiedClient } from '../utils/rutUtils';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
@@ -74,8 +75,21 @@ export default function RegistrarVenta() {
       setItems(prev => prev.map(it => ({ ...it, tipoComision: CommissionType.MAYORISTA, esMayorista: true })));
       setFormData(prev => ({ ...prev, tipoComision: CommissionType.MAYORISTA }));
     } else {
-      setNewItem(prev => ({ ...prev, tipoComision: CommissionType.FARDO_NORMAL }));
-      setFormData(prev => ({ ...prev, tipoComision: CommissionType.FARDO_NORMAL }));
+      setNewItem(prev => ({
+        ...prev,
+        tipoComision: isBlackFridayCode(prev.codigoFardo) ? CommissionType.FARDO_PROMO : CommissionType.FARDO_NORMAL
+      }));
+      setItems(prev => prev.map(it => ({
+        ...it,
+        esMayorista: false,
+        tipoComision: isBlackFridayCode(it.codigoFardo)
+          ? CommissionType.FARDO_PROMO
+          : (it.tipoComision === CommissionType.MAYORISTA ? CommissionType.FARDO_NORMAL : it.tipoComision)
+      })));
+      setFormData(prev => ({
+        ...prev,
+        tipoComision: isBlackFridayCode(prev.codigoFardo) ? CommissionType.FARDO_PROMO : CommissionType.FARDO_NORMAL
+      }));
     }
   };
   
@@ -226,10 +240,11 @@ export default function RegistrarVenta() {
   const handleItemCodeChange = (code: string, isNotaVenta: boolean) => {
     const uppercaseCode = code.toUpperCase();
     const foundItem = stock.find(s => s.codigo === uppercaseCode);
-    const price = foundItem ? foundItem.precioSugerido : 0;
+    const bfOffer = foundItem ? getBlackFridayOffer(foundItem) : null;
+    const price = bfOffer ? bfOffer.precioOferta : (foundItem ? foundItem.precioSugerido : 0);
     const esManual = !foundItem;
     
-    // Determine commission type correctly
+    // Determine commission type correctly (productos Black Friday siempre pagan comisión Promo $1.500)
     let newCommissionType = CommissionType.FARDO_NORMAL;
     if (esMayorista) {
         newCommissionType = CommissionType.MAYORISTA;
@@ -238,11 +253,13 @@ export default function RegistrarVenta() {
             newCommissionType = CommissionType.LOTE;
         } else if (foundItem.unidad === 'MEDIO FARDO') {
             newCommissionType = CommissionType.MEDIO_FARDO;
-        } else if (foundItem.promocion) {
+        } else if (foundItem.promocion || bfOffer) {
             newCommissionType = CommissionType.FARDO_PROMO;
         }
     } else if (uppercaseCode.startsWith('L')) {
         newCommissionType = CommissionType.LOTE;
+    } else if (isBlackFridayCode(uppercaseCode)) {
+        newCommissionType = CommissionType.FARDO_PROMO;
     }
     
     if (isNotaVenta) {
@@ -322,16 +339,23 @@ export default function RegistrarVenta() {
 
     const isPartnerSale = isLautaroOrFardolandia(formData.vendedor);
 
+    const resolveCommission = (codigo?: string, current?: CommissionType): CommissionType => {
+      if (!isQuick && esMayorista) return CommissionType.MAYORISTA;
+      if (current === CommissionType.LOTE || current === CommissionType.MEDIO_FARDO) return current;
+      if (isBlackFridayCode(codigo)) return CommissionType.FARDO_PROMO;
+      return current || CommissionType.FARDO_NORMAL;
+    };
+
     const finalData = {
       ...formData,
       esPartner: isPartnerSale ? true : undefined,
       nombreEmpresa: isPartnerSale ? 'Fardolandia' : undefined,
       tipoVenta: isQuick ? SaleType.LIVE : isNotaVenta ? SaleType.NOTA_VENTA : SaleType.NORMAL,
       esMayorista: !isQuick && esMayorista,
-      tipoComision: (!isQuick && esMayorista) ? CommissionType.MAYORISTA : formData.tipoComision,
+      tipoComision: resolveCommission(formData.codigoFardo, formData.tipoComision),
       items: isNotaVenta ? items.map(item => ({
         ...item,
-        tipoComision: esMayorista ? CommissionType.MAYORISTA : (item.tipoComision || CommissionType.FARDO_NORMAL),
+        tipoComision: resolveCommission(item.codigoFardo, item.tipoComision),
         esMayorista
       })) : undefined,
       total: isNotaVenta ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0) : formData.valorUnitario * (formData.cantidad || 1),
@@ -868,8 +892,21 @@ export default function RegistrarVenta() {
                       <input list="stock-suggestions" type="text" className="w-[120px] px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CODIGO" value={newItem.codigoFardo} onChange={(e) => handleItemCodeChange(e.target.value, true)}/>
                       <input type="number" className="w-16 px-2 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="CANT" value={newItem.cantidad} onChange={(e) => setNewItem({...newItem, cantidad: Number(e.target.value)})}/>
                       <input type="number" className="w-24 px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none" placeholder="VALOR" value={newItem.valorUnitario} onChange={(e) => setNewItem({...newItem, valorUnitario: Number(e.target.value)})}/>
-                      <select className="px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none text-[10px]" value={newItem.tipoComision} onChange={(e) => setNewItem({...newItem, tipoComision: e.target.value as CommissionType})}>
-                          <option value={CommissionType.FARDO_NORMAL}>FARDO ($3.000)</option>
+                      <select
+                        className="px-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-[20px] font-black outline-none text-[10px]"
+                        value={newItem.tipoComision}
+                        onChange={(e) => {
+                          const chosen = e.target.value as CommissionType;
+                          const enforced =
+                            isBlackFridayCode(newItem.codigoFardo) && chosen === CommissionType.FARDO_NORMAL
+                              ? CommissionType.FARDO_PROMO
+                              : chosen;
+                          setNewItem({...newItem, tipoComision: enforced});
+                        }}
+                      >
+                          <option value={CommissionType.FARDO_NORMAL} disabled={isBlackFridayCode(newItem.codigoFardo)}>
+                            {isBlackFridayCode(newItem.codigoFardo) ? 'FARDO ($3.000 - No aplica en BF)' : 'FARDO ($3.000)'}
+                          </option>
                           <option value={CommissionType.FARDO_PROMO}>PROMO ($1.500)</option>
                           <option value={CommissionType.MEDIO_FARDO}>MEDIO ($1.500)</option>
                           <option value={CommissionType.LOTE}>LOTE ($1.000)</option>
@@ -888,13 +925,19 @@ export default function RegistrarVenta() {
                                       return;
                                   }
                               }
-                              setItems([...items, { ...newItem, tipoComision: esMayorista ? CommissionType.MAYORISTA : newItem.tipoComision, esMayorista }]);
+                              const itemIsBF = isBlackFridayCode(newItem.codigoFardo);
+                              const finalItemComm = esMayorista
+                                ? CommissionType.MAYORISTA
+                                : itemIsBF && newItem.tipoComision === CommissionType.FARDO_NORMAL
+                                  ? CommissionType.FARDO_PROMO
+                                  : newItem.tipoComision;
+                              setItems([...items, { ...newItem, tipoComision: finalItemComm, esMayorista }]);
                               setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: esMayorista ? CommissionType.MAYORISTA : CommissionType.FARDO_NORMAL});
                           }
                       }} className="bg-amber-600 text-white rounded-2xl px-4 font-black text-lg hover:bg-amber-700">+</button>
                   </div>
                   {selectedNewItemStock && (
-                    <div className="mt-3 text-[10px] font-black uppercase tracking-wider">
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-wider">
                       {selectedNewItemStock.stockActual <= 0 ? (
                         <span className="text-red-500 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg inline-block">
                           ⚠️ ¡Agotado! (Stock: {selectedNewItemStock.stockActual} {selectedNewItemStock.unidad}s)
@@ -908,6 +951,16 @@ export default function RegistrarVenta() {
                           ✅ Stock disponible: {selectedNewItemStock.stockActual} {selectedNewItemStock.unidad}s
                         </span>
                       )}
+                      {(() => {
+                        const bf = getBlackFridayOffer(selectedNewItemStock);
+                        if (!bf) return null;
+                        return (
+                          <span className="text-amber-300 bg-zinc-950 border border-amber-400/50 px-2.5 py-1.5 rounded-lg inline-block">
+                            BLACK FRIDAY · Oferta ${bf.precioOferta.toLocaleString('es-CL')}
+                            {bf.promoExtra ? ` (${bf.promoExtra})` : ''} · Comisión Promo ($1.500)
+                          </span>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -918,7 +971,7 @@ export default function RegistrarVenta() {
                       <input required type="number" className="w-32 px-4 py-6 bg-slate-50 border-2 border-slate-100 rounded-[28px] text-xl font-black outline-none transition-all" placeholder="VALOR" value={formData.valorUnitario || ''} onChange={(e) => setFormData({...formData, valorUnitario: Number(e.target.value)})}/>
                   </div>
                   {selectedStockItem && (
-                    <div className="mt-3 text-[11px] font-black uppercase tracking-wider">
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-black uppercase tracking-wider">
                       {selectedStockItem.stockActual <= 0 ? (
                         <span className="text-red-500 bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl inline-block">
                           ⚠️ ¡Producto agotado! Stock: {selectedStockItem.stockActual} {selectedStockItem.unidad}s
@@ -932,6 +985,16 @@ export default function RegistrarVenta() {
                           ✅ Stock disponible: {selectedStockItem.stockActual} {selectedStockItem.unidad}s
                         </span>
                       )}
+                      {(() => {
+                        const bf = getBlackFridayOffer(selectedStockItem);
+                        if (!bf) return null;
+                        return (
+                          <span className="text-amber-300 bg-zinc-950 border border-amber-400/50 px-3 py-1.5 rounded-xl inline-block">
+                            BLACK FRIDAY · Oferta ${bf.precioOferta.toLocaleString('es-CL')}
+                            {bf.promoExtra ? ` (${bf.promoExtra})` : ''} · Comisión Promo ($1.500)
+                          </span>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -948,10 +1011,13 @@ export default function RegistrarVenta() {
                 ) : (
                   items.map((item, idx) => (
                       <div key={idx} className="flex justify-between items-center text-xs font-bold p-1.5 border-b border-slate-100 last:border-0 hover:bg-white/80 rounded-lg transition-colors">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span>{item.cantidad} x {stock.find(s => s.codigo === item.codigoFardo)?.tipo || item.codigoFardo}</span>
                             {(item.tipoComision === CommissionType.MAYORISTA || item.esMayorista) && (
                               <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-black rounded uppercase">Mayorista ($1.500)</span>
+                            )}
+                            {isBlackFridayCode(item.codigoFardo) && !(item.tipoComision === CommissionType.MAYORISTA || item.esMayorista) && (
+                              <span className="px-1.5 py-0.5 bg-zinc-950 text-amber-300 text-[9px] font-black rounded uppercase">Black Friday · Promo ($1.500)</span>
                             )}
                           </div>
                           <div className="flex items-center gap-3">

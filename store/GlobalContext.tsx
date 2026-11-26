@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { Sale, StockItem, SaleStatus, SaleType, StaffMember, StaffRole, Purchase, PurchaseType, Abono, DispatchType, DispatchStatus, CommissionAdjustment, Customer, Coupon, Cheque, ProductionRecord, CommissionType, COMMISSION_VALUES, StockHistoryEvent, Incident, IncidentStatus, IncidentPriority, IncidentHistoryEvent, IncidentComment, IncidentAttachment, UsaPurchase, UsaAbono, UsaContainerStatus, SalaryAdvance, SalaryDeduction, EmployeeLoan, LoanPayment, WorkExtra, ExtraWorkType, WeeklyPayrollRecord, SaleReturn, WeeklyAttendance, DayAttendance, TikTokLiveRecord, ValeEntrada, ValeEntradaItem, LabelPrintLog, LabelPrintProduct, DeletedSaleRecord } from '../types';
 import { normalizeDateToISO } from '../utils/salesBackup';
 import { DEFAULT_CARRIERS, suggestCarrierForSale } from '../utils/carrierUtils';
+import { isBlackFridayCode } from '../utils/blackFridayOffers';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
@@ -1116,9 +1117,23 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const now = new Date();
     const isMayorista = saleData.esMayorista === true;
     const rawItems = saleData.items || [];
+    const resolveSaleItemCommission = (
+      codigo?: string,
+      requested?: CommissionType
+    ): CommissionType => {
+      if (isMayorista) return CommissionType.MAYORISTA;
+      if (requested === CommissionType.LOTE || requested === CommissionType.MEDIO_FARDO) {
+        return requested;
+      }
+      if (isBlackFridayCode(codigo)) {
+        return CommissionType.FARDO_PROMO;
+      }
+      return requested || (codigo ? calculateCommission(codigo) : CommissionType.FARDO_NORMAL);
+    };
+
     const items = rawItems.map(item => ({
       ...item,
-      tipoComision: isMayorista ? CommissionType.MAYORISTA : (item.tipoComision || CommissionType.FARDO_NORMAL)
+      tipoComision: resolveSaleItemCommission(item.codigoFardo, item.tipoComision)
     }));
     
     // Calculate total
@@ -1126,9 +1141,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
        ? items.reduce((acc, item) => acc + item.valorUnitario * item.cantidad, 0)
        : (saleData.valorUnitario || 0) * (saleData.cantidad || 0);
 
-    const defaultCommission = isMayorista 
-      ? CommissionType.MAYORISTA 
-      : (saleData.codigoFardo ? calculateCommission(saleData.codigoFardo) : CommissionType.FARDO_NORMAL);
+    const defaultCommission = resolveSaleItemCommission(saleData.codigoFardo, saleData.tipoComision);
 
     // Calcular el próximo número de venta de forma estrictamente incremental
     // NUNCA se reutilizan números eliminados ni números previamente asignados
@@ -1166,7 +1179,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       itemsDespachados: 0,
       tipoDespacho: saleData.tipoDespacho || '',
       timestamp: now.toISOString(),
-      tipoComision: isMayorista ? CommissionType.MAYORISTA : (saleData.tipoComision || defaultCommission)
+      tipoComision: defaultCommission
     } as Sale;
     
     // Remove undefined values to prevent Firestore errors
@@ -1822,8 +1835,8 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
           return CommissionType.MEDIO_FARDO;
       }
       
-      // Si es FARDO (Normal o Promo)
-      if (item.promocion) {
+      // Si es FARDO (Normal, Promo o Black Friday)
+      if (item.promocion || isBlackFridayCode(item.codigo)) {
           return CommissionType.FARDO_PROMO;
       }
       

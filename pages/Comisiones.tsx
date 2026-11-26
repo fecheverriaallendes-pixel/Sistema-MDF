@@ -19,6 +19,7 @@ import {
 import { useStore } from '../store/GlobalContext';
 import { CommissionType, Sale, CommissionAdjustment } from '../types';
 import { isLautaroOrFardolandia } from '../utils/partnerUtils';
+import { shouldApplyBlackFridayPromoCommission } from '../utils/blackFridayOffers';
 
 const DEFAULT_COMMISSION_VALUES: Record<string, number> = {
   [CommissionType.FARDO_NORMAL]: 3000,
@@ -177,6 +178,8 @@ export default function Comisiones() {
              finalTipo = CommissionType.LOTE;
           } else if (variantUpper.includes('MEDIO')) {
              finalTipo = CommissionType.MEDIO_FARDO;
+          } else if (shouldApplyBlackFridayPromoCommission(uppercaseCode, s.fecha)) {
+             finalTipo = CommissionType.FARDO_PROMO;
           }
           
           // Fallback detection for older or manually entered sales if still null

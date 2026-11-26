@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Printer } from 'lucide-react';
 import { Sale, CommissionType } from '../types';
+import { shouldApplyBlackFridayPromoCommission } from '../utils/blackFridayOffers';
 
 interface ReportProps {
   isOpen: boolean;
@@ -24,7 +25,10 @@ export const ReportModal = ({ isOpen, onClose, title, sales, stats }: ReportProp
 
     const processEntry = (tipo: CommissionType | undefined, qty: number, codigo: string, totalItem: number) => {
         // Categorización basada en tipo de comisión para total consistencia
-        const finalTipo = tipo || (codigo.startsWith('L') ? CommissionType.LOTE : CommissionType.FARDO_NORMAL);
+        let finalTipo = tipo || (codigo.startsWith('L') ? CommissionType.LOTE : CommissionType.FARDO_NORMAL);
+        if (finalTipo === CommissionType.FARDO_NORMAL && shouldApplyBlackFridayPromoCommission(codigo, s.fecha)) {
+          finalTipo = CommissionType.FARDO_PROMO;
+        }
         
         const isLote = finalTipo === CommissionType.LOTE;
         const isPromo = finalTipo === CommissionType.FARDO_PROMO || finalTipo === CommissionType.MAYORISTA;
