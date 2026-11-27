@@ -119,6 +119,20 @@
         "motivo": { "type": "string" }
       },
       "required": ["numeroVenta", "cliente", "vendedor", "deletedAt", "deletedBy"]
+    },
+    "SaleNumberReservation": {
+      "title": "SaleNumberReservation",
+      "description": "Atomic unique sale number registry preventing concurrent duplicate sale numbers",
+      "type": "object",
+      "properties": {
+        "numeroVenta": { "type": "number" },
+        "saleId": { "type": "string" },
+        "cliente": { "type": "string" },
+        "vendedor": { "type": "string" },
+        "blocked": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["numeroVenta", "saleId"]
     }
   },
   "firestore": {
@@ -141,6 +155,10 @@
     "/sales/{saleId}": {
       "schema": { "$ref": "Sale" },
       "description": "Sales collection"
+    },
+    "/sale_numbers/{saleNumber}": {
+      "schema": { "$ref": "SaleNumberReservation" },
+      "description": "Atomic unique sale number locks ensuring no two sales ever receive the same numeroVenta"
     },
     "/sales_archive/{saleId}": {
       "schema": { "$ref": "Sale" },

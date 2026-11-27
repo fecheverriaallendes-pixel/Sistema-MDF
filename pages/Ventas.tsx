@@ -34,8 +34,9 @@ function parseLocalDate(dateStr: string): Date {
 }
 
 export default function Ventas() {
-  const { sales, updateSale, markAsSent, revertDispatchToPending, playSound, deleteSale, deleteAllSales, currentUser, stock, deletedSales, getSalePrintLogs } = useStore();
+  const { sales, updateSale, markAsSent, revertDispatchToPending, playSound, deleteSale, deleteAllSales, reassignDuplicateSaleNumber, currentUser, stock, deletedSales, getSalePrintLogs } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
+  const [reassigningSaleId, setReassigningSaleId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'PENDING' | 'READY'>('READY');
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
@@ -84,6 +85,53 @@ export default function Ventas() {
   }, [sales, isLautaroUser, canSeeAll, currentUser?.nombre, selectedMonth, selectedYear]);
 
   const currentSales = activeTab === 'PENDING' ? pendingLiveSales : readySales;
+
+  // Detectar números de venta duplicados entre las ventas activas (para corrección inmediata por Admin)
+  const duplicateNumberMap = useMemo(() => {
+    const map = new Map<number, Sale[]>();
+    (sales || []).forEach(s => {
+      const num = Number(s?.numeroVenta) || 0;
+      if (num <= 0) return;
+      const list = map.get(num) || [];
+      list.push(s);
+      map.set(num, list);
+    });
+    const dups = new Map<number, Sale[]>();
+    map.forEach((list, num) => {
+      if (list.length > 1) {
+        const sorted = [...list].sort((a, b) =>
+          (a.timestamp || a.fecha || '').localeCompare(b.timestamp || b.fecha || '')
+        );
+        dups.set(num, sorted);
+      }
+    });
+    return dups;
+  }, [sales]);
+
+  const pendingDuplicateGroups = useMemo(() => {
+    return Array.from(duplicateNumberMap.entries())
+      .filter(([_, list]) => list.some(s => s.status === SaleStatus.PENDIENTE && !s.enviado))
+      .sort((a, b) => b[0] - a[0]);
+  }, [duplicateNumberMap]);
+
+  const handleReassignDuplicate = async (sale: Sale) => {
+    if (!isAdmin) return;
+    const confirmed = confirm(
+      `¿Asignar un nuevo número de venta único a la compra de ${sale.cliente} (${sale.vendedor || 'Sin vendedora'}) actualmente con el N° duplicado #${sale.numeroVenta}?\n\n` +
+      `• Se conservarán intactos el cliente, producto, vendedora y comisión.\n` +
+      `• Recuerda reimprimir la etiqueta térmica con el nuevo número asignado.`
+    );
+    if (!confirmed) return;
+    setReassigningSaleId(sale.id);
+    try {
+      const newNum = await reassignDuplicateSaleNumber(sale.id);
+      alert(`✓ Venta corregida: ahora tiene el número único #${newNum}.\nRecuerda reimprimir la etiqueta de esta venta si ya estaba impresa.`);
+    } catch (err: any) {
+      alert(`Error al reasignar número: ${err?.message || 'Error desconocido'}`);
+    } finally {
+      setReassigningSaleId(null);
+    }
+  };
 
   const filteredSales = useMemo(() => {
     return currentSales
@@ -313,6 +361,67 @@ export default function Ventas() {
         </div>
       </div>
 
+      {isAdmin && pendingDuplicateGroups.length > 0 && (
+        <div className="no-print bg-rose-50 border-2 border-rose-300 rounded-[28px] p-5 shadow-md space-y-3 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+              <AlertTriangle size={22} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-black uppercase text-rose-950 tracking-tight">
+                Se detectaron {pendingDuplicateGroups.length} número(s) de venta duplicado(s) en ventas pendientes
+              </h3>
+              <p className="text-xs text-rose-900 font-medium mt-0.5">
+                Puedes conservar el número original en la primera venta y asignar un folio nuevo único a la copia (se mantienen intactos los productos, vendedoras y comisiones).
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            {pendingDuplicateGroups.map(([dupNum, groupSales]) => (
+              <div key={dupNum} className="bg-white border border-rose-200 rounded-2xl p-3.5 space-y-2">
+                <div className="text-xs font-black uppercase text-rose-800">
+                  Folio duplicado #{dupNum} ({groupSales.length} ventas)
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {groupSales.map((dupSale, idx) => {
+                    const prodText = dupSale.tipoVenta === SaleType.NOTA_VENTA
+                      ? (dupSale.items || []).map(i => `${i.codigoFardo} x${i.cantidad}`).join(', ')
+                      : (dupSale.codigoFardo || 'Sin código');
+                    return (
+                      <div key={dupSale.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+                        <div className="min-w-0 text-xs">
+                          <div className="font-black text-slate-900 truncate">
+                            {dupSale.cliente}
+                            {idx === 0 && (
+                              <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] uppercase">
+                                1ra registrada
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-600 font-semibold">
+                            Vendedora: <strong className="text-slate-800">{dupSale.vendedor || 'General'}</strong> • {prodText} • ${(dupSale.total || 0).toLocaleString('es-CL')}
+                          </div>
+                        </div>
+                        {idx > 0 && (
+                          <button
+                            type="button"
+                            disabled={reassigningSaleId === dupSale.id}
+                            onClick={() => handleReassignDuplicate(dupSale)}
+                            className="shrink-0 px-3 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shadow-xs"
+                          >
+                            {reassigningSaleId === dupSale.id ? 'Asignando...' : 'Asignar N° único'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="relative group no-print">
         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-900 transition-colors" size={28} />
         <input 
@@ -384,8 +493,28 @@ export default function Ventas() {
                   <tr key={sale.id} className="group hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-6 font-mono font-black text-slate-900 text-lg flex items-center gap-3">
                       <div className="flex flex-col">
-                        <span>#{sale.numeroVenta}</span>
+                        <div className="flex items-center gap-2">
+                          <span>#{sale.numeroVenta}</span>
+                          {duplicateNumberMap.has(Number(sale.numeroVenta)) && (
+                            <span
+                              className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300 text-[9px] font-sans font-black uppercase"
+                              title="Número de venta duplicado"
+                            >
+                              Duplicado
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-slate-500 font-bold">{parseLocalDate(sale.fecha).toLocaleDateString()}</span>
+                        {isAdmin && duplicateNumberMap.has(Number(sale.numeroVenta)) && duplicateNumberMap.get(Number(sale.numeroVenta))?.[0]?.id !== sale.id && (
+                          <button
+                            type="button"
+                            disabled={reassigningSaleId === sale.id}
+                            onClick={() => handleReassignDuplicate(sale)}
+                            className="mt-1 px-2 py-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg font-sans text-[9px] font-black uppercase tracking-wider w-fit"
+                          >
+                            {reassigningSaleId === sale.id ? 'Corrigiendo...' : 'Asignar N° único'}
+                          </button>
+                        )}
                       </div>
                       {sale.comprobante && (
                         <a href={sale.comprobante} target="_blank" rel="noreferrer" className="text-emerald-500 hover:text-emerald-700">

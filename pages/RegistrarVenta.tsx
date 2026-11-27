@@ -55,6 +55,9 @@ export default function RegistrarVenta() {
   const [mode, setMode] = useState<'QUICK' | 'NORMAL' | 'NOTA_VENTA'>('QUICK');
   const [esMayorista, setEsMayorista] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [lastRegisteredNumber, setLastRegisteredNumber] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [clientSearch, setClientSearch] = useState('');
   const [isRutLookupOpen, setIsRutLookupOpen] = useState(false);
   const [foundClientFeedback, setFoundClientFeedback] = useState<string | null>(null);
@@ -291,6 +294,7 @@ export default function RegistrarVenta() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
     const isQuick = mode === 'QUICK';
     const isNotaVenta = mode === 'NOTA_VENTA';
     
@@ -371,33 +375,43 @@ export default function RegistrarVenta() {
     console.log("Final data to be saved:", finalData);
     console.log("Items to be saved:", items);
 
-    await addSale(finalData);
-    setSuccess(true);
-    playSound('success');
-    
-    setFormData({
-      cliente: '', 
-      vendedor: formData.vendedor, 
-      telefono: '', 
-      rut: '',
-      codigoFardo: '', 
-      esManual: true, 
-      variante: isQuick ? '' : 'FARDO', 
-      valorUnitario: 0, 
-      cantidad: 1, 
-      direccion: '', 
-      estadoPago: 'Pendiente', 
-      tipoComision: CommissionType.FARDO_NORMAL,
-      juntaCompra: 'DESPACHO INMEDIATO', 
-      observaciones: '', 
-      tipoDespacho: undefined,
-      agencia: ''
-    });
-    setItems([]);
-    setEsMayorista(false);
-    setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
-    
-    setTimeout(() => setSuccess(false), 2000);
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      const createdSale = await addSale(finalData);
+      setLastRegisteredNumber(createdSale?.numeroVenta ?? null);
+      setSuccess(true);
+      playSound('success');
+      
+      setFormData({
+        cliente: '', 
+        vendedor: formData.vendedor, 
+        telefono: '', 
+        rut: '',
+        codigoFardo: '', 
+        esManual: true, 
+        variante: isQuick ? '' : 'FARDO', 
+        valorUnitario: 0, 
+        cantidad: 1, 
+        direccion: '', 
+        estadoPago: 'Pendiente', 
+        tipoComision: CommissionType.FARDO_NORMAL,
+        juntaCompra: 'DESPACHO INMEDIATO', 
+        observaciones: '', 
+        tipoDespacho: undefined,
+        agencia: ''
+      });
+      setItems([]);
+      setEsMayorista(false);
+      setNewItem({codigoFardo: '', cantidad: 1, valorUnitario: 0, esManual: false, tipoComision: CommissionType.FARDO_NORMAL});
+      
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("No se pudo completar el registro de la venta:", err);
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   const selectedStockItem = formData.codigoFardo ? stock.find(s => s.codigo === formData.codigoFardo.trim().toUpperCase()) : null;
@@ -454,8 +468,14 @@ export default function RegistrarVenta() {
         <div className="bg-emerald-500 text-white px-8 py-6 rounded-[32px] flex items-center gap-4 animate-bounce shadow-2xl shadow-emerald-500/30">
           <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center"><CheckCircle2 size={32} /></div>
           <div>
-            <p className="font-black text-xl uppercase italic">¡Operación Exitosa!</p>
-            <p className="text-emerald-100 text-sm font-bold">Venta registrada en el sistema central.</p>
+            <p className="font-black text-xl uppercase italic">
+              ¡Operación Exitosa!{lastRegisteredNumber ? ` Venta #${lastRegisteredNumber}` : ''}
+            </p>
+            <p className="text-emerald-100 text-sm font-bold">
+              {lastRegisteredNumber
+                ? `Folio único #${lastRegisteredNumber} asignado y guardado en el sistema central.`
+                : 'Venta registrada en el sistema central.'}
+            </p>
           </div>
         </div>
       )}
@@ -1261,9 +1281,13 @@ export default function RegistrarVenta() {
             </div>
           </div>
 
-          <button type="submit" className={`group w-full py-7 sm:py-8 rounded-[32px] text-white font-black text-2xl sm:text-3xl flex items-center justify-center gap-4 shadow-2xl transition-all active:scale-[0.97] ${mode === 'QUICK' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : mode === 'NOTA_VENTA' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'}`}>
-            <Save size={32} /> {mode === 'QUICK' ? 'REGISTRAR LIVE' : mode === 'NOTA_VENTA' ? 'REGISTRAR NOTA DE VENTA' : 'REGISTRAR VENTA COMPLETA'}
-            <ChevronRight size={28} className="group-hover:translate-x-2 transition-transform" />
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={`group w-full py-7 sm:py-8 rounded-[32px] text-white font-black text-2xl sm:text-3xl flex items-center justify-center gap-4 shadow-2xl transition-all active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed ${mode === 'QUICK' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : mode === 'NOTA_VENTA' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'}`}
+          >
+            <Save size={32} /> {isSubmitting ? 'ASIGNANDO N° DE VENTA...' : mode === 'QUICK' ? 'REGISTRAR LIVE' : mode === 'NOTA_VENTA' ? 'REGISTRAR NOTA DE VENTA' : 'REGISTRAR VENTA COMPLETA'}
+            {!isSubmitting && <ChevronRight size={28} className="group-hover:translate-x-2 transition-transform" />}
           </button>
         </form>
       </div>

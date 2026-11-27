@@ -232,7 +232,7 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
     if (!pendingAnalysis.hasPendingPurchases) return;
     const saleNums = consolidateSales(pendingAnalysis.allGroupSales, updateSale);
     playSound('success');
-    setConsolidationSuccessNotice(`¡Ventas ${saleNums} unificadas bajo JUNTA COMPRA! Bodega ahora las despachará en un solo bulto/envío consolidado.`);
+    setConsolidationSuccessNotice(`¡Ventas ${saleNums} unificadas bajo JUNTA COMPRA para despacho físico! Cada venta mantiene su propio N° único, vendedora y comisión.`);
     setIsConsolidatedMode(true);
   };
 
@@ -643,7 +643,7 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
                         </span>
                       </div>
                       <p className="text-[11px] text-amber-800 font-medium mt-0.5">
-                        {sale.ultimoEtiquetador ? `Última impresión realizada por ${sale.ultimoEtiquetador}` : 'Se registrará este nuevo tiraje en el historial de etiquetas de bodega.'}
+                        {effectiveSale.ultimoEtiquetador ? `Última impresión realizada por ${effectiveSale.ultimoEtiquetador}` : 'Se registrará este nuevo tiraje en el historial de etiquetas de bodega.'}
                       </p>
                     </div>
                   </div>
@@ -1096,14 +1096,16 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
                 </div>
 
                 {/* Thermal Label Display Box */}
-                {currentPreviewLabel ? (
+                {currentPreviewLabel ? (() => {
+                  const previewSale = currentPreviewLabel.sale || effectiveSale;
+                  return (
                   <div className="w-full flex flex-col items-center">
                     <div className="relative border-4 border-slate-800 rounded-3xl p-3 bg-slate-900/5 shadow-xl overflow-hidden scale-[0.68] sm:scale-[0.78] origin-top -mb-28">
                       <div className="bg-white rounded-xl shadow-md overflow-hidden">
                         <Label 
                           sale={{
-                            ...sale,
-                            etiquetador: etiquetador.trim() || sale.etiquetador || currentUser?.nombre || 'BODEGA'
+                            ...previewSale,
+                            etiquetador: etiquetador.trim() || previewSale.etiquetador || currentUser?.nombre || 'BODEGA'
                           }} 
                           stock={stock} 
                           item={currentPreviewLabel.item} 
@@ -1113,13 +1115,14 @@ export const PrintLabelsModal: React.FC<PrintLabelsModalProps> = ({
 
                     <div className="mt-4 bg-slate-100 px-3 py-1.5 rounded-full text-center">
                       <span className="text-[11px] font-black text-slate-700 uppercase">
-                        Mostrando: Bulto {currentPreviewLabel.bultoNumero} de {currentPreviewLabel.bultoTotal}
+                        Venta #{previewSale.numeroVenta} • Bulto {currentPreviewLabel.bultoNumero} de {currentPreviewLabel.bultoTotal}
                         {' • '}
                         {currentPreviewLabel.productDescription}
                       </span>
                     </div>
                   </div>
-                ) : (
+                  );
+                })() : (
                   <div className="w-full h-80 rounded-3xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center p-6 text-center text-slate-400">
                     <AlertCircle size={32} className="mb-2" />
                     <p className="text-xs font-bold">No hay etiquetas seleccionadas</p>

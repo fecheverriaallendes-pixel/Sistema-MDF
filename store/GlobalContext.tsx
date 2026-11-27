@@ -5,7 +5,7 @@ import { DEFAULT_CARRIERS, suggestCarrierForSale } from '../utils/carrierUtils';
 import { isBlackFridayCode } from '../utils/blackFridayOffers';
 import { db, storage, auth } from '../firebase';
 import { signInAnonymously } from 'firebase/auth';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, addDoc, query, where, orderBy, increment, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const cleanUndefined = (obj: any): any => {
@@ -449,6 +449,7 @@ interface StoreContextType {
   addIncidentAttachment: (id: string, attachment: { name: string; url: string; type: string }) => Promise<void>;
   deleteIncident: (id: string) => Promise<void>;
   addSale: (saleData: Partial<Sale>) => Promise<Sale>;
+  reassignDuplicateSaleNumber: (saleId: string) => Promise<number>;
   updateSale: (id: string, updatedData: Partial<Sale>) => void;
   markAsSent: (saleId: string, notificationData?: { message?: string; pendiente?: boolean }) => void;
   revertDispatchToPending: (saleId: string) => Promise<boolean>;
@@ -1143,33 +1144,42 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
     const defaultCommission = resolveSaleItemCommission(saleData.codigoFardo, saleData.tipoComision);
 
-    // Calcular el próximo número de venta de forma estrictamente incremental
-    // NUNCA se reutilizan números eliminados ni números previamente asignados
+    // Piso local de seguridad (nunca inferior a ventas activas, eliminadas o contador conocido)
     const activeMax = sales.length > 0 ? Math.max(...sales.map(s => Number(s.numeroVenta) || 0)) : 0;
     const deletedMax = deletedSales.length > 0 ? Math.max(...deletedSales.map(d => Number(d.numeroVenta) || 0)) : 0;
-    const baseNumber = Math.max(highestSaleNumber, activeMax, deletedMax, 2000);
-    let nextNumeroVenta = baseNumber + 1;
-
-    // Asegurar que no coincida con ningún número de venta activo o eliminado
-    const allOccupiedNumbers = new Set<number>([
+    const localFloor = Math.max(highestSaleNumber, activeMax, deletedMax, 2000);
+    const localOccupiedNumbers = new Set<number>([
       ...sales.map(s => Number(s.numeroVenta) || 0),
       ...deletedSales.map(d => Number(d.numeroVenta) || 0)
     ]);
 
-    while (allOccupiedNumbers.has(nextNumeroVenta)) {
-      nextNumeroVenta++;
+    // Agrupar descuentos de stock por código para evitar actualizaciones duplicadas dentro de la transacción
+    const stockDecrements = new Map<string, number>();
+    if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
+      for (const item of items) {
+        if (!item.esManual && item.codigoFardo) {
+          const code = item.codigoFardo.trim();
+          stockDecrements.set(code, (stockDecrements.get(code) || 0) + (Number(item.cantidad) || 0));
+        }
+      }
+    } else if (saleData.codigoFardo && !saleData.esManual) {
+      const code = saleData.codigoFardo.trim();
+      const qty = Number(saleData.cantidad) || 0;
+      if (qty > 0) {
+        stockDecrements.set(code, (stockDecrements.get(code) || 0) + qty);
+      }
     }
 
     const resolvedCarrier = saleData.transportista || suggestCarrierForSale(saleData.agencia, saleData.tipoDespacho, saleData.direccion) || undefined;
+    const newSaleRef = doc(collection(db, 'sales'));
 
-    const newSale: Sale = {
+    const baseSaleFields = {
       ...saleData,
       transportista: resolvedCarrier,
       esMayorista: isMayorista,
       items: saleData.tipoVenta === SaleType.NOTA_VENTA ? items : saleData.items,
       total,
-      id: Math.random().toString(36).substr(2, 9),
-      numeroVenta: nextNumeroVenta,
+      id: newSaleRef.id,
       fecha: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
       hora: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: SaleStatus.PENDIENTE,
@@ -1180,50 +1190,197 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       tipoDespacho: saleData.tipoDespacho || '',
       timestamp: now.toISOString(),
       tipoComision: defaultCommission
-    } as Sale;
-    
-    // Remove undefined values to prevent Firestore errors
-    const cleanSale = Object.fromEntries(Object.entries(newSale).filter(([_, v]) => v !== undefined));
+    };
 
     try {
-      console.log("Saving sale to Firestore...", newSale.id, cleanSale);
-      const batch = writeBatch(db);
-      batch.set(doc(db, 'sales', newSale.id), cleanSale);
+      // Transacción atómica en Firestore: garantiza N° de venta 100% único aunque 2 o más vendedoras
+      // registren ventas en el mismo milisegundo (incluso para la misma clienta).
+      const assignedSale = await runTransaction(db, async (transaction) => {
+        const counterRef = doc(db, 'config', 'sales_counter');
+        const counterSnap = await transaction.get(counterRef);
+        const serverLast = counterSnap.exists() && typeof counterSnap.data()?.lastSaleNumber === 'number'
+          ? Number(counterSnap.data()!.lastSaleNumber)
+          : 0;
 
-      // Persistir el contador para que nunca retroceda aunque se elimine la venta
-      batch.set(doc(db, 'config', 'sales_counter'), {
-        lastSaleNumber: nextNumeroVenta,
-        updatedAt: now.toISOString()
-      }, { merge: true });
-
-      if (saleData.tipoVenta === SaleType.NOTA_VENTA) {
-          console.log("Processing Nota de Venta items:", items);
-          for (const item of items) {
-              if (!item.esManual) {
-                const stockRef = doc(db, 'stock', item.codigoFardo);
-                batch.update(stockRef, {
-                    stockActual: increment(-item.cantidad)
-                });
-              }
+        // Leer documentos de stock antes de escribir (requisito de transacciones en Firestore)
+        const existingStockRefs: Array<{ ref: ReturnType<typeof doc>; qty: number }> = [];
+        for (const [code, qty] of stockDecrements.entries()) {
+          if (qty <= 0) continue;
+          const stockRef = doc(db, 'stock', code);
+          const stockSnap = await transaction.get(stockRef);
+          if (stockSnap.exists()) {
+            existingStockRefs.push({ ref: stockRef, qty });
           }
-      } else if (saleData.codigoFardo && !saleData.esManual) {
-          const stockRef = doc(db, 'stock', saleData.codigoFardo);
-          batch.update(stockRef, {
-              stockActual: increment(-(saleData.cantidad || 0))
-          });
-      }
+        }
 
-      await batch.commit();
-      console.log("Sale and stock updates committed successfully.");
-      setSales(prev => [newSale, ...prev.filter(s => s.id !== newSale.id)]);
-      setHighestSaleNumber(prev => Math.max(prev, nextNumeroVenta));
-      safeLocalStorage.setItem('mdf_highest_sale_number', String(Math.max(highestSaleNumber, nextNumeroVenta)));
-    } catch(error) {
-        console.error("Error adding sale:", error);
-        alert("Error al registrar venta. Revisa la consola.");
+        // Reservar un número estrictamente incremental y único en el registro `sale_numbers`
+        let candidate = Math.max(serverLast, localFloor) + 1;
+        while (localOccupiedNumbers.has(candidate)) {
+          candidate++;
+        }
+
+        let reservationRef = doc(db, 'sale_numbers', String(candidate));
+        let reservationSnap = await transaction.get(reservationRef);
+        let guard = 0;
+        while (reservationSnap.exists() && guard < 25) {
+          candidate++;
+          while (localOccupiedNumbers.has(candidate)) {
+            candidate++;
+          }
+          reservationRef = doc(db, 'sale_numbers', String(candidate));
+          reservationSnap = await transaction.get(reservationRef);
+          guard++;
+        }
+
+        const finalizedSale: Sale = {
+          ...baseSaleFields,
+          numeroVenta: candidate
+        } as Sale;
+
+        const cleanSale = Object.fromEntries(
+          Object.entries(finalizedSale).filter(([_, v]) => v !== undefined)
+        );
+
+        // Escrituras atómicas: reserva única + contador global + venta + descuento de stock
+        transaction.set(reservationRef, {
+          numeroVenta: candidate,
+          saleId: newSaleRef.id,
+          cliente: finalizedSale.cliente || '',
+          vendedor: finalizedSale.vendedor || '',
+          createdAt: now.toISOString()
+        });
+
+        transaction.set(counterRef, {
+          lastSaleNumber: candidate,
+          updatedAt: now.toISOString()
+        }, { merge: true });
+
+        transaction.set(newSaleRef, cleanSale);
+
+        for (const { ref: stockRef, qty } of existingStockRefs) {
+          transaction.update(stockRef, {
+            stockActual: increment(-qty)
+          });
+        }
+
+        return finalizedSale;
+      });
+
+      console.log("Sale registered atomically with unique number:", assignedSale.numeroVenta, assignedSale.id);
+      setSales(prev => [assignedSale, ...prev.filter(s => s.id !== assignedSale.id)]);
+      setHighestSaleNumber(prev => Math.max(prev, assignedSale.numeroVenta));
+      safeLocalStorage.setItem('mdf_highest_sale_number', String(Math.max(highestSaleNumber, assignedSale.numeroVenta)));
+      return assignedSale;
+    } catch (error) {
+      console.error("Error adding sale:", error);
+      alert("Error al registrar venta. Verifica tu conexión e intenta nuevamente.");
+      throw error;
+    }
+  };
+
+  const reassignDuplicateSaleNumber = async (saleId: string): Promise<number> => {
+    if (currentUser?.rol !== StaffRole.ADMIN) {
+      alert("Solo el administrador puede reasignar un número de venta duplicado.");
+      throw new Error("Permisos insuficientes");
     }
 
-    return newSale;
+    const targetSale = sales.find(s => s.id === saleId);
+    if (!targetSale) {
+      throw new Error("Venta no encontrada");
+    }
+
+    const activeMax = sales.length > 0 ? Math.max(...sales.map(s => Number(s.numeroVenta) || 0)) : 0;
+    const deletedMax = deletedSales.length > 0 ? Math.max(...deletedSales.map(d => Number(d.numeroVenta) || 0)) : 0;
+    const localFloor = Math.max(highestSaleNumber, activeMax, deletedMax, 2000);
+    const localOccupiedNumbers = new Set<number>([
+      ...sales.map(s => Number(s.numeroVenta) || 0),
+      ...deletedSales.map(d => Number(d.numeroVenta) || 0)
+    ]);
+
+    const nowIso = new Date().toISOString();
+
+    const newNumber = await runTransaction(db, async (transaction) => {
+      const counterRef = doc(db, 'config', 'sales_counter');
+      const saleRef = doc(db, 'sales', saleId);
+      const [counterSnap, saleSnap] = await Promise.all([
+        transaction.get(counterRef),
+        transaction.get(saleRef)
+      ]);
+
+      if (!saleSnap.exists()) {
+        throw new Error("La venta ya no existe en Firestore.");
+      }
+
+      const serverLast = counterSnap.exists() && typeof counterSnap.data()?.lastSaleNumber === 'number'
+        ? Number(counterSnap.data()!.lastSaleNumber)
+        : 0;
+
+      let candidate = Math.max(serverLast, localFloor) + 1;
+      while (localOccupiedNumbers.has(candidate)) {
+        candidate++;
+      }
+
+      let reservationRef = doc(db, 'sale_numbers', String(candidate));
+      let reservationSnap = await transaction.get(reservationRef);
+      let guard = 0;
+      while (reservationSnap.exists() && guard < 25) {
+        candidate++;
+        while (localOccupiedNumbers.has(candidate)) {
+          candidate++;
+        }
+        reservationRef = doc(db, 'sale_numbers', String(candidate));
+        reservationSnap = await transaction.get(reservationRef);
+        guard++;
+      }
+
+      const oldNum = Number(saleSnap.data()?.numeroVenta) || targetSale.numeroVenta;
+      const existingObs = String(saleSnap.data()?.observaciones || '');
+      const auditTag = `[N° corregido de #${oldNum} a #${candidate} por duplicidad]`;
+      const updatedObs = existingObs.includes(auditTag)
+        ? existingObs
+        : (existingObs ? `${existingObs} • ${auditTag}` : auditTag);
+
+      transaction.set(reservationRef, {
+        numeroVenta: candidate,
+        saleId,
+        cliente: targetSale.cliente || '',
+        vendedor: targetSale.vendedor || '',
+        reassignedFrom: oldNum,
+        createdAt: nowIso
+      });
+
+      transaction.set(counterRef, {
+        lastSaleNumber: candidate,
+        updatedAt: nowIso
+      }, { merge: true });
+
+      transaction.update(saleRef, {
+        numeroVenta: candidate,
+        observaciones: updatedObs
+      });
+
+      return candidate;
+    });
+
+    // Sincronizar historial de impresiones de etiquetas vinculado a esta venta
+    try {
+      const matchingLogs = labelPrintLogs.filter(l => l.saleId === saleId);
+      if (matchingLogs.length > 0) {
+        const logBatch = writeBatch(db);
+        matchingLogs.forEach(log => {
+          logBatch.update(doc(db, 'label_prints', log.id), { numeroVenta: newNumber });
+        });
+        await logBatch.commit();
+      }
+    } catch (logErr) {
+      console.error("Error actualizando número en historial de etiquetas:", logErr);
+    }
+
+    setSales(prev => prev.map(s => s.id === saleId ? { ...s, numeroVenta: newNumber } : s));
+    setHighestSaleNumber(prev => Math.max(prev, newNumber));
+    safeLocalStorage.setItem('mdf_highest_sale_number', String(Math.max(highestSaleNumber, newNumber)));
+    playSound('success');
+    return newNumber;
   };
 
   const addProductionRecord = async (cantidad: number) => {
@@ -2432,12 +2589,15 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       };
       batch.set(doc(db, 'deleted_sales', saleToDelete.id), cleanUndefined(deletedRecord));
 
-      // 3. Mantener el contador en el número más alto para que la próxima venta sea estrictamente mayor
-      const newHighest = Math.max(highestSaleNumber, saleNum);
-      batch.set(doc(db, 'config', 'sales_counter'), {
-        lastSaleNumber: newHighest,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      // 3. Bloquear el número eliminado en `sale_numbers` para que jamás pueda reutilizarse
+      if (saleNum > 0) {
+        batch.set(doc(db, 'sale_numbers', String(saleNum)), {
+          numeroVenta: saleNum,
+          saleId: saleToDelete.id,
+          blocked: true,
+          deletedAt: new Date().toISOString()
+        }, { merge: true });
+      }
 
       if (saleToDelete) {
         if (saleToDelete.tipoVenta === SaleType.NOTA_VENTA && saleToDelete.items) {
@@ -2478,6 +2638,21 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
 
       await batch.commit();
+
+      // Mantener el contador global estrictamente creciente sin riesgo de retrocederlo
+      const newHighest = await runTransaction(db, async (transaction) => {
+        const counterRef = doc(db, 'config', 'sales_counter');
+        const counterSnap = await transaction.get(counterRef);
+        const serverLast = counterSnap.exists() && typeof counterSnap.data()?.lastSaleNumber === 'number'
+          ? Number(counterSnap.data()!.lastSaleNumber)
+          : 0;
+        const safeMax = Math.max(serverLast, highestSaleNumber, saleNum);
+        transaction.set(counterRef, {
+          lastSaleNumber: safeMax,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        return safeMax;
+      });
 
       // Actualizar estado local
       setDeletedSales(prev => [deletedRecord, ...prev.filter(d => d.id !== deletedRecord.id)]);
@@ -3589,7 +3764,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
   return (
     <StoreContext.Provider value={{
       currentUser, login, logout, settings, updateSettings, playSound,
-      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, updateSale, markAsSent, revertDispatchToPending, setSaleDispatchStatus, markDepartureNotificationAsSent, triggerDispatchWebhook, testDispatchWebhook, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, autoAssignPendingCarriers, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
+      sales, stock, staff, customers, purchases, carriers, adjustments, coupons, addSale, reassignDuplicateSaleNumber, updateSale, markAsSent, revertDispatchToPending, setSaleDispatchStatus, markDepartureNotificationAsSent, triggerDispatchWebhook, testDispatchWebhook, updateDispatchStatus, updateDispatchItems, assignCarrier, assignAgency, autoAssignPendingCarriers, refreshSales, addCarrier, removeCarrier, addAdjustment, removeAdjustment, addCoupon, redeemCoupon, redeemCouponByCode, deleteCoupon, cheques, addCheque, markChequeAsPaid, deleteCheque, clearAllSales, clearAllStock,
       incidents, addIncident, updateIncident, addIncidentHistoryEvent, addIncidentComment, addIncidentAttachment, deleteIncident,
       addStockItem, updateStockItem, togglePromocion, removeStockItem, bulkAddStock, fixDuplicateStock, fixDuplicateStockByName, purgeUnusedStock, resetToMasterStock, addStaff, updateStaff, removeStaff, addCustomer, updateCustomer, removeCustomer, deleteSale, deleteAllSales,
       addPurchase, updatePurchase, removePurchase, addAbono, updateAbono, removeAbono,
