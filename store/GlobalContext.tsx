@@ -1082,7 +1082,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
               const logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as LabelPrintLog));
               logs.sort((a, b) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime());
               setLabelPrintLogs(logs);
-              safeLocalStorage.setItem('mdf_label_prints', JSON.stringify(logs));
             })
           );
           unsubs.push(
@@ -1090,7 +1089,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
               const recs = snap.docs.map(d => ({ ...d.data(), id: d.id } as DeletedSaleRecord));
               recs.sort((a, b) => (b.numeroVenta || 0) - (a.numeroVenta || 0));
               setDeletedSales(recs);
-              safeLocalStorage.setItem('mdf_deleted_sales', JSON.stringify(recs));
             })
           );
         }
@@ -1158,7 +1156,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
             onSnapshot(collection(db, 'salary_deductions'), (snap) => {
               const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryDeduction));
               setSalaryDeductions(list);
-              safeLocalStorage.setItem('mdf_salary_deductions', JSON.stringify(list));
             })
           );
           unsubs.push(
