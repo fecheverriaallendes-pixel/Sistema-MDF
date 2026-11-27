@@ -866,16 +866,70 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   };
 
+  const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: StaffRole } | null>(() => {
+    const saved = safeSessionStorage.getItem('mdf_session');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const detectPublicCatalogRoute = () => {
+    if (typeof window === 'undefined') return false;
+    const hash = window.location.hash || '';
+    const path = window.location.pathname || '';
+    return hash.includes('catalogo-publico') || path.includes('catalogo-publico');
+  };
+
+  const [isPublicCatalogRoute, setIsPublicCatalogRoute] = useState<boolean>(detectPublicCatalogRoute);
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      setIsPublicCatalogRoute(detectPublicCatalogRoute());
+    };
+    window.addEventListener('hashchange', handleRouteChange);
+    window.addEventListener('popstate', handleRouteChange);
+    return () => {
+      window.removeEventListener('hashchange', handleRouteChange);
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, []);
+
   const refreshSales = useCallback(async (): Promise<Sale[]> => {
+    if (!currentUser) return [];
     setIsSyncing(true);
     try {
-      const snap = await getDocs(collection(db, 'sales'));
-      const freshSales = snap.docs.map(d => d.data() as Sale);
-      setSales(freshSales);
+      // Optimización Blaze: en lugar de releer todo el historial (+11.000 ventas),
+      // solo refresca ventas pendientes + últimos 7 días y las fusiona con el estado en vivo.
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const cutoffISO = `${sevenDaysAgo.getFullYear()}-${String(sevenDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(sevenDaysAgo.getDate()).padStart(2, '0')}`;
+
+      const [pendingSnap, recentSnap] = await Promise.all([
+        getDocs(query(collection(db, 'sales'), where('status', '==', SaleStatus.PENDIENTE))),
+        getDocs(query(collection(db, 'sales'), where('fecha', '>=', cutoffISO)))
+      ]);
+
+      const updatedMap = new Map<string, Sale>();
+      pendingSnap.docs.forEach(d => {
+        const s = { ...d.data(), id: d.id } as Sale;
+        updatedMap.set(s.id, s);
+      });
+      recentSnap.docs.forEach(d => {
+        const s = { ...d.data(), id: d.id } as Sale;
+        updatedMap.set(s.id, s);
+      });
+
+      let mergedResult: Sale[] = [];
+      setSales(prev => {
+        const nextMap = new Map<string, Sale>();
+        prev.forEach(s => nextMap.set(s.id, s));
+        updatedMap.forEach((s, id) => nextMap.set(id, s));
+        mergedResult = Array.from(nextMap.values());
+        return mergedResult;
+      });
+
       const now = new Date();
       const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       updateSettings({ dbConnected: true, lastSync: timeString, lastError: null });
-      return freshSales;
+      return mergedResult;
     } catch (err: any) {
       console.error("Error al refrescar ventas desde Firestore:", err);
       updateSettings({ lastError: err.message });
@@ -883,171 +937,261 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     } finally {
       setIsSyncing(false);
     }
-  }, []);
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        refreshSales().catch(() => {});
-      }
-    };
-    const handleOnline = () => {
-      refreshSales().catch(() => {});
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('online', handleOnline);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [refreshSales]);
+  }, [currentUser]);
 
   const syncWithCloud = async (silent = false) => {
     return true;
   };
 
   useEffect(() => {
-    let unsubSales: any;
-    let unsubStock: any;
-    let unsubStaff: any;
-    let unsubPurchases: any;
-    let unsubUsaPurchases: any;
-    let unsubAdjustments: any;
-    let unsubCoupons: any;
-    let unsubIncidents: any;
-    let unsubCheques: any;
-    let unsubProduction: any;
-    let unsubConfig: any;
-    let unsubAppValues: any;
-    let unsubCustomers: any;
-    let unsubStockHistory: any;
-    let unsubSalaryAdvances: any;
-    let unsubSalaryDeductions: any;
-    let unsubEmployeeLoans: any;
-    let unsubWorkExtras: any;
-    let unsubPayrollRecords: any;
-    let unsubWeeklyAttendance: any;
-    let unsubTikTokLives: any;
-    let unsubReturns: any;
-    let unsubValesEntrada: any;
-    let unsubLabelPrints: any;
-    let unsubDeletedSales: any;
-    let unsubSalesCounter: any;
+    let isCancelled = false;
+    const unsubs: Array<() => void> = [];
 
     const initFirebase = async () => {
       try {
-        await signInAnonymously(auth);
+        if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
       } catch (error: any) {
         console.warn("Advertencia al iniciar sesión anónima en Firebase (se continuará sin auth):", error.code, error.message);
       }
 
+      if (isCancelled) return;
+
+      // CASO 1: Visitante público del Catálogo Black Friday / Público (sin sesión iniciada)
+      // Solo consulta stock disponible (> 0) con caché local de 3 minutos.
+      // CERO lecturas de ventas, clientes, sueldos, proveedores ni colecciones internas.
+      if (!currentUser && isPublicCatalogRoute) {
+        try {
+          const CACHE_KEY = 'mdf_public_stock_cache_v1';
+          const CACHE_TTL_MS = 3 * 60 * 1000;
+          const cachedRaw = safeLocalStorage.getItem(CACHE_KEY);
+          if (cachedRaw) {
+            try {
+              const parsed = JSON.parse(cachedRaw);
+              if (parsed?.ts && Array.isArray(parsed?.items) && Date.now() - parsed.ts < CACHE_TTL_MS) {
+                setStock(parsed.items);
+                return;
+              }
+            } catch {}
+          }
+          const stockSnap = await getDocs(query(collection(db, 'stock'), where('stockActual', '>', 0)));
+          if (isCancelled) return;
+          const availableItems = stockSnap.docs.map(d => d.data() as StockItem);
+          setStock(availableItems);
+          safeLocalStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items: availableItems }));
+        } catch (error: any) {
+          console.error("Error cargando stock para catálogo público:", error.code, error.message);
+        }
+        return;
+      }
+
+      // CASO 2: Pantalla de inicio de sesión (aún sin usuario autenticado)
+      // Solo lee la colección liviana `staff` (~20 registros) para permitir el login.
+      if (!currentUser) {
+        try {
+          unsubs.push(
+            onSnapshot(collection(db, 'staff'), (snap) => {
+              setStaff(snap.docs.map(d => d.data() as StaffMember));
+            })
+          );
+        } catch (error: any) {
+          console.error("Error cargando usuarios de acceso:", error.code, error.message);
+        }
+        return;
+      }
+
+      // CASO 3: Personal autenticado — suscripciones selectivas según rol
+      const isAdmin = currentUser.rol === StaffRole.ADMIN;
+      const isVendedor = currentUser.rol === StaffRole.VENDEDOR;
+      const isBodegaOrDespacho = currentUser.rol === StaffRole.BODEGA || currentUser.rol === StaffRole.DESPACHO;
+      const isPostVenta = currentUser.rol === StaffRole.POST_VENTA;
+      const isCamilaVivar = (currentUser.nombre || '').toUpperCase() === 'CAMILA VIVAR';
+
       try {
-        unsubSales = onSnapshot(collection(db, 'sales'), (snap) => {
-          const salesData = snap.docs.map(d => d.data() as Sale);
-          setSales(salesData);
-          const now = new Date();
-          const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          updateSettings({ dbConnected: true, lastSync: timeString, lastError: null });
-        }, (error) => {
-          console.error("Error en listener de sales:", error);
-          updateSettings({ dbConnected: false, lastError: error.message });
-        });
-        unsubStock = onSnapshot(collection(db, 'stock'), (snap) => {
-          setStock(snap.docs.map(d => d.data() as StockItem));
-        });
-        unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => {
-          setStaff(snap.docs.map(d => d.data() as StaffMember));
-        });
-        unsubPurchases = onSnapshot(collection(db, 'purchases'), (snap) => {
-          setPurchases(snap.docs.map(d => d.data() as Purchase));
-        });
-        unsubUsaPurchases = onSnapshot(collection(db, 'usa_purchases'), (snap) => {
-          setUsaPurchases(snap.docs.map(d => ({ ...d.data(), id: d.id } as UsaPurchase)));
-        });
-        unsubAdjustments = onSnapshot(collection(db, 'adjustments'), (snap) => {
-          setAdjustments(snap.docs.map(d => d.data() as CommissionAdjustment));
-        });
-        unsubCoupons = onSnapshot(collection(db, 'coupons'), (snap) => {
-          setCoupons(snap.docs.map(d => d.data() as Coupon));
-        });
-        unsubIncidents = onSnapshot(collection(db, 'incidents'), (snap) => {
-          setIncidents(snap.docs.map(d => ({ ...d.data(), id: d.id } as Incident)));
-        });
-        unsubCheques = onSnapshot(collection(db, 'cheques'), (snap) => {
-          setCheques(snap.docs.map(d => ({ ...d.data(), id: d.id } as Cheque)));
-        });
-        unsubProduction = onSnapshot(collection(db, 'produccion'), (snap) => {
-          setProductionRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as ProductionRecord)));
-        });
-        unsubConfig = onSnapshot(doc(db, 'config', 'carriers'), (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.list) setCarriers(data.list);
-          }
-        });
-        unsubAppValues = onSnapshot(doc(db, 'config', 'app_values'), (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.comisiones) setCommissionValues({ ...DEFAULT_COMMISSION_VALUES, ...data.comisiones });
-            if (typeof data.pagoReenfardado === 'number') setPagoReenfardado(data.pagoReenfardado);
-          }
-        });
-        unsubCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
-          setCustomers(snapshot.docs.map(doc => doc.data() as Customer));
-        });
-        unsubStockHistory = onSnapshot(collection(db, 'stock_history'), (snap) => {
-          setStockHistory(snap.docs.map(d => d.data() as StockHistoryEvent));
-        });
-        unsubSalaryAdvances = onSnapshot(collection(db, 'salary_advances'), (snap) => {
-          setSalaryAdvances(snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryAdvance)));
-        });
-        unsubSalaryDeductions = onSnapshot(collection(db, 'salary_deductions'), (snap) => {
-          const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryDeduction));
-          setSalaryDeductions(list);
-          safeLocalStorage.setItem('mdf_salary_deductions', JSON.stringify(list));
-        });
-        unsubEmployeeLoans = onSnapshot(collection(db, 'employee_loans'), (snap) => {
-          setEmployeeLoans(snap.docs.map(d => ({ ...d.data(), id: d.id } as EmployeeLoan)));
-        });
-        unsubWorkExtras = onSnapshot(collection(db, 'work_extras'), (snap) => {
-          setWorkExtras(snap.docs.map(d => ({ ...d.data(), id: d.id } as WorkExtra)));
-        });
-        unsubPayrollRecords = onSnapshot(collection(db, 'payroll_records'), (snap) => {
-          setPayrollRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyPayrollRecord)));
-        });
-        unsubWeeklyAttendance = onSnapshot(collection(db, 'weekly_attendance'), (snap) => {
-          setWeeklyAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyAttendance)));
-        });
-        unsubTikTokLives = onSnapshot(collection(db, 'tiktok_lives'), (snap) => {
-          setTiktokLives(snap.docs.map(d => ({ ...d.data(), id: d.id } as TikTokLiveRecord)));
-        });
-        unsubReturns = onSnapshot(collection(db, 'devoluciones'), (snap) => {
-          setSaleReturns(snap.docs.map(d => ({ ...d.data(), id: d.id } as SaleReturn)));
-        });
-        unsubValesEntrada = onSnapshot(collection(db, 'vales_entrada'), (snap) => {
-          setValesEntrada(snap.docs.map(d => ({ ...d.data(), id: d.id } as ValeEntrada)));
-        });
-        unsubLabelPrints = onSnapshot(collection(db, 'label_prints'), (snap) => {
-          const logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as LabelPrintLog));
-          logs.sort((a, b) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime());
-          setLabelPrintLogs(logs);
-          safeLocalStorage.setItem('mdf_label_prints', JSON.stringify(logs));
-        });
-        unsubDeletedSales = onSnapshot(collection(db, 'deleted_sales'), (snap) => {
-          const recs = snap.docs.map(d => ({ ...d.data(), id: d.id } as DeletedSaleRecord));
-          recs.sort((a, b) => (b.numeroVenta || 0) - (a.numeroVenta || 0));
-          setDeletedSales(recs);
-          safeLocalStorage.setItem('mdf_deleted_sales', JSON.stringify(recs));
-        });
-        unsubSalesCounter = onSnapshot(doc(db, 'config', 'sales_counter'), (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (typeof data.lastSaleNumber === 'number') {
-              setHighestSaleNumber(prev => Math.max(prev, data.lastSaleNumber));
-              safeLocalStorage.setItem('mdf_highest_sale_number', String(data.lastSaleNumber));
+        // Colecciones operativas base (requeridas por todo el personal)
+        unsubs.push(
+          onSnapshot(collection(db, 'sales'), (snap) => {
+            const salesData = snap.docs.map(d => d.data() as Sale);
+            setSales(salesData);
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            updateSettings({ dbConnected: true, lastSync: timeString, lastError: null });
+          }, (error) => {
+            console.error("Error en listener de sales:", error);
+            updateSettings({ dbConnected: false, lastError: error.message });
+          })
+        );
+        unsubs.push(
+          onSnapshot(collection(db, 'stock'), (snap) => {
+            setStock(snap.docs.map(d => d.data() as StockItem));
+          })
+        );
+        unsubs.push(
+          onSnapshot(collection(db, 'staff'), (snap) => {
+            setStaff(snap.docs.map(d => d.data() as StaffMember));
+          })
+        );
+        unsubs.push(
+          onSnapshot(doc(db, 'config', 'carriers'), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data.list) setCarriers(data.list);
             }
-          }
-        });
+          })
+        );
+        unsubs.push(
+          onSnapshot(doc(db, 'config', 'app_values'), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data.comisiones) setCommissionValues({ ...DEFAULT_COMMISSION_VALUES, ...data.comisiones });
+              if (typeof data.pagoReenfardado === 'number') setPagoReenfardado(data.pagoReenfardado);
+            }
+          })
+        );
+        unsubs.push(
+          onSnapshot(doc(db, 'config', 'sales_counter'), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (typeof data.lastSaleNumber === 'number') {
+                setHighestSaleNumber(prev => Math.max(prev, data.lastSaleNumber));
+                safeLocalStorage.setItem('mdf_highest_sale_number', String(data.lastSaleNumber));
+              }
+            }
+          })
+        );
+
+        // Ventas, CRM y comisiones (Admin + Vendedoras)
+        if (isAdmin || isVendedor) {
+          unsubs.push(
+            onSnapshot(collection(db, 'customers'), (snapshot) => {
+              setCustomers(snapshot.docs.map(d => d.data() as Customer));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'adjustments'), (snap) => {
+              setAdjustments(snap.docs.map(d => d.data() as CommissionAdjustment));
+            })
+          );
+        }
+
+        // Etiquetado y ventas eliminadas (Admin + Vendedoras + Bodega/Despacho)
+        if (isAdmin || isVendedor || isBodegaOrDespacho) {
+          unsubs.push(
+            onSnapshot(collection(db, 'label_prints'), (snap) => {
+              const logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as LabelPrintLog));
+              logs.sort((a, b) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime());
+              setLabelPrintLogs(logs);
+              safeLocalStorage.setItem('mdf_label_prints', JSON.stringify(logs));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'deleted_sales'), (snap) => {
+              const recs = snap.docs.map(d => ({ ...d.data(), id: d.id } as DeletedSaleRecord));
+              recs.sort((a, b) => (b.numeroVenta || 0) - (a.numeroVenta || 0));
+              setDeletedSales(recs);
+              safeLocalStorage.setItem('mdf_deleted_sales', JSON.stringify(recs));
+            })
+          );
+        }
+
+        // Movimientos de bodega (Admin + Bodega/Despacho)
+        if (isAdmin || isBodegaOrDespacho) {
+          unsubs.push(
+            onSnapshot(collection(db, 'stock_history'), (snap) => {
+              setStockHistory(snap.docs.map(d => d.data() as StockHistoryEvent));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'vales_entrada'), (snap) => {
+              setValesEntrada(snap.docs.map(d => ({ ...d.data(), id: d.id } as ValeEntrada)));
+            })
+          );
+        }
+
+        // Post-Venta y cupones (Admin + Post-Venta)
+        if (isAdmin || isPostVenta) {
+          unsubs.push(
+            onSnapshot(collection(db, 'incidents'), (snap) => {
+              setIncidents(snap.docs.map(d => ({ ...d.data(), id: d.id } as Incident)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'coupons'), (snap) => {
+              setCoupons(snap.docs.map(d => d.data() as Coupon));
+            })
+          );
+        }
+
+        // Producción (Admin + Camila Vivar)
+        if (isAdmin || isCamilaVivar) {
+          unsubs.push(
+            onSnapshot(collection(db, 'produccion'), (snap) => {
+              setProductionRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as ProductionRecord)));
+            })
+          );
+        }
+
+        // Colecciones exclusivas de Administración (Proveedores, Cheques, Sueldos, Devoluciones)
+        if (isAdmin) {
+          unsubs.push(
+            onSnapshot(collection(db, 'purchases'), (snap) => {
+              setPurchases(snap.docs.map(d => d.data() as Purchase));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'usa_purchases'), (snap) => {
+              setUsaPurchases(snap.docs.map(d => ({ ...d.data(), id: d.id } as UsaPurchase)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'cheques'), (snap) => {
+              setCheques(snap.docs.map(d => ({ ...d.data(), id: d.id } as Cheque)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'salary_advances'), (snap) => {
+              setSalaryAdvances(snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryAdvance)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'salary_deductions'), (snap) => {
+              const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as SalaryDeduction));
+              setSalaryDeductions(list);
+              safeLocalStorage.setItem('mdf_salary_deductions', JSON.stringify(list));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'employee_loans'), (snap) => {
+              setEmployeeLoans(snap.docs.map(d => ({ ...d.data(), id: d.id } as EmployeeLoan)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'work_extras'), (snap) => {
+              setWorkExtras(snap.docs.map(d => ({ ...d.data(), id: d.id } as WorkExtra)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'payroll_records'), (snap) => {
+              setPayrollRecords(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyPayrollRecord)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'weekly_attendance'), (snap) => {
+              setWeeklyAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id } as WeeklyAttendance)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'tiktok_lives'), (snap) => {
+              setTiktokLives(snap.docs.map(d => ({ ...d.data(), id: d.id } as TikTokLiveRecord)));
+            })
+          );
+          unsubs.push(
+            onSnapshot(collection(db, 'devoluciones'), (snap) => {
+              setSaleReturns(snap.docs.map(d => ({ ...d.data(), id: d.id } as SaleReturn)));
+            })
+          );
+        }
       } catch (error: any) {
         console.error("Error al suscribirse a colecciones de Firebase:", error.code, error.message);
       }
@@ -1056,34 +1200,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     initFirebase();
 
     return () => {
-      if (unsubSales) unsubSales();
-      if (unsubStock) unsubStock();
-      if (unsubStaff) unsubStaff();
-      if (unsubPurchases) unsubPurchases();
-      if (unsubUsaPurchases) unsubUsaPurchases();
-      if (unsubAdjustments) unsubAdjustments();
-      if (unsubCoupons) unsubCoupons();
-      if (unsubIncidents) unsubIncidents();
-      if (unsubCheques) unsubCheques();
-      if (unsubProduction) unsubProduction();
-      if (unsubConfig) unsubConfig();
-      if (unsubAppValues) unsubAppValues();
-      if (unsubCustomers) unsubCustomers();
-      if (unsubStockHistory) unsubStockHistory();
-      if (unsubSalaryAdvances) unsubSalaryAdvances();
-      if (unsubSalaryDeductions) unsubSalaryDeductions();
-      if (unsubEmployeeLoans) unsubEmployeeLoans();
-      if (unsubWorkExtras) unsubWorkExtras();
-      if (unsubPayrollRecords) unsubPayrollRecords();
-      if (unsubWeeklyAttendance) unsubWeeklyAttendance();
-      if (unsubTikTokLives) unsubTikTokLives();
-      if (unsubReturns) unsubReturns();
-      if (unsubValesEntrada) unsubValesEntrada();
-      if (unsubLabelPrints) unsubLabelPrints();
-      if (unsubDeletedSales) unsubDeletedSales();
-      if (unsubSalesCounter) unsubSalesCounter();
+      isCancelled = true;
+      unsubs.forEach(u => {
+        try { u(); } catch {}
+      });
     };
-  }, []);
+  }, [currentUser?.rol, currentUser?.nombre, isPublicCatalogRoute]);
 
   useEffect(() => {
     safeLocalStorage.setItem('mdf_settings', JSON.stringify(settings));
@@ -1094,11 +1216,6 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
     safeLocalStorage.setItem('mdf_commission_values', JSON.stringify(commissionValues));
     safeLocalStorage.setItem('mdf_pago_reenfardado', String(pagoReenfardado));
   }, [commissionValues, pagoReenfardado]);
-
-  const [currentUser, setCurrentUser] = useState<{ nombre: string; rol: StaffRole } | null>(() => {
-    const saved = safeSessionStorage.getItem('mdf_session');
-    return saved ? JSON.parse(saved) : null;
-  });
 
   const login = (nombre: string, rol: StaffRole) => {
     const user = { nombre, rol };
@@ -1159,13 +1276,15 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       for (const item of items) {
         if (!item.esManual && item.codigoFardo) {
           const code = item.codigoFardo.trim();
-          stockDecrements.set(code, (stockDecrements.get(code) || 0) + (Number(item.cantidad) || 0));
+          if (code && !code.includes('/')) {
+            stockDecrements.set(code, (stockDecrements.get(code) || 0) + (Number(item.cantidad) || 0));
+          }
         }
       }
     } else if (saleData.codigoFardo && !saleData.esManual) {
       const code = saleData.codigoFardo.trim();
       const qty = Number(saleData.cantidad) || 0;
-      if (qty > 0) {
+      if (code && !code.includes('/') && qty > 0) {
         stockDecrements.set(code, (stockDecrements.get(code) || 0) + qty);
       }
     }
@@ -1237,9 +1356,7 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
           numeroVenta: candidate
         } as Sale;
 
-        const cleanSale = Object.fromEntries(
-          Object.entries(finalizedSale).filter(([_, v]) => v !== undefined)
-        );
+        const cleanSale = cleanUndefined(finalizedSale);
 
         // Escrituras atómicas: reserva única + contador global + venta + descuento de stock
         transaction.set(reservationRef, {
@@ -1271,9 +1388,12 @@ export const StoreProvider = ({ children }: React.PropsWithChildren<{}>) => {
       setHighestSaleNumber(prev => Math.max(prev, assignedSale.numeroVenta));
       safeLocalStorage.setItem('mdf_highest_sale_number', String(Math.max(highestSaleNumber, assignedSale.numeroVenta)));
       return assignedSale;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding sale:", error);
-      alert("Error al registrar venta. Verifica tu conexión e intenta nuevamente.");
+      const detail = error?.code === 'resource-exhausted'
+        ? 'Se alcanzó temporalmente la cuota de Firebase. Intenta en unos segundos.'
+        : (error?.message ? `Detalle: ${error.message}` : 'Verifica tu conexión e intenta nuevamente.');
+      alert(`Error al registrar venta. ${detail}`);
       throw error;
     }
   };

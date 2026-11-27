@@ -218,26 +218,11 @@ export default function Despachos() {
     });
   };
 
+  // Las ventas se sincronizan en tiempo real vía onSnapshot en GlobalContext;
+  // evitamos releer toda la colección en cada foco/cambio de pestaña para ahorrar lecturas en Firestore.
   React.useEffect(() => {
-    refreshSales().then(() => {
-      setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    }).catch(() => {});
-
-    const handleFocus = () => {
-      if (document.visibilityState === 'visible') {
-        refreshSales().then(() => {
-          setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-        }).catch(() => {});
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleFocus);
-    };
-  }, [refreshSales]);
+    setLastRefreshedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  }, [sales.length]);
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
